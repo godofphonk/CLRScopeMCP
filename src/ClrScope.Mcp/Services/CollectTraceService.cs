@@ -14,14 +14,15 @@ public record CollectTraceRequest(int Pid, string Duration, string? Profile = nu
 public record CollectTraceResult(
     Session Session,
     Artifact? Artifact,
-    string? Error
+    string? Error,
+    TraceCompletionMode CompletionMode = TraceCompletionMode.Complete
 )
 {
-    public static CollectTraceResult Success(Session session, Artifact artifact) =>
-        new(session, artifact, null);
+    public static CollectTraceResult Success(Session session, Artifact artifact, TraceCompletionMode completionMode = TraceCompletionMode.Complete) =>
+        new(session, artifact, null, completionMode);
 
-    public static CollectTraceResult Failure(Session session, string error) =>
-        new(session, null, error);
+    public static CollectTraceResult Failure(Session session, string error, TraceCompletionMode completionMode = TraceCompletionMode.Failed) =>
+        new(session, null, error, completionMode);
 }
 
 public class CollectTraceService
@@ -56,7 +57,7 @@ public class CollectTraceService
             return CollectTraceResult.Failure(failedSession, preflightResult.Message ?? "Preflight validation failed");
         }
 
-        // Parse duration (dd:hh:mm:ss format per PC5 verification)
+        // Parse duration (hh:mm:ss format)
         TimeSpan duration;
         try
         {
@@ -81,60 +82,122 @@ public class CollectTraceService
         var fileName = $"trace_{session.SessionId.Value}.nettrace";
         var filePath = Path.Combine(tracesDir, fileName);
 
-        // Start EventPipeSession
+        // Start EventPipeSession with bounded timeout
         Microsoft.Diagnostics.NETCore.Client.EventPipeSession? eventPipeSession = null;
-        FileStream? fileStream = null;
+        bool forced = false;
+        TraceCompletionMode completionMode = TraceCompletionMode.Complete;
+
         try
         {
+            using var startCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            startCts.CancelAfter(TimeSpan.FromSeconds(30)); // Bounded timeout for start
+
             var client = new DiagnosticsClient(request.Pid);
             var providers = new List<EventPipeProvider>
             {
                 new("Microsoft-Windows-DotNETRuntime", EventLevel.Informational)
             };
 
-            eventPipeSession = client.StartEventPipeSession(providers, requestRundown: true, circularBufferMB: 256);
-
-            // Copy EventPipeStream to file
-            fileStream = File.OpenWrite(filePath);
-            var copyTask = eventPipeSession.EventStream.CopyToAsync(fileStream, cancellationToken);
-
-            // Wait for duration or cancellation (workaround for PC2: do NOT call session.Stop())
-            await Task.WhenAny(copyTask, Task.Delay(duration, cancellationToken));
+            eventPipeSession = await client.StartEventPipeSessionAsync(
+                providers,
+                requestRundown: true,
+                circularBufferMB: 256,
+                token: startCts.Token);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            // Cancellation requested
-            if (fileStream != null)
+            await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = "StartEventPipeSession timed out" }, cancellationToken);
+            return CollectTraceResult.Failure(session, "StartEventPipeSession timed out");
+        }
+
+        // Copy EventPipeStream to file with FileMode.Create
+        await using var fileStream = new FileStream(
+            filePath,
+            FileMode.Create,
+            FileAccess.Write,
+            FileShare.Read,
+            bufferSize: 81920,
+            useAsync: true);
+
+        try
+        {
+            // copyTask not tied to operation cancellation - lifecycle managed by session.Stop/Dispose
+            var copyTask = eventPipeSession.EventStream.CopyToAsync(fileStream, CancellationToken.None);
+
+            var winner = await Task.WhenAny(copyTask, Task.Delay(duration, cancellationToken));
+
+            if (winner == copyTask)
             {
-                await fileStream.FlushAsync(cancellationToken);
-                fileStream.Dispose();
+                completionMode = TraceCompletionMode.CompletedEarly;
+                await copyTask; // Observe exception if any
             }
+            else
+            {
+                // Graceful stop with bounded timeout
+                try
+                {
+                    using var stopCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                    stopCts.CancelAfter(TimeSpan.FromSeconds(15)); // Bounded timeout for stop
+
+                    await eventPipeSession.StopAsync(stopCts.Token);
+                }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                {
+                    forced = true;
+                    completionMode = TraceCompletionMode.Partial;
+                    eventPipeSession.Dispose(); // Fallback
+                }
+
+                try
+                {
+                    await copyTask;
+                }
+                catch (Exception) when (forced)
+                {
+                    // Forced stop may interrupt stream - this is partial trace, not necessarily fatal
+                    completionMode = TraceCompletionMode.Partial;
+                }
+            }
+
+            // Flush with CancellationToken.None in cleanup
+            await fileStream.FlushAsync(CancellationToken.None);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
             eventPipeSession?.Dispose();
             await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Cancelled }, cancellationToken);
-            return CollectTraceResult.Failure(session, "Collection cancelled");
+            return CollectTraceResult.Failure(session, "Collection cancelled", TraceCompletionMode.Cancelled);
         }
         catch (Exception ex)
         {
-            fileStream?.Dispose();
             eventPipeSession?.Dispose();
             await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = ex.Message }, cancellationToken);
-            return CollectTraceResult.Failure(session, $"Failed to collect trace: {ex.Message}");
+            return CollectTraceResult.Failure(session, $"Failed to collect trace: {ex.Message}", TraceCompletionMode.Failed);
+        }
+        finally
+        {
+            eventPipeSession?.Dispose();
         }
 
         // Check if file was created
         if (!File.Exists(filePath))
         {
             await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = "Trace file not created" }, cancellationToken);
-            return CollectTraceResult.Failure(session, "Trace file was not created");
+            return CollectTraceResult.Failure(session, "Trace file was not created", TraceCompletionMode.Failed);
+        }
+
+        var fileInfo = new FileInfo(filePath);
+        if (fileInfo.Length == 0)
+        {
+            await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = "Trace file is empty" }, cancellationToken);
+            return CollectTraceResult.Failure(session, "Trace file is empty", TraceCompletionMode.Failed);
         }
 
         // Create artifact record
-        var fileSize = new FileInfo(filePath).Length;
-        
         var artifact = await _artifactStore.CreateAsync(
             ArtifactKind.Trace,
             filePath,
-            fileSize,
+            fileInfo.Length,
             request.Pid,
             session.SessionId,
             cancellationToken
@@ -144,35 +207,28 @@ public class CollectTraceService
         var diagUri = $"clrscope://artifact/{artifact.ArtifactId.Value}";
         var fileUri = $"file://{filePath}";
 
-        // Update artifact with URIs
+        // Update artifact with URIs and status
         artifact = artifact with { DiagUri = diagUri, FileUri = fileUri };
-        await _artifactStore.UpdateAsync(artifact with { Status = ArtifactStatus.Completed }, cancellationToken);
+        var artifactStatus = forced ? ArtifactStatus.Partial : ArtifactStatus.Completed;
+        await _artifactStore.UpdateAsync(artifact with { Status = artifactStatus }, cancellationToken);
         await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Completed, CompletedAtUtc = DateTime.UtcNow }, cancellationToken);
 
-        // Cleanup
-        if (fileStream != null)
-        {
-            await fileStream.FlushAsync(cancellationToken);
-            fileStream.Dispose();
-        }
-        eventPipeSession?.Dispose();
-
-        return CollectTraceResult.Success(session, artifact);
+        return CollectTraceResult.Success(session, artifact, completionMode);
     }
 
     private static TimeSpan ParseDuration(string duration)
     {
-        // Parse dd:hh:mm format (3 parts: days, hours, minutes)
+        // Parse hh:mm:ss format (3 parts: hours, minutes, seconds)
         var parts = duration.Split(':');
         if (parts.Length != 3)
         {
-            throw new FormatException("Duration must be in dd:hh:mm format");
+            throw new FormatException("Duration must be in hh:mm:ss format");
         }
 
-        var days = int.Parse(parts[0]);
-        var hours = int.Parse(parts[1]);
-        var minutes = int.Parse(parts[2]);
+        var hours = int.Parse(parts[0]);
+        var minutes = int.Parse(parts[1]);
+        var seconds = int.Parse(parts[2]);
 
-        return new TimeSpan(days, hours, minutes, 0);
+        return new TimeSpan(hours, minutes, seconds);
     }
 }

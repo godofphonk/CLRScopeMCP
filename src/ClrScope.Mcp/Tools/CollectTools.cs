@@ -88,10 +88,10 @@ public sealed class CollectTools
         }
     }
 
-    [McpServerTool(Name = "collect.trace", Title = "Collect EventPipe Trace (Experimental)", ReadOnly = false, Idempotent = false), Description("Сбор EventPipe trace из .NET процесса через StartEventPipeSession(). EXPERIMENTAL: имеет workaround для PC2 (session.Stop() висит). Duration формат: dd:hh:mm")]
+    [McpServerTool(Name = "collect.trace", Title = "Collect EventPipe Trace (Experimental)", ReadOnly = false, Idempotent = false), Description("Сбор EventPipe trace из .NET процесса через StartEventPipeSession(). Duration формат: hh:mm:ss")]
     public static async Task<CollectTraceResult> CollectTrace(
         [Description("Process ID to collect trace from")] int pid,
-        [Description("Duration in dd:hh:mm format (e.g., 00:01:30 for 1.5 minutes)")] string duration,
+        [Description("Duration in hh:mm:ss format (e.g., 00:01:30 for 1.5 minutes)")] string duration,
         McpServer server,
         [Description("Trace profile (optional)")] string? profile = null,
         CancellationToken cancellationToken = default)
@@ -113,7 +113,7 @@ public sealed class CollectTools
 
             if (!System.Text.RegularExpressions.Regex.IsMatch(duration, @"^\d{2}:\d{2}:\d{2}$"))
             {
-                throw new ArgumentException("Duration must be in dd:hh:mm format (e.g., 00:01:30)", nameof(duration));
+                throw new ArgumentException("Duration must be in hh:mm:ss format (e.g., 00:01:30)", nameof(duration));
             }
 
             logger.LogInformation("Starting trace collection for PID {Pid}, Duration={Duration}, Profile={Profile}", pid, duration, profile);
