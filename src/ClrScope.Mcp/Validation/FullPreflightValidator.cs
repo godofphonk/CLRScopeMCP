@@ -119,6 +119,22 @@ public class FullPreflightValidator : IPreflightValidator
             // Return as warning, not failure (best-effort)
         }
 
+        // Validation 9: cgroup limits (Linux only)
+        var cgroupLimits = CheckCgroupLimits();
+        if (cgroupLimits != null)
+        {
+            _logger.LogWarning("cgroup limits detected: {Message}", cgroupLimits);
+            // Return as warning, not failure (best-effort)
+        }
+
+        // Validation 10: namespace checks (PID namespace)
+        var namespaceCheck = CheckNamespaceCompatibility(pid);
+        if (namespaceCheck != null)
+        {
+            _logger.LogWarning("Namespace compatibility issue: {Message}", namespaceCheck);
+            // Return as warning, not failure (best-effort)
+        }
+
         return PreflightResult.Success();
     }
 
@@ -202,6 +218,100 @@ public class FullPreflightValidator : IPreflightValidator
         {
             _logger.LogDebug(ex, "Could not check container capabilities");
             return true; // Assume available on error
+        }
+    }
+
+    private string? CheckCgroupLimits()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return null; // Not applicable on non-Linux
+        }
+
+        try
+        {
+            // Check if running in container
+            var dockerEnv = File.Exists("/.dockerenv");
+            if (!dockerEnv)
+            {
+                return null; // Not in container
+            }
+
+            // Check memory limit
+            var memoryLimitPath = "/sys/fs/cgroup/memory/memory.limit_in_bytes";
+            if (File.Exists(memoryLimitPath))
+            {
+                var memoryLimit = File.ReadAllText(memoryLimitPath).Trim();
+                if (long.TryParse(memoryLimit, out var limitBytes))
+                {
+                    var limitMB = limitBytes / (1024 * 1024);
+                    if (limitMB < 512) // Less than 512 MB
+                    {
+                        return $"Low memory limit detected: {limitMB} MB";
+                    }
+                }
+            }
+
+            // Check CPU limit
+            var cpuQuotaPath = "/sys/fs/cgroup/cpu/cpu.cfs_quota_us";
+            var cpuPeriodPath = "/sys/fs/cgroup/cpu/cpu.cfs_period_us";
+            if (File.Exists(cpuQuotaPath) && File.Exists(cpuPeriodPath))
+            {
+                var quota = File.ReadAllText(cpuQuotaPath).Trim();
+                var period = File.ReadAllText(cpuPeriodPath).Trim();
+                if (int.TryParse(quota, out var quotaValue) && int.TryParse(period, out var periodValue))
+                {
+                    if (quotaValue > 0)
+                    {
+                        var cpuLimit = (double)quotaValue / periodValue;
+                        if (cpuLimit < 0.5) // Less than 0.5 CPU
+                        {
+                            return $"Low CPU limit detected: {cpuLimit:F2} CPUs";
+                        }
+                    }
+                }
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Could not check cgroup limits");
+            return null;
+        }
+    }
+
+    private string? CheckNamespaceCompatibility(int pid)
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return null; // Not applicable on non-Linux
+        }
+
+        try
+        {
+            // Check if running in container
+            var dockerEnv = File.Exists("/.dockerenv");
+            if (!dockerEnv)
+            {
+                return null; // Not in container
+            }
+
+            // Check PID namespace
+            var pidNamespacePath = $"/proc/{pid}/ns/pid";
+            if (File.Exists(pidNamespacePath))
+            {
+                // In production, we would compare namespace inodes to detect PID namespace isolation
+                // For now, just log a warning that we're in a container
+                return "Running in container with PID namespace isolation - process visibility may be limited";
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Could not check namespace compatibility");
+            return null;
         }
     }
 }
