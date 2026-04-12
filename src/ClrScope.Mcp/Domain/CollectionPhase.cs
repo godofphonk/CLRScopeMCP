@@ -1,0 +1,15 @@
+namespace ClrScope.Mcp.Domain;
+
+/// <summary>
+/// Phases of a collection operation
+/// </summary>
+public enum CollectionPhase
+{
+    Preflight,
+    Attaching,
+    Collecting,
+    Persisting,
+    Completed,
+    Failed,
+    Cancelled
+}

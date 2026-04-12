@@ -4,6 +4,7 @@ using ClrScope.Mcp.Infrastructure;
 using ClrScope.Mcp.Options;
 using ClrScope.Mcp.Validation;
 using Microsoft.Diagnostics.NETCore.Client;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Diagnostics.Tracing;
 
@@ -32,25 +33,30 @@ public class CollectTraceService
     private readonly ISqliteSessionStore _sessionStore;
     private readonly ISqliteArtifactStore _artifactStore;
     private readonly IPidLockManager _pidLockManager;
+    private readonly ILogger<CollectTraceService> _logger;
 
     public CollectTraceService(
         IOptions<ClrScopeOptions> options,
         IPreflightValidator preflightValidator,
         ISqliteSessionStore sessionStore,
         ISqliteArtifactStore artifactStore,
-        IPidLockManager pidLockManager)
+        IPidLockManager pidLockManager,
+        ILogger<CollectTraceService> logger)
     {
         _options = options;
         _preflightValidator = preflightValidator;
         _sessionStore = sessionStore;
         _artifactStore = artifactStore;
         _pidLockManager = pidLockManager;
+        _logger = logger;
     }
 
     public async Task<CollectTraceResult> CollectTraceAsync(
         CollectTraceRequest request,
         CancellationToken cancellationToken = default)
     {
+        _logger.LogInformation("[{Phase}] Starting trace collection for PID {Pid}", CollectionPhase.Preflight, request.Pid);
+
         // Acquire PID lock to serialize operations on the same process
         using var pidLock = await _pidLockManager.AcquireLockAsync(request.Pid, cancellationToken);
 
@@ -58,10 +64,13 @@ public class CollectTraceService
         var preflightResult = await _preflightValidator.ValidateCollectAsync(request.Pid, cancellationToken);
         if (!preflightResult.IsValid)
         {
+            _logger.LogError("[{Phase}] Preflight validation failed for PID {Pid}: {Error}", CollectionPhase.Preflight, request.Pid, preflightResult.Message);
             var failedSession = await _sessionStore.CreateAsync(SessionKind.Trace, request.Pid, request.Profile, cancellationToken);
             await _sessionStore.UpdateAsync(failedSession with { Status = SessionStatus.Failed, Error = preflightResult.Message }, cancellationToken);
             return CollectTraceResult.Failure(failedSession, preflightResult.Message ?? "Preflight validation failed");
         }
+
+        _logger.LogInformation("[{Phase}] Preflight validation passed for PID {Pid}", CollectionPhase.Preflight, request.Pid);
 
         // Parse duration (hh:mm:ss format)
         TimeSpan duration;
@@ -71,6 +80,7 @@ public class CollectTraceService
         }
         catch (FormatException ex)
         {
+            _logger.LogError("[{Phase}] Invalid duration format: {Error}", CollectionPhase.Preflight, ex.Message);
             var failedSession = await _sessionStore.CreateAsync(SessionKind.Trace, request.Pid, request.Profile, cancellationToken);
             await _sessionStore.UpdateAsync(failedSession with { Status = SessionStatus.Failed, Error = ex.Message }, cancellationToken);
             return CollectTraceResult.Failure(failedSession, $"Invalid duration format: {ex.Message}");
@@ -89,6 +99,7 @@ public class CollectTraceService
         var filePath = Path.Combine(tracesDir, fileName);
 
         // Start EventPipeSession with bounded timeout
+        _logger.LogInformation("[{Phase}] Attaching to PID {Pid}", CollectionPhase.Attaching, request.Pid);
         Microsoft.Diagnostics.NETCore.Client.EventPipeSession? eventPipeSession = null;
         bool forced = false;
         TraceCompletionMode completionMode = TraceCompletionMode.Complete;
@@ -109,9 +120,11 @@ public class CollectTraceService
                 requestRundown: true,
                 circularBufferMB: 256,
                 token: startCts.Token);
+            _logger.LogInformation("[{Phase}] Successfully attached to PID {Pid}", CollectionPhase.Attaching, request.Pid);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
+            _logger.LogError("[{Phase}] Attach timeout for PID {Pid}", CollectionPhase.Attaching, request.Pid);
             await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = "StartEventPipeSession timed out" }, cancellationToken);
             return CollectTraceResult.Failure(session, "StartEventPipeSession timed out");
         }
@@ -127,6 +140,7 @@ public class CollectTraceService
 
         try
         {
+            _logger.LogInformation("[{Phase}] Collecting trace for {Duration}", CollectionPhase.Collecting, duration);
             // copyTask not tied to operation cancellation - lifecycle managed by session.Stop/Dispose
             var copyTask = eventPipeSession.EventStream.CopyToAsync(fileStream, CancellationToken.None);
 
@@ -170,12 +184,14 @@ public class CollectTraceService
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            _logger.LogWarning("[{Phase}] Collection cancelled for PID {Pid}", CollectionPhase.Cancelled, request.Pid);
             eventPipeSession?.Dispose();
             await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Cancelled }, cancellationToken);
             return CollectTraceResult.Failure(session, "Collection cancelled", TraceCompletionMode.Cancelled);
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "[{Phase}] Collection failed for PID {Pid}", CollectionPhase.Failed, request.Pid);
             eventPipeSession?.Dispose();
             await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = ex.Message }, cancellationToken);
             return CollectTraceResult.Failure(session, $"Failed to collect trace: {ex.Message}", TraceCompletionMode.Failed);
@@ -199,7 +215,8 @@ public class CollectTraceService
             return CollectTraceResult.Failure(session, "Trace file is empty", TraceCompletionMode.Failed);
         }
 
-        // Create artifact record
+        // Persist artifact
+        _logger.LogInformation("[{Phase}] Persisting artifact for session {SessionId}", CollectionPhase.Persisting, session.SessionId.Value);
         var artifact = await _artifactStore.CreateAsync(
             ArtifactKind.Trace,
             filePath,
@@ -218,6 +235,9 @@ public class CollectTraceService
         var artifactStatus = forced ? ArtifactStatus.Partial : ArtifactStatus.Completed;
         await _artifactStore.UpdateAsync(artifact with { Status = artifactStatus }, cancellationToken);
         await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Completed, CompletedAtUtc = DateTime.UtcNow }, cancellationToken);
+
+        _logger.LogInformation("[{Phase}] Trace collection completed for PID {Pid}, SessionId {SessionId}, CompletionMode {CompletionMode}, Size {SizeBytes} bytes",
+            CollectionPhase.Completed, request.Pid, session.SessionId.Value, completionMode, fileInfo.Length);
 
         return CollectTraceResult.Success(session, artifact, completionMode);
     }
