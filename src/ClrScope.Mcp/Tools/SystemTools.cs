@@ -8,31 +8,37 @@ namespace ClrScope.Mcp.Tools;
 [McpServerToolType]
 public sealed class SystemTools
 {
+    private readonly HealthService _healthService;
+    private readonly ILogger<SystemTools> _logger;
+
+    public SystemTools(HealthService healthService, ILogger<SystemTools> logger)
+    {
+        _healthService = healthService;
+        _logger = logger;
+    }
+
     [McpServerTool(Name = "system.health", Title = "System Health Check", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Проверка здоровья сервера: artifact root, disk space, доступность инструментов")]
-    public static async Task<HealthCheckResult> SystemHealth(
-        HealthService healthService,
-        ILogger logger,
-        CancellationToken cancellationToken = default)
+    public async Task<HealthCheckResult> SystemHealth(CancellationToken cancellationToken = default)
     {
         try
         {
-            var health = await healthService.GetHealthAsync(cancellationToken);
-            logger.LogInformation("Health check completed: IsHealthy={IsHealthy}", health.IsHealthy);
+            var health = await _healthService.GetHealthAsync(cancellationToken);
+            _logger.LogInformation("Health check completed: IsHealthy={IsHealthy}", health.IsHealthy);
 
             return new HealthCheckResult(
                 IsHealthy: health.IsHealthy,
                 ArtifactRoot: health.ArtifactRoot.Path,
                 FreeDiskSpaceBytes: health.ArtifactRoot.FreeSpaceBytes,
-                DiagnosticsClientAvailable: true, // Always available in Stage 0a+
+                DiagnosticsClientAvailable: true,
                 Error: null
             );
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Health check failed");
+            _logger.LogError(ex, "Health check failed");
             return new HealthCheckResult(
                 IsHealthy: false,
-                ArtifactRoot: null!,
+                ArtifactRoot: string.Empty,
                 FreeDiskSpaceBytes: 0,
                 DiagnosticsClientAvailable: false,
                 Error: $"Health check failed: {ex.Message}"
@@ -41,12 +47,10 @@ public sealed class SystemTools
     }
 
     [McpServerTool(Name = "system.capabilities", Title = "System Capabilities", ReadOnly = true, Idempotent = true, UseStructuredContent = true), Description("Returns available capabilities and feature flags for the CLRScope MCP server")]
-    public static CapabilitiesResult GetCapabilities(
-        ILogger logger)
+    public CapabilitiesResult GetCapabilities()
     {
-        logger.LogInformation("Capabilities requested");
+        _logger.LogInformation("Capabilities requested");
 
-        // Check for CLI tools availability
         var dotnetCountersAvailable = CheckCliToolAvailable("dotnet-counters");
         var dotnetGcDumpAvailable = CheckCliToolAvailable("dotnet-gcdump");
         var dotnetStackAvailable = CheckCliToolAvailable("dotnet-stack");
@@ -92,7 +96,7 @@ public sealed class SystemTools
 
 public record HealthCheckResult(
     bool IsHealthy,
-    object ArtifactRoot,
+    string ArtifactRoot,
     long FreeDiskSpaceBytes,
     bool DiagnosticsClientAvailable,
     string? Error

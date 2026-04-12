@@ -8,16 +8,24 @@ namespace ClrScope.Mcp.Tools;
 [McpServerToolType]
 public sealed class RuntimeTools
 {
+    private readonly RuntimeService _runtimeService;
+    private readonly InspectTargetService _inspectService;
+    private readonly ILogger<RuntimeTools> _logger;
+
+    public RuntimeTools(RuntimeService runtimeService, InspectTargetService inspectService, ILogger<RuntimeTools> logger)
+    {
+        _runtimeService = runtimeService;
+        _inspectService = inspectService;
+        _logger = logger;
+    }
+
     [McpServerTool(Name = "runtime.list_targets", Title = "List .NET Processes", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Список всех attachable .NET процессов через GetPublishedProcesses()")]
-    public static ListTargetsResult ListTargets(
-        RuntimeService runtimeService,
-        ILogger logger,
-        CancellationToken cancellationToken = default)
+    public ListTargetsResult ListTargets(CancellationToken cancellationToken = default)
     {
         try
         {
-            var targets = runtimeService.ListTargets();
-            logger.LogInformation("Found {Count} .NET processes", targets.Count);
+            var targets = _runtimeService.ListTargets();
+            _logger.LogInformation("Found {Count} .NET processes", targets.Count);
             
             return new ListTargetsResult(
                 Targets: targets.Select(t => new RuntimeTargetInfo(t.Pid, t.ProcessName)).ToArray(),
@@ -26,16 +34,14 @@ public sealed class RuntimeTools
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "List targets failed");
+            _logger.LogError(ex, "List targets failed");
             throw new InvalidOperationException("List targets failed", ex);
         }
     }
 
     [McpServerTool(Name = "runtime.inspect_target", Title = "Inspect .NET Process", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Детальная информация о .NET процессе. Возвращает guaranteed fields (pid, processName, isAttachable) и best-effort fields (commandLine, OS, architecture).")]
-    public static InspectTargetResult InspectTarget(
+    public InspectTargetResult InspectTarget(
         [Description("Process ID to inspect")] int pid,
-        InspectTargetService inspectService,
-        ILogger logger,
         CancellationToken cancellationToken = default)
     {
         if (pid <= 0)
@@ -45,11 +51,11 @@ public sealed class RuntimeTools
 
         try
         {
-            var result = inspectService.InspectTarget(pid);
+            var result = _inspectService.InspectTarget(pid);
             
             if (!result.Found)
             {
-                logger.LogWarning("Process {Pid} not found", pid);
+                _logger.LogWarning("Process {Pid} not found", pid);
                 return new InspectTargetResult(
                     Found: false,
                     Attachable: false,
@@ -62,7 +68,7 @@ public sealed class RuntimeTools
                 );
             }
             
-            logger.LogInformation("Inspected process {Pid}: Found={Found}, Attachable={Attachable}", pid, result.Found, result.Attachable);
+            _logger.LogInformation("Inspected process {Pid}: Found={Found}, Attachable={Attachable}", pid, result.Found, result.Attachable);
             
             return new InspectTargetResult(
                 Found: result.Found,
@@ -77,7 +83,7 @@ public sealed class RuntimeTools
         }
         catch (ArgumentException ex)
         {
-            logger.LogError(ex, "Invalid input for target inspection: {Message}", ex.Message);
+            _logger.LogError(ex, "Invalid input for target inspection: {Message}", ex.Message);
             return new InspectTargetResult(
                 Found: false,
                 Attachable: false,
@@ -91,7 +97,7 @@ public sealed class RuntimeTools
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Inspect target failed for PID {Pid}", pid);
+            _logger.LogError(ex, "Inspect target failed for PID {Pid}", pid);
             return new InspectTargetResult(
                 Found: false,
                 Attachable: false,

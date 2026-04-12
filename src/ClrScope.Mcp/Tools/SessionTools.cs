@@ -9,12 +9,20 @@ namespace ClrScope.Mcp.Tools;
 [McpServerToolType]
 public sealed class SessionTools
 {
+    private readonly ISqliteSessionStore _sessionStore;
+    private readonly ISqliteArtifactStore _artifactStore;
+    private readonly ILogger<SessionTools> _logger;
+
+    public SessionTools(ISqliteSessionStore sessionStore, ISqliteArtifactStore artifactStore, ILogger<SessionTools> logger)
+    {
+        _sessionStore = sessionStore;
+        _artifactStore = artifactStore;
+        _logger = logger;
+    }
+
     [McpServerTool(Name = "session.get", Title = "Get Session", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Получение информации о сессии по ID")]
-    public static async Task<SessionResult> GetSession(
+    public async Task<SessionResult> GetSession(
         [Description("Session ID to get information for")] string sessionId,
-        ISqliteSessionStore sessionStore,
-        ISqliteArtifactStore artifactStore,
-        ILogger logger,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(sessionId))
@@ -25,11 +33,11 @@ public sealed class SessionTools
         try
         {
             var id = new SessionId(sessionId);
-            var session = await sessionStore.GetAsync(id, cancellationToken);
+            var session = await _sessionStore.GetAsync(id, cancellationToken);
             
             if (session == null)
             {
-                logger.LogWarning("Session {SessionId} not found", sessionId);
+                _logger.LogWarning("Session {SessionId} not found", sessionId);
                 return new SessionResult(
                     Found: false,
                     SessionId: sessionId,
@@ -45,10 +53,9 @@ public sealed class SessionTools
                 );
             }
             
-            // Get artifacts for this session
-            var artifacts = await artifactStore.GetBySessionAsync(id, cancellationToken);
+            var artifacts = await _artifactStore.GetBySessionAsync(id, cancellationToken);
             
-            logger.LogInformation("Retrieved session {SessionId} with {ArtifactCount} artifacts", sessionId, artifacts.Count);
+            _logger.LogInformation("Retrieved session {SessionId} with {ArtifactCount} artifacts", sessionId, artifacts.Count);
             
             return new SessionResult(
                 Found: true,
@@ -72,7 +79,7 @@ public sealed class SessionTools
         }
         catch (ArgumentException ex)
         {
-            logger.LogError(ex, "Invalid input for session retrieval: {Message}", ex.Message);
+            _logger.LogError(ex, "Invalid input for session retrieval: {Message}", ex.Message);
             return new SessionResult(
                 Found: false,
                 SessionId: sessionId,
@@ -89,7 +96,7 @@ public sealed class SessionTools
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Get session failed for {SessionId}", sessionId);
+            _logger.LogError(ex, "Get session failed for {SessionId}", sessionId);
             return new SessionResult(
                 Found: false,
                 SessionId: sessionId,
