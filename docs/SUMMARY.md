@@ -1,8 +1,8 @@
 # CLRScope MCP Server — Implementation Summary
 
-**Дата:** 13 апреля 2026  
-**Версия:** 0.2.0  
-**Статус:** Core MCP Slice + Production-Grade Trace Collection Ready
+**Дата:** 13 апреля 2026
+**Версия:** 0.3.0
+**Статус:** Beta / Pre-production Ready
 
 ---
 
@@ -204,13 +204,14 @@ dotnet run --project src/ClrScope.Mcp -- --demo
 2. Реализовать реальные CLI fallback tools (при необходимости)
 3. Добавить capability model для динамического включения tools
 
-### Среднесрочно (Stage 1 — Production Safety)
-1. `session.cancel` tool
-2. PidLockManager (SemaphoreSlim v1)
-3. Artifact retention service
+### Среднесрочно (Stage 1 — Production Safety) - Phase 1 & 2 ЗАВЕРШЕНО
+1. ✅ `session.cancel` tool - реальная runtime cancellation через IActiveOperationRegistry
+2. ✅ PidLockManager (SemaphoreSlim v1) - с ref-count + idle TTL + opportunistic sweep
+3. ✅ Artifact retention service - manual tool artifact.cleanup + startup cleanup
 4. ✅ Graceful cancellation с partial artifacts - ЗАВЕРШЕНО
-5. Full preflight validation (container checks)
-6. Minimal progress reporting (phase-based)
+5. ✅ Full preflight validation - GetPublishedProcesses probe вместо создания DiagnosticsClient
+6. ✅ Minimal progress reporting - IProgress<double> для collect.trace/collect.dump
+7. ✅ Stdio logging - AddConsole с LogToStandardErrorThreshold = LogLevel.Trace
 
 ### Долгосрочно (Stage 2+)
 1. Native EventPipe counters (замена CLI)
@@ -218,10 +219,26 @@ dotnet run --project src/ClrScope.Mcp -- --demo
 3. MCP Resources, Prompts, Workflows
 4. SOS analysis для dump файлов
 
+### Phase 3 (Low Priority - Production Polish)
+1. Uri/UriBuilder для file:// URIs - заменить ручную интерполяцию
+2. Stress/soak matrix testing для collect.trace
+
 ---
 
 ## Выводы
 
-CLRScope MCP Server Core MCP Slice + Production-Grade Trace Collection готов для использования. Core diagnostics tools работают, management layer реализован, MCP server wiring настроен. Stage 0c.1 Hardening завершён: добавлены metadata, validation, structured error handling, system.capabilities tool. Placeholder CLI tools удалены из MCP surface. Inspector verification завершён успешно. collect.trace рефакторен по feedback наставника: graceful stop, bounded timeout, partial artifacts, TraceCompletionMode.
+CLRScope MCP Server имеет статус **Beta / Pre-production Ready**. Phase 1 (P0 - Critical fixes) и Phase 2 (P1 - Medium priority) выполнены полностью:
 
-**Готовность к:** Использованию в production, интеграции с MCP clients, дальнейшей разработке Stage 1 (Production Safety).
+**Phase 1 - Critical fixes (P0):**
+- ✅ Stdio logging: AddConsole с LogToStandardErrorThreshold = LogLevel.Trace
+- ✅ Preflight validation: GetPublishedProcesses probe вместо создания DiagnosticsClient
+- ✅ Real session.cancel: IActiveOperationRegistry с CTS tracking для runtime cancellation
+- ✅ Retention policy: manual tool artifact.cleanup + startup cleanup (7 days)
+
+**Phase 2 - Medium priority (P1):**
+- ✅ MCP progress notifications: IProgress<double> для collect.trace/collect.dump (0%, 20%, 60%, 90%, 100%)
+- ✅ PidLockManager cleanup: ref-count + idle TTL (30 min) + opportunistic sweep
+
+Core diagnostics tools работают, management layer реализован, MCP server wiring настроен. Stage 0c.1 Hardening завершён: добавлены metadata, validation, structured error handling, system.capabilities tool. Placeholder CLI tools удалены из MCP surface. Inspector verification завершён успешно. collect.trace рефакторен по feedback наставника: graceful stop, bounded timeout, partial artifacts, TraceCompletionMode.
+
+**Готовность к:** Использованию в production, интеграции с MCP clients, Phase 3 (Production Polish).
