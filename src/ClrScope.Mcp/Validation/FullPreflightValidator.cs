@@ -237,48 +237,99 @@ public class FullPreflightValidator : IPreflightValidator
                 return null; // Not in container
             }
 
-            // Check memory limit
-            var memoryLimitPath = "/sys/fs/cgroup/memory/memory.limit_in_bytes";
-            if (File.Exists(memoryLimitPath))
+            // Try cgroup v2 first
+            var cgroupV2MemoryPath = "/sys/fs/cgroup/memory.max";
+            var cgroupV2CpuPath = "/sys/fs/cgroup/cpu.max";
+
+            if (File.Exists(cgroupV2MemoryPath) || File.Exists(cgroupV2CpuPath))
             {
-                var memoryLimit = File.ReadAllText(memoryLimitPath).Trim();
-                if (long.TryParse(memoryLimit, out var limitBytes))
-                {
-                    var limitMB = limitBytes / (1024 * 1024);
-                    if (limitMB < 512) // Less than 512 MB
-                    {
-                        return $"Low memory limit detected: {limitMB} MB";
-                    }
-                }
+                // cgroup v2 detected
+                return CheckCgroupV2Limits(cgroupV2MemoryPath, cgroupV2CpuPath);
             }
 
-            // Check CPU limit
-            var cpuQuotaPath = "/sys/fs/cgroup/cpu/cpu.cfs_quota_us";
-            var cpuPeriodPath = "/sys/fs/cgroup/cpu/cpu.cfs_period_us";
-            if (File.Exists(cpuQuotaPath) && File.Exists(cpuPeriodPath))
-            {
-                var quota = File.ReadAllText(cpuQuotaPath).Trim();
-                var period = File.ReadAllText(cpuPeriodPath).Trim();
-                if (int.TryParse(quota, out var quotaValue) && int.TryParse(period, out var periodValue))
-                {
-                    if (quotaValue > 0)
-                    {
-                        var cpuLimit = (double)quotaValue / periodValue;
-                        if (cpuLimit < 0.5) // Less than 0.5 CPU
-                        {
-                            return $"Low CPU limit detected: {cpuLimit:F2} CPUs";
-                        }
-                    }
-                }
-            }
-
-            return null;
+            // Fallback to cgroup v1
+            return CheckCgroupV1Limits();
         }
         catch (Exception ex)
         {
             _logger.LogDebug(ex, "Could not check cgroup limits");
             return null;
         }
+    }
+
+    private string? CheckCgroupV2Limits(string memoryPath, string cpuPath)
+    {
+        // Check memory limit (cgroup v2)
+        if (File.Exists(memoryPath))
+        {
+            var memoryLimit = File.ReadAllText(memoryPath).Trim();
+            if (memoryLimit != "max" && long.TryParse(memoryLimit, out var limitBytes))
+            {
+                var limitMB = limitBytes / (1024 * 1024);
+                if (limitMB < 512) // Less than 512 MB
+                {
+                    return $"Low memory limit detected (cgroup v2): {limitMB} MB";
+                }
+            }
+        }
+
+        // Check CPU limit (cgroup v2)
+        if (File.Exists(cpuPath))
+        {
+            var cpuLimit = File.ReadAllText(cpuPath).Trim();
+            // Format: "$quota $period" or "max $period"
+            var parts = cpuLimit.Split(' ');
+            if (parts.Length >= 2 && parts[0] != "max" && long.TryParse(parts[0], out var quota) && long.TryParse(parts[1], out var period))
+            {
+                var cpuLimitValue = (double)quota / period;
+                if (cpuLimitValue < 0.5) // Less than 0.5 CPU
+                {
+                    return $"Low CPU limit detected (cgroup v2): {cpuLimitValue:F2} CPUs";
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private string? CheckCgroupV1Limits()
+    {
+        // Check memory limit (cgroup v1)
+        var memoryLimitPath = "/sys/fs/cgroup/memory/memory.limit_in_bytes";
+        if (File.Exists(memoryLimitPath))
+        {
+            var memoryLimit = File.ReadAllText(memoryLimitPath).Trim();
+            if (long.TryParse(memoryLimit, out var limitBytes))
+            {
+                var limitMB = limitBytes / (1024 * 1024);
+                if (limitMB < 512) // Less than 512 MB
+                {
+                    return $"Low memory limit detected (cgroup v1): {limitMB} MB";
+                }
+            }
+        }
+
+        // Check CPU limit (cgroup v1)
+        var cpuQuotaPath = "/sys/fs/cgroup/cpu/cpu.cfs_quota_us";
+        var cpuPeriodPath = "/sys/fs/cgroup/cpu/cpu.cfs_period_us";
+        if (File.Exists(cpuQuotaPath) && File.Exists(cpuPeriodPath))
+        {
+            var quota = File.ReadAllText(cpuQuotaPath).Trim();
+            var period = File.ReadAllText(cpuPeriodPath).Trim();
+            if (int.TryParse(quota, out var quotaValue) && int.TryParse(period, out var periodValue))
+            {
+                if (quotaValue > 0)
+                {
+                    var cpuLimit = (double)quotaValue / periodValue;
+                    if (cpuLimit < 0.5) // Less than 0.5 CPU
+                    {
+                        return $"Low CPU limit detected (cgroup v1): {cpuLimit:F2} CPUs";
+                    }
+                }
+            }
+        }
+
+        return null;
     }
 
     private string? CheckNamespaceCompatibility(int pid)
