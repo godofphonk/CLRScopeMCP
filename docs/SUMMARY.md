@@ -1,8 +1,8 @@
 # CLRScope MCP Server — Implementation Summary
 
-**Дата:** 12 апреля 2026  
-**Версия:** 0.1.0  
-**Статус:** Core MCP Slice Ready for Testing
+**Дата:** 13 апреля 2026  
+**Версия:** 0.2.0  
+**Статус:** Core MCP Slice + Production-Grade Trace Collection Ready
 
 ---
 
@@ -29,7 +29,7 @@ CLRScope MCP Server — это MCP (Model Context Protocol) сервер для 
 | `runtime.list_targets` | Список .NET процессов | ✅ |
 | `runtime.inspect_target` | Детали процесса | ✅ |
 | `collect.dump` | Сбор memory dump | ✅ |
-| `collect.trace` | Сбор EventPipe trace | ⚠️ experimental (PC2 workaround) |
+| `collect.trace` | Сбор EventPipe trace | ✅ production-grade (graceful stop, partial artifacts) |
 
 ### Stage 0b — Management Layer
 
@@ -110,8 +110,8 @@ Domain Layer (Entities, Value Objects)
 ## Известные ограничения и блокеры
 
 ### PC2: EventPipeSession.Stop() висит
-**Статус:** Workaround реализован (fixed duration вместо manual stop)  
-**План решения:** Заменить на Cancellation Token pattern в Stage 1
+**Статус:** ✅ РЕШЕНО - production-grade graceful stop реализован  
+**Решение:** Graceful stop с bounded timeout (15s), forced fallback с Partial artifacts, TraceCompletionMode enum
 
 ### PC4: commandLine недоступно для внешних процессов
 **Статус:** Best-effort implementation с warning  
@@ -121,10 +121,10 @@ Domain Layer (Entities, Value Objects)
 **Статус:** Placeholder tools удалены из MCP surface (Stage 0c.1)  
 **План решения:** Реализовать реальные CLI команды в Stage 0b full при необходимости
 
-### MCP Integration — частично реализовано
-**Статус:** Stage 0c.1 Hardening завершён (metadata, validation, error handling)  
-**Отложено:** Progress notifications, UseStructuredContent, Inspector verification  
-**План решения:** Реализовать в Stage 1 при необходимости
+### MCP Integration — реализовано
+**Статус:** ✅ Stage 0c.1 Hardening завершён (metadata, validation, error handling)  
+**Inspector verification:** ✅ Все tools проверены, negative cases протестированы  
+**Отложено:** Progress notifications, MCP Resources, Prompts, Workflows
 
 ---
 
@@ -200,7 +200,7 @@ dotnet run --project src/ClrScope.Mcp -- --demo
 ## Следующие шаги
 
 ### Краткосрочно (для production MVP)
-1. Протестировать через MCP Inspector
+1. ✅ Протестировать через MCP Inspector - ЗАВЕРШЕНО
 2. Реализовать реальные CLI fallback tools (при необходимости)
 3. Добавить capability model для динамического включения tools
 
@@ -208,8 +208,9 @@ dotnet run --project src/ClrScope.Mcp -- --demo
 1. `session.cancel` tool
 2. PidLockManager (SemaphoreSlim v1)
 3. Artifact retention service
-4. Graceful cancellation с partial artifacts
+4. ✅ Graceful cancellation с partial artifacts - ЗАВЕРШЕНО
 5. Full preflight validation (container checks)
+6. Minimal progress reporting (phase-based)
 
 ### Долгосрочно (Stage 2+)
 1. Native EventPipe counters (замена CLI)
@@ -221,6 +222,6 @@ dotnet run --project src/ClrScope.Mcp -- --demo
 
 ## Выводы
 
-CLRScope MCP Server Core MCP Slice готов для тестирования. Core diagnostics tools работают, management layer реализован, MCP server wiring настроен. Stage 0c.1 Hardening завершён: добавлены metadata, validation, structured error handling, system.capabilities tool. Placeholder CLI tools удалены из MCP surface.
+CLRScope MCP Server Core MCP Slice + Production-Grade Trace Collection готов для использования. Core diagnostics tools работают, management layer реализован, MCP server wiring настроен. Stage 0c.1 Hardening завершён: добавлены metadata, validation, structured error handling, system.capabilities tool. Placeholder CLI tools удалены из MCP surface. Inspector verification завершён успешно. collect.trace рефакторен по feedback наставника: graceful stop, bounded timeout, partial artifacts, TraceCompletionMode.
 
-**Готовность к:** Тестированию через MCP Inspector, интеграции с MCP clients, дальнейшей разработке Stage 0b (CLI tools) или Stage 1 (Production Safety).
+**Готовность к:** Использованию в production, интеграции с MCP clients, дальнейшей разработке Stage 1 (Production Safety).
