@@ -64,13 +64,13 @@ public class CollectDumpService
         if (!preflightResult.IsValid)
         {
             var failedSession = await _sessionStore.CreateAsync(SessionKind.Dump, request.Pid, cancellationToken: cancellationToken);
-            await _sessionStore.UpdateAsync(failedSession with { Status = SessionStatus.Failed, Error = preflightResult.Message }, cancellationToken);
+            await _sessionStore.UpdateAsync(failedSession with { Status = SessionStatus.Failed, Error = preflightResult.Message, Phase = SessionPhase.Failed }, cancellationToken);
             return CollectDumpResult.Failure(failedSession, preflightResult.Message ?? "Preflight validation failed");
         }
 
         // Create session
         var session = await _sessionStore.CreateAsync(SessionKind.Dump, request.Pid, cancellationToken: cancellationToken);
-        await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Running }, cancellationToken);
+        await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Running, Phase = SessionPhase.Attaching }, cancellationToken);
 
         // Create linked CTS for operation cancellation
         using var operationCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -88,6 +88,7 @@ public class CollectDumpService
 
         // Write dump
         progress?.Report(20);
+        await _sessionStore.UpdateAsync(session with { Phase = SessionPhase.Collecting }, operationCts.Token);
         try
         {
             var client = new DiagnosticsClient(request.Pid);
@@ -98,19 +99,20 @@ public class CollectDumpService
         }
         catch (Exception ex)
         {
-            await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = ex.Message }, operationCts.Token);
+            await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = ex.Message, Phase = SessionPhase.Failed }, operationCts.Token);
             return CollectDumpResult.Failure(session, $"Failed to write dump: {ex.Message}");
         }
 
         // Check if file was created
         if (!File.Exists(filePath))
         {
-            await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = "Dump file not created" }, operationCts.Token);
+            await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = "Dump file not created", Phase = SessionPhase.Failed }, operationCts.Token);
             return CollectDumpResult.Failure(session, "Dump file was not created");
         }
 
         // Create artifact record
         progress?.Report(70);
+        await _sessionStore.UpdateAsync(session with { Phase = SessionPhase.Persisting }, operationCts.Token);
         var fileSize = new FileInfo(filePath).Length;
 
         var artifact = await _artifactStore.CreateAsync(
@@ -129,7 +131,7 @@ public class CollectDumpService
         // Update artifact with URIs
         artifact = artifact with { DiagUri = diagUri, FileUri = fileUri };
         await _artifactStore.UpdateAsync(artifact with { Status = ArtifactStatus.Completed }, operationCts.Token);
-        await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Completed, CompletedAtUtc = DateTime.UtcNow }, operationCts.Token);
+        await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Completed, CompletedAtUtc = DateTime.UtcNow, Phase = SessionPhase.Completed }, operationCts.Token);
 
         progress?.Report(100);
         return CollectDumpResult.Success(session, artifact);
