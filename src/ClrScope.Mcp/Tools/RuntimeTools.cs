@@ -30,7 +30,11 @@ public sealed class RuntimeTools
         catch (Exception ex)
         {
             logger.LogError(ex, "List targets failed");
-            throw new InvalidOperationException("List targets failed", ex);
+            return new ListTargetsResult(
+                Targets: Array.Empty<RuntimeTargetInfo>(),
+                Count: 0,
+                Error: $"List targets failed: {ex.Message}"
+            );
         }
     }
 
@@ -113,7 +117,8 @@ public sealed class RuntimeTools
 
 public record ListTargetsResult(
     RuntimeTargetInfo[] Targets,
-    int Count
+    int Count,
+    string Error = ""
 );
 
 public record RuntimeTargetInfo(
