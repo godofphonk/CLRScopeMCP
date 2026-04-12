@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("ClrScope.Mcp")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+3cb8baa9c16130d98b235d8a7d5a79cfd8b27f0c")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+50e0f2de0416a5edcd8caf8b43af5c44162c26de")]
 [assembly: System.Reflection.AssemblyProductAttribute("ClrScope.Mcp")]
 [assembly: System.Reflection.AssemblyTitleAttribute("ClrScope.Mcp")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

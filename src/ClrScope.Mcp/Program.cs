@@ -75,6 +75,9 @@ class Program
                 // PID Lock Manager
                 services.AddSingleton<IPidLockManager, PidLockManager>();
 
+                // Artifact Retention Service
+                services.AddSingleton<IArtifactRetentionService, ArtifactRetentionService>();
+
                 // Services
                 services.AddSingleton<HealthService>();
                 services.AddSingleton<RuntimeService>();
