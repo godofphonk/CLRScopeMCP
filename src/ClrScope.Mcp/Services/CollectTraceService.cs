@@ -93,23 +93,13 @@ public class CollectTraceService
             };
 
             eventPipeSession = client.StartEventPipeSession(providers, requestRundown: true, circularBufferMB: 256);
-            
-            // Copy EventPipeStream to file (CRITICAL FIX)
+
+            // Copy EventPipeStream to file
             fileStream = File.OpenWrite(filePath);
             var copyTask = eventPipeSession.EventStream.CopyToAsync(fileStream, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            fileStream?.Dispose();
-            await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = ex.Message }, cancellationToken);
-            return CollectTraceResult.Failure(session, $"Failed to start EventPipeSession: {ex.Message}");
-        }
 
-        // Wait for duration or cancellation (workaround for PC2: do NOT call session.Stop())
-        try
-        {
-            await Task.Delay(duration, cancellationToken);
-            await (eventPipeSession?.EventStream.CopyToAsync(fileStream!, cancellationToken) ?? Task.CompletedTask);
+            // Wait for duration or cancellation (workaround for PC2: do NOT call session.Stop())
+            await Task.WhenAny(copyTask, Task.Delay(duration, cancellationToken));
         }
         catch (OperationCanceledException)
         {
@@ -122,6 +112,13 @@ public class CollectTraceService
             eventPipeSession?.Dispose();
             await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Cancelled }, cancellationToken);
             return CollectTraceResult.Failure(session, "Collection cancelled");
+        }
+        catch (Exception ex)
+        {
+            fileStream?.Dispose();
+            eventPipeSession?.Dispose();
+            await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = ex.Message }, cancellationToken);
+            return CollectTraceResult.Failure(session, $"Failed to collect trace: {ex.Message}");
         }
 
         // Check if file was created
