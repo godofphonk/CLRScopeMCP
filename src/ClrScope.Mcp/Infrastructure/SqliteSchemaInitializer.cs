@@ -38,10 +38,20 @@ public class SqliteSchemaInitializer
 
         if (currentVersion >= 1)
         {
+            if (currentVersion < 2)
+            {
+                await Migration002_AddSessionPhaseAsync(connection, cancellationToken);
+            }
+            if (currentVersion < 3)
+            {
+                await Migration003_AddArtifactPinnedAsync(connection, cancellationToken);
+            }
             return;
         }
 
         await Migration001_CreateSessionsAndArtifactsAsync(connection, cancellationToken);
+        await Migration002_AddSessionPhaseAsync(connection, cancellationToken);
+        await Migration003_AddArtifactPinnedAsync(connection, cancellationToken);
     }
 
     private static async Task<int> GetCurrentVersionAsync(SqliteConnection connection, CancellationToken cancellationToken)
@@ -92,6 +102,26 @@ public class SqliteSchemaInitializer
             CREATE INDEX IF NOT EXISTS idx_artifacts_kind ON artifacts(kind);
 
             INSERT INTO schema_info (version, applied_at_utc) VALUES (1, datetime('now'));
+            """;
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static async Task Migration002_AddSessionPhaseAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    {
+        var command = connection.CreateCommand();
+        command.CommandText = """
+            ALTER TABLE sessions ADD COLUMN phase TEXT NOT NULL DEFAULT 'Preflight';
+            INSERT INTO schema_info (version, applied_at_utc) VALUES (2, datetime('now'));
+            """;
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static async Task Migration003_AddArtifactPinnedAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    {
+        var command = connection.CreateCommand();
+        command.CommandText = """
+            ALTER TABLE artifacts ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;
+            INSERT INTO schema_info (version, applied_at_utc) VALUES (3, datetime('now'));
             """;
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
