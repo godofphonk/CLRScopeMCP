@@ -11,11 +11,11 @@ public sealed class RuntimeTools
 {
     [McpServerTool(Name = "runtime.list_targets", Title = "List .NET Processes", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Список всех attachable .NET процессов через GetPublishedProcesses()")]
     public static ListTargetsResult ListTargets(
-        IServiceProvider serviceProvider,
+        McpServer server,
         CancellationToken cancellationToken = default)
     {
-        var runtimeService = serviceProvider.GetRequiredService<RuntimeService>();
-        var logger = serviceProvider.GetRequiredService<ILogger<RuntimeTools>>();
+        var runtimeService = server.Services.GetRequiredService<RuntimeService>();
+        var logger = server.Services.GetRequiredService<ILogger<RuntimeTools>>();
 
         try
         {
@@ -37,11 +37,11 @@ public sealed class RuntimeTools
     [McpServerTool(Name = "runtime.inspect_target", Title = "Inspect .NET Process", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Детальная информация о .NET процессе. Возвращает guaranteed fields (pid, processName, isAttachable) и best-effort fields (commandLine, OS, architecture).")]
     public static InspectTargetResult InspectTarget(
         [Description("Process ID to inspect")] int pid,
-        IServiceProvider serviceProvider,
+        McpServer server,
         CancellationToken cancellationToken = default)
     {
-        var inspectService = serviceProvider.GetRequiredService<InspectTargetService>();
-        var logger = serviceProvider.GetRequiredService<ILogger<RuntimeTools>>();
+        var inspectService = server.Services.GetRequiredService<InspectTargetService>();
+        var logger = server.Services.GetRequiredService<ILogger<RuntimeTools>>();
         if (pid <= 0)
         {
             throw new ArgumentException("Process ID must be greater than 0", nameof(pid));

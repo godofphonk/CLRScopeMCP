@@ -12,12 +12,12 @@ public sealed class CollectTools
     [McpServerTool(Name = "collect.dump", Title = "Collect Memory Dump", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false), Description("Сбор memory dump из .NET процесса через WriteDump(). Возвращает Session ID и Artifact ID.")]
     public static async Task<CollectDumpResult> CollectDump(
         [Description("Process ID to collect dump from")] int pid,
-        IServiceProvider serviceProvider,
+        McpServer server,
         [Description("Include heap in dump (default: true)")] bool includeHeap = true,
         CancellationToken cancellationToken = default)
     {
-        var dumpService = serviceProvider.GetRequiredService<CollectDumpService>();
-        var logger = serviceProvider.GetRequiredService<ILogger<CollectTools>>();
+        var dumpService = server.Services.GetRequiredService<CollectDumpService>();
+        var logger = server.Services.GetRequiredService<ILogger<CollectTools>>();
 
         if (pid <= 0)
         {
@@ -92,12 +92,12 @@ public sealed class CollectTools
     public static async Task<CollectTraceResult> CollectTrace(
         [Description("Process ID to collect trace from")] int pid,
         [Description("Duration in dd:hh:mm format (e.g., 00:01:30 for 1.5 minutes)")] string duration,
-        IServiceProvider serviceProvider,
+        McpServer server,
         [Description("Trace profile (optional)")] string? profile = null,
         CancellationToken cancellationToken = default)
     {
-        var traceService = serviceProvider.GetRequiredService<CollectTraceService>();
-        var logger = serviceProvider.GetRequiredService<ILogger<CollectTools>>();
+        var traceService = server.Services.GetRequiredService<CollectTraceService>();
+        var logger = server.Services.GetRequiredService<ILogger<CollectTools>>();
 
         if (pid <= 0)
         {

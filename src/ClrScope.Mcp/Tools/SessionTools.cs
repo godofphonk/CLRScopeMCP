@@ -13,12 +13,12 @@ public sealed class SessionTools
     [McpServerTool(Name = "session.get", Title = "Get Session", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Получение информации о сессии по ID")]
     public static async Task<SessionResult> GetSession(
         [Description("Session ID to get information for")] string sessionId,
-        IServiceProvider serviceProvider,
+        McpServer server,
         CancellationToken cancellationToken = default)
     {
-        var sessionStore = serviceProvider.GetRequiredService<ISqliteSessionStore>();
-        var artifactStore = serviceProvider.GetRequiredService<ISqliteArtifactStore>();
-        var logger = serviceProvider.GetRequiredService<ILogger<SessionTools>>();
+        var sessionStore = server.Services.GetRequiredService<ISqliteSessionStore>();
+        var artifactStore = server.Services.GetRequiredService<ISqliteArtifactStore>();
+        var logger = server.Services.GetRequiredService<ILogger<SessionTools>>();
 
         if (string.IsNullOrWhiteSpace(sessionId))
         {

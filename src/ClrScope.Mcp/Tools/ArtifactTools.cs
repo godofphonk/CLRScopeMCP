@@ -13,11 +13,11 @@ public sealed class ArtifactTools
     [McpServerTool(Name = "artifact.get_metadata", Title = "Get Artifact Metadata", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Получение метаданных артефакта по ID")]
     public static async Task<ArtifactMetadataResult> GetArtifactMetadata(
         [Description("Artifact ID to get metadata for")] string artifactId,
-        IServiceProvider serviceProvider,
+        McpServer server,
         CancellationToken cancellationToken = default)
     {
-        var artifactStore = serviceProvider.GetRequiredService<ISqliteArtifactStore>();
-        var logger = serviceProvider.GetRequiredService<ILogger<ArtifactTools>>();
+        var artifactStore = server.Services.GetRequiredService<ISqliteArtifactStore>();
+        var logger = server.Services.GetRequiredService<ILogger<ArtifactTools>>();
 
         if (string.IsNullOrWhiteSpace(artifactId))
         {
@@ -97,13 +97,13 @@ public sealed class ArtifactTools
 
     [McpServerTool(Name = "artifact.list", Title = "List Artifacts", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Список всех артефактов с опциональной фильтрацией")]
     public static async Task<ArtifactListResult> ListArtifacts(
-        IServiceProvider serviceProvider,
+        McpServer server,
         [Description("Filter by kind (optional)")] string? kind = null,
         [Description("Filter by status (optional)")] string? status = null,
         CancellationToken cancellationToken = default)
     {
-        var artifactStore = serviceProvider.GetRequiredService<ISqliteArtifactStore>();
-        var logger = serviceProvider.GetRequiredService<ILogger<ArtifactTools>>();
+        var artifactStore = server.Services.GetRequiredService<ISqliteArtifactStore>();
+        var logger = server.Services.GetRequiredService<ILogger<ArtifactTools>>();
 
         try
         {
@@ -150,11 +150,11 @@ public sealed class ArtifactTools
     [McpServerTool(Name = "artifact.delete", Title = "Delete Artifact", Destructive = true, Idempotent = false), Description("Удаление артефакта по ID")]
     public static async Task<DeleteArtifactResult> DeleteArtifact(
         [Description("Artifact ID to delete")] string artifactId,
-        IServiceProvider serviceProvider,
+        McpServer server,
         CancellationToken cancellationToken = default)
     {
-        var artifactStore = serviceProvider.GetRequiredService<ISqliteArtifactStore>();
-        var logger = serviceProvider.GetRequiredService<ILogger<ArtifactTools>>();
+        var artifactStore = server.Services.GetRequiredService<ISqliteArtifactStore>();
+        var logger = server.Services.GetRequiredService<ILogger<ArtifactTools>>();
 
         if (string.IsNullOrWhiteSpace(artifactId))
         {
@@ -214,11 +214,11 @@ public sealed class ArtifactTools
     [McpServerTool(Name = "artifact.read_text", Title = "Read Artifact Text", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Чтение текстового содержимого артефакта (если применимо)")]
     public static async Task<ReadArtifactTextResult> ReadArtifactText(
         [Description("Artifact ID to read text from")] string artifactId,
-        IServiceProvider serviceProvider,
+        McpServer server,
         CancellationToken cancellationToken = default)
     {
-        var artifactStore = serviceProvider.GetRequiredService<ISqliteArtifactStore>();
-        var logger = serviceProvider.GetRequiredService<ILogger<ArtifactTools>>();
+        var artifactStore = server.Services.GetRequiredService<ISqliteArtifactStore>();
+        var logger = server.Services.GetRequiredService<ILogger<ArtifactTools>>();
 
         if (string.IsNullOrWhiteSpace(artifactId))
         {
