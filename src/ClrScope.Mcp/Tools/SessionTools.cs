@@ -9,7 +9,7 @@ namespace ClrScope.Mcp.Tools;
 [McpServerToolType]
 public sealed class SessionTools
 {
-    [McpServerTool(Name = "session.get", Title = "Get Session", ReadOnly = true, Idempotent = true), Description("Получение информации о сессии по ID")]
+    [McpServerTool(Name = "session.get", Title = "Get Session", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Получение информации о сессии по ID")]
     public static async Task<SessionResult> GetSession(
         [Description("Session ID to get information for")] string sessionId,
         ISqliteSessionStore sessionStore,

@@ -9,7 +9,7 @@ namespace ClrScope.Mcp.Tools;
 [McpServerToolType]
 public sealed class ArtifactTools
 {
-    [McpServerTool(Name = "artifact.get_metadata", Title = "Get Artifact Metadata", ReadOnly = true, Idempotent = true), Description("Получение метаданных артефакта по ID")]
+    [McpServerTool(Name = "artifact.get_metadata", Title = "Get Artifact Metadata", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Получение метаданных артефакта по ID")]
     public static async Task<ArtifactMetadataResult> GetArtifactMetadata(
         [Description("Artifact ID to get metadata for")] string artifactId,
         ISqliteArtifactStore artifactStore,
@@ -92,7 +92,7 @@ public sealed class ArtifactTools
         }
     }
 
-    [McpServerTool(Name = "artifact.list", Title = "List Artifacts", ReadOnly = true, Idempotent = true), Description("Список всех артефактов с опциональной фильтрацией")]
+    [McpServerTool(Name = "artifact.list", Title = "List Artifacts", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Список всех артефактов с опциональной фильтрацией")]
     public static async Task<ArtifactListResult> ListArtifacts(
         ISqliteArtifactStore artifactStore,
         ILogger logger,
@@ -207,7 +207,7 @@ public sealed class ArtifactTools
         }
     }
 
-    [McpServerTool(Name = "artifact.read_text", Title = "Read Artifact Text", ReadOnly = true, Idempotent = true), Description("Чтение текстового содержимого артефакта (если применимо)")]
+    [McpServerTool(Name = "artifact.read_text", Title = "Read Artifact Text", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Чтение текстового содержимого артефакта (если применимо)")]
     public static async Task<ReadArtifactTextResult> ReadArtifactText(
         [Description("Artifact ID to read text from")] string artifactId,
         ISqliteArtifactStore artifactStore,

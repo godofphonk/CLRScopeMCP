@@ -8,7 +8,7 @@ namespace ClrScope.Mcp.Tools;
 [McpServerToolType]
 public sealed class SystemTools
 {
-    [McpServerTool(Name = "system.health", Title = "System Health Check", ReadOnly = true, Idempotent = true, OpenWorld = false), Description("Проверка здоровья сервера: artifact root, disk space, доступность инструментов")]
+    [McpServerTool(Name = "system.health", Title = "System Health Check", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Проверка здоровья сервера: artifact root, disk space, доступность инструментов")]
     public static async Task<HealthCheckResult> SystemHealth(
         HealthService healthService,
         ILogger logger,
@@ -40,7 +40,7 @@ public sealed class SystemTools
         }
     }
 
-    [McpServerTool(Name = "system.capabilities", Title = "System Capabilities", ReadOnly = true, Idempotent = true), Description("Returns available capabilities and feature flags for the CLRScope MCP server")]
+    [McpServerTool(Name = "system.capabilities", Title = "System Capabilities", ReadOnly = true, Idempotent = true, UseStructuredContent = true), Description("Returns available capabilities and feature flags for the CLRScope MCP server")]
     public static CapabilitiesResult GetCapabilities(
         ILogger logger)
     {
