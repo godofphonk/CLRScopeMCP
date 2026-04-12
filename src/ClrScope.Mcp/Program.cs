@@ -91,7 +91,7 @@ class Program
                 services.AddSingleton<IMonitorBackend, MonitorBackend>();
 
                 // SOS Analyzer
-                services.AddSingleton<ISosAnalyzer, DotnetSosAnalyzer>();
+                services.AddSingleton<ISosAnalyzer, DotnetDumpAnalyzer>();
 
                 // Symbol Resolver
                 services.AddSingleton<ISymbolResolver, SymbolResolver>();

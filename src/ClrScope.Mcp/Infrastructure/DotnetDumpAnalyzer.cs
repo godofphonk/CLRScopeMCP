@@ -4,16 +4,16 @@ using Microsoft.Extensions.Logging;
 namespace ClrScope.Mcp.Infrastructure;
 
 /// <summary>
-/// SOS analyzer implementation using dotnet-sos CLI
+/// SOS analyzer implementation using dotnet-dump analyze CLI
 /// </summary>
-public class DotnetSosAnalyzer : ISosAnalyzer
+public class DotnetDumpAnalyzer : ISosAnalyzer
 {
-    private readonly ILogger<DotnetSosAnalyzer> _logger;
+    private readonly ILogger<DotnetDumpAnalyzer> _logger;
     private readonly ICliCommandRunner _cliRunner;
     private readonly CorrelationIdProvider _correlationIdProvider;
 
-    public DotnetSosAnalyzer(
-        ILogger<DotnetSosAnalyzer> logger,
+    public DotnetDumpAnalyzer(
+        ILogger<DotnetDumpAnalyzer> logger,
         ICliCommandRunner cliRunner,
         CorrelationIdProvider correlationIdProvider)
     {
@@ -27,10 +27,10 @@ public class DotnetSosAnalyzer : ISosAnalyzer
         try
         {
             var correlationId = _correlationIdProvider.GetCorrelationId();
-            _logger.LogInformation("[{CorrelationId}] Checking dotnet-sos availability", correlationId);
+            _logger.LogInformation("[{CorrelationId}] Checking dotnet-dump availability", correlationId);
 
             var result = await _cliRunner.ExecuteAsync(
-                "dotnet-sos",
+                "dotnet-dump",
                 new[] { "--version" },
                 cancellationToken);
 
@@ -38,7 +38,7 @@ public class DotnetSosAnalyzer : ISosAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "dotnet-sos not available");
+            _logger.LogWarning(ex, "dotnet-dump not available");
             return false;
         }
     }
@@ -59,19 +59,10 @@ public class DotnetSosAnalyzer : ISosAnalyzer
                 return SosAnalysisResult.FailureResult($"Dump file not found: {dumpFilePath}");
             }
 
-            // Execute dotnet-sos command
-            // dotnet-sos requires loading the dump first, then executing commands
-            var args = new[] { "load", dumpFilePath };
-            var loadResult = await _cliRunner.ExecuteAsync("dotnet-sos", args, cancellationToken);
-
-            if (loadResult.ExitCode != 0)
-            {
-                return SosAnalysisResult.FailureResult($"Failed to load dump: {loadResult.StandardError}");
-            }
-
-            // Execute the SOS command
-            var commandArgs = new[] { command };
-            var commandResult = await _cliRunner.ExecuteAsync("dotnet-sos", commandArgs, cancellationToken);
+            // Execute dotnet-dump analyze with the SOS command
+            // dotnet-dump analyze opens interactive REPL, so we use echo to pipe the command
+            var args = new[] { "analyze", dumpFilePath, "-c", command };
+            var commandResult = await _cliRunner.ExecuteAsync("dotnet-dump", args, cancellationToken);
 
             if (commandResult.ExitCode == 0)
             {
