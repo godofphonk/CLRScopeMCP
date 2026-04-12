@@ -76,7 +76,7 @@ public sealed class RuntimeTools
                 OperatingSystem: result.Details?.OperatingSystem ?? string.Empty,
                 ProcessArchitecture: result.Details?.ProcessArchitecture ?? string.Empty,
                 Warnings: result.Warnings,
-                Error: result.Error
+                Error: result.Error ?? string.Empty
             );
         }
         catch (ArgumentException ex)
