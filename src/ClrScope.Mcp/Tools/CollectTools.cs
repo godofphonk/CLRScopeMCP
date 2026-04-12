@@ -19,13 +19,13 @@ public sealed class CollectTools
         var dumpService = server.Services.GetRequiredService<CollectDumpService>();
         var logger = server.Services.GetRequiredService<ILogger<CollectTools>>();
 
-        if (pid <= 0)
-        {
-            throw new ArgumentException("Process ID must be greater than 0", nameof(pid));
-        }
-
         try
         {
+            if (pid <= 0)
+            {
+                throw new ArgumentException("Process ID must be greater than 0", nameof(pid));
+            }
+
             logger.LogInformation("Starting dump collection for PID {Pid}, IncludeHeap={IncludeHeap}", pid, includeHeap);
             
             var request = new CollectDumpRequest(pid, includeHeap);
