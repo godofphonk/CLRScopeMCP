@@ -294,10 +294,11 @@ public sealed class ArtifactTools
         }
     }
 
-    [McpServerTool(Name = "artifact.cleanup", Title = "Cleanup Old Artifacts", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false, UseStructuredContent = true), Description("Удаление старых артефактов старше указанного возраста")]
+    [McpServerTool(Name = "artifact.cleanup", Title = "Cleanup Old Artifacts", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false, UseStructuredContent = true), Description("Удаление старых артефактов старше указанного возраста и/или ограничение общего размера")]
     public static async Task<CleanupArtifactsResult> CleanupArtifacts(
         [Description("Максимальный возраст артефактов для сохранения (например, 7d для 7 дней)")] string maxAge,
         McpServer server,
+        [Description("Максимальный общий размер для удаления в байтах (опционально, например, 10737418240 для 10GB)")] long? maxSizeBytes = null,
         CancellationToken cancellationToken = default)
     {
         var retentionService = server.Services.GetRequiredService<IArtifactRetentionService>();
@@ -311,13 +312,18 @@ public sealed class ArtifactTools
             }
 
             var timeSpan = ParseMaxAge(maxAge);
-            var deletedCount = await retentionService.CleanupOldArtifactsAsync(timeSpan, cancellationToken);
+            var deletedCount = await retentionService.CleanupOldArtifactsAsync(timeSpan, maxSizeBytes, cancellationToken);
 
-            logger.LogInformation("Cleanup completed: {DeletedCount} artifacts deleted older than {MaxAge}", deletedCount, maxAge);
+            var message = maxSizeBytes.HasValue
+                ? $"Deleted {deletedCount} artifacts older than {maxAge} (max size: {maxSizeBytes} bytes)"
+                : $"Deleted {deletedCount} artifacts older than {maxAge}";
+
+            logger.LogInformation("Cleanup completed: {DeletedCount} artifacts deleted older than {MaxAge}, max size: {MaxSize}",
+                deletedCount, maxAge, maxSizeBytes);
 
             return new CleanupArtifactsResult(
                 DeletedCount: deletedCount,
-                Message: $"Deleted {deletedCount} artifacts older than {maxAge}"
+                Message: message
             );
         }
         catch (ArgumentException ex)
@@ -352,6 +358,126 @@ public sealed class ArtifactTools
             's' => TimeSpan.FromSeconds(value),
             _ => throw new FormatException($"Unknown time unit: {unit}. Use d, h, m, or s.")
         };
+    }
+
+    [McpServerTool(Name = "artifact.pin", Title = "Pin Artifact", ReadOnly = false, Idempotent = false, UseStructuredContent = true), Description("Закрепить артефакт для защиты от автоматического удаления")]
+    public static async Task<PinArtifactResult> PinArtifact(
+        [Description("Artifact ID to pin")] string artifactId,
+        McpServer server,
+        CancellationToken cancellationToken = default)
+    {
+        var artifactStore = server.Services.GetRequiredService<ISqliteArtifactStore>();
+        var logger = server.Services.GetRequiredService<ILogger<ArtifactTools>>();
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(artifactId))
+            {
+                throw new ArgumentException("Artifact ID must not be empty", nameof(artifactId));
+            }
+
+            var id = new ArtifactId(artifactId);
+            var artifact = await artifactStore.GetAsync(id, cancellationToken);
+
+            if (artifact == null)
+            {
+                logger.LogWarning("Artifact {ArtifactId} not found for pinning", artifactId);
+                return new PinArtifactResult(
+                    Success: false,
+                    ArtifactId: artifactId,
+                    Message: "Artifact not found"
+                );
+            }
+
+            var updatedArtifact = artifact with { Pinned = true };
+            await artifactStore.UpdateAsync(updatedArtifact, cancellationToken);
+
+            logger.LogInformation("Pinned artifact {ArtifactId}", artifactId);
+
+            return new PinArtifactResult(
+                Success: true,
+                ArtifactId: artifactId,
+                Message: "Artifact pinned successfully"
+            );
+        }
+        catch (ArgumentException ex)
+        {
+            logger.LogError(ex, "Invalid input for artifact pinning: {Message}", ex.Message);
+            return new PinArtifactResult(
+                Success: false,
+                ArtifactId: artifactId,
+                Message: $"Invalid input: {ex.Message}"
+            );
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Pin artifact failed for {ArtifactId}", artifactId);
+            return new PinArtifactResult(
+                Success: false,
+                ArtifactId: artifactId,
+                Message: $"Pin artifact failed: {ex.Message}"
+            );
+        }
+    }
+
+    [McpServerTool(Name = "artifact.unpin", Title = "Unpin Artifact", ReadOnly = false, Idempotent = false, UseStructuredContent = true), Description("Открепить артефакт для разрешения автоматического удаления")]
+    public static async Task<PinArtifactResult> UnpinArtifact(
+        [Description("Artifact ID to unpin")] string artifactId,
+        McpServer server,
+        CancellationToken cancellationToken = default)
+    {
+        var artifactStore = server.Services.GetRequiredService<ISqliteArtifactStore>();
+        var logger = server.Services.GetRequiredService<ILogger<ArtifactTools>>();
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(artifactId))
+            {
+                throw new ArgumentException("Artifact ID must not be empty", nameof(artifactId));
+            }
+
+            var id = new ArtifactId(artifactId);
+            var artifact = await artifactStore.GetAsync(id, cancellationToken);
+
+            if (artifact == null)
+            {
+                logger.LogWarning("Artifact {ArtifactId} not found for unpinning", artifactId);
+                return new PinArtifactResult(
+                    Success: false,
+                    ArtifactId: artifactId,
+                    Message: "Artifact not found"
+                );
+            }
+
+            var updatedArtifact = artifact with { Pinned = false };
+            await artifactStore.UpdateAsync(updatedArtifact, cancellationToken);
+
+            logger.LogInformation("Unpinned artifact {ArtifactId}", artifactId);
+
+            return new PinArtifactResult(
+                Success: true,
+                ArtifactId: artifactId,
+                Message: "Artifact unpinned successfully"
+            );
+        }
+        catch (ArgumentException ex)
+        {
+            logger.LogError(ex, "Invalid input for artifact unpinning: {Message}", ex.Message);
+            return new PinArtifactResult(
+                Success: false,
+                ArtifactId: artifactId,
+                Message: $"Invalid input: {ex.Message}"
+            );
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Unpin artifact failed for {ArtifactId}", artifactId);
+            return new PinArtifactResult(
+                Success: false,
+                ArtifactId: artifactId,
+                Message: $"Unpin artifact failed: {ex.Message}"
+            );
+        }
     }
 }
 
@@ -393,4 +519,10 @@ public record ReadArtifactTextResult(
     string ArtifactId,
     string? Content,
     string? Error
+);
+
+public record PinArtifactResult(
+    bool Success,
+    string ArtifactId,
+    string Message
 );
