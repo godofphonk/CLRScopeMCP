@@ -1,4 +1,5 @@
 using ClrScope.Mcp.Services;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
 using System.ComponentModel;
@@ -8,22 +9,18 @@ namespace ClrScope.Mcp.Tools;
 [McpServerToolType]
 public sealed class SystemTools
 {
-    private readonly HealthService _healthService;
-    private readonly ILogger<SystemTools> _logger;
-
-    public SystemTools(HealthService healthService, ILogger<SystemTools> logger)
-    {
-        _healthService = healthService;
-        _logger = logger;
-    }
-
     [McpServerTool(Name = "system.health", Title = "System Health Check", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Проверка здоровья сервера: artifact root, disk space, доступность инструментов")]
-    public async Task<HealthCheckResult> SystemHealth(CancellationToken cancellationToken = default)
+    public static async Task<HealthCheckResult> SystemHealth(
+        IServiceProvider serviceProvider,
+        CancellationToken cancellationToken = default)
     {
+        var healthService = serviceProvider.GetRequiredService<HealthService>();
+        var logger = serviceProvider.GetRequiredService<ILogger<SystemTools>>();
+
         try
         {
-            var health = await _healthService.GetHealthAsync(cancellationToken);
-            _logger.LogInformation("Health check completed: IsHealthy={IsHealthy}", health.IsHealthy);
+            var health = await healthService.GetHealthAsync(cancellationToken);
+            logger.LogInformation("Health check completed: IsHealthy={IsHealthy}", health.IsHealthy);
 
             return new HealthCheckResult(
                 IsHealthy: health.IsHealthy,
@@ -35,7 +32,7 @@ public sealed class SystemTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Health check failed");
+            logger.LogError(ex, "Health check failed");
             return new HealthCheckResult(
                 IsHealthy: false,
                 ArtifactRoot: string.Empty,
@@ -47,9 +44,10 @@ public sealed class SystemTools
     }
 
     [McpServerTool(Name = "system.capabilities", Title = "System Capabilities", ReadOnly = true, Idempotent = true, UseStructuredContent = true), Description("Returns available capabilities and feature flags for the CLRScope MCP server")]
-    public CapabilitiesResult GetCapabilities()
+    public static CapabilitiesResult GetCapabilities(IServiceProvider serviceProvider)
     {
-        _logger.LogInformation("Capabilities requested");
+        var logger = serviceProvider.GetRequiredService<ILogger<SystemTools>>();
+        logger.LogInformation("Capabilities requested");
 
         var dotnetCountersAvailable = CheckCliToolAvailable("dotnet-counters");
         var dotnetGcDumpAvailable = CheckCliToolAvailable("dotnet-gcdump");

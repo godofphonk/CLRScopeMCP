@@ -1,4 +1,5 @@
 using ClrScope.Mcp.Services;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
 using System.ComponentModel;
@@ -8,23 +9,16 @@ namespace ClrScope.Mcp.Tools;
 [McpServerToolType]
 public sealed class CollectTools
 {
-    private readonly CollectDumpService _dumpService;
-    private readonly CollectTraceService _traceService;
-    private readonly ILogger<CollectTools> _logger;
-
-    public CollectTools(CollectDumpService dumpService, CollectTraceService traceService, ILogger<CollectTools> logger)
-    {
-        _dumpService = dumpService;
-        _traceService = traceService;
-        _logger = logger;
-    }
-
     [McpServerTool(Name = "collect.dump", Title = "Collect Memory Dump", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false), Description("Сбор memory dump из .NET процесса через WriteDump(). Возвращает Session ID и Artifact ID.")]
-    public async Task<CollectDumpResult> CollectDump(
+    public static async Task<CollectDumpResult> CollectDump(
         [Description("Process ID to collect dump from")] int pid,
+        IServiceProvider serviceProvider,
         [Description("Include heap in dump (default: true)")] bool includeHeap = true,
         CancellationToken cancellationToken = default)
     {
+        var dumpService = serviceProvider.GetRequiredService<CollectDumpService>();
+        var logger = serviceProvider.GetRequiredService<ILogger<CollectTools>>();
+
         if (pid <= 0)
         {
             throw new ArgumentException("Process ID must be greater than 0", nameof(pid));
@@ -32,14 +26,14 @@ public sealed class CollectTools
 
         try
         {
-            _logger.LogInformation("Starting dump collection for PID {Pid}, IncludeHeap={IncludeHeap}", pid, includeHeap);
+            logger.LogInformation("Starting dump collection for PID {Pid}, IncludeHeap={IncludeHeap}", pid, includeHeap);
             
             var request = new CollectDumpRequest(pid, includeHeap);
-            var result = await _dumpService.CollectDumpAsync(request, cancellationToken);
+            var result = await dumpService.CollectDumpAsync(request, cancellationToken);
             
             if (result.Artifact != null)
             {
-                _logger.LogInformation("Dump collected successfully: SessionId={SessionId}, ArtifactId={ArtifactId}", 
+                logger.LogInformation("Dump collected successfully: SessionId={SessionId}, ArtifactId={ArtifactId}", 
                     result.Session.SessionId.Value, result.Artifact.ArtifactId.Value);
                 
                 return new CollectDumpResult(
@@ -54,7 +48,7 @@ public sealed class CollectTools
             }
             else
             {
-                _logger.LogWarning("Dump collection failed for PID {Pid}: {Error}", pid, result.Error);
+                logger.LogWarning("Dump collection failed for PID {Pid}: {Error}", pid, result.Error);
                 return new CollectDumpResult(
                     Success: false,
                     SessionId: result.Session.SessionId.Value,
@@ -68,7 +62,7 @@ public sealed class CollectTools
         }
         catch (ArgumentException ex)
         {
-            _logger.LogError(ex, "Invalid input for dump collection: {Message}", ex.Message);
+            logger.LogError(ex, "Invalid input for dump collection: {Message}", ex.Message);
             return new CollectDumpResult(
                 Success: false,
                 SessionId: string.Empty,
@@ -81,7 +75,7 @@ public sealed class CollectTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Collect dump failed for PID {Pid}", pid);
+            logger.LogError(ex, "Collect dump failed for PID {Pid}", pid);
             return new CollectDumpResult(
                 Success: false,
                 SessionId: string.Empty,
@@ -95,12 +89,16 @@ public sealed class CollectTools
     }
 
     [McpServerTool(Name = "collect.trace", Title = "Collect EventPipe Trace (Experimental)", ReadOnly = false, Idempotent = false), Description("Сбор EventPipe trace из .NET процесса через StartEventPipeSession(). EXPERIMENTAL: имеет workaround для PC2 (session.Stop() висит). Duration формат: dd:hh:mm")]
-    public async Task<CollectTraceResult> CollectTrace(
+    public static async Task<CollectTraceResult> CollectTrace(
         [Description("Process ID to collect trace from")] int pid,
         [Description("Duration in dd:hh:mm format (e.g., 00:01:30 for 1.5 minutes)")] string duration,
+        IServiceProvider serviceProvider,
         [Description("Trace profile (optional)")] string? profile = null,
         CancellationToken cancellationToken = default)
     {
+        var traceService = serviceProvider.GetRequiredService<CollectTraceService>();
+        var logger = serviceProvider.GetRequiredService<ILogger<CollectTools>>();
+
         if (pid <= 0)
         {
             throw new ArgumentException("Process ID must be greater than 0", nameof(pid));
@@ -118,14 +116,14 @@ public sealed class CollectTools
 
         try
         {
-            _logger.LogInformation("Starting trace collection for PID {Pid}, Duration={Duration}, Profile={Profile}", pid, duration, profile);
+            logger.LogInformation("Starting trace collection for PID {Pid}, Duration={Duration}, Profile={Profile}", pid, duration, profile);
             
             var request = new CollectTraceRequest(pid, duration, profile);
-            var result = await _traceService.CollectTraceAsync(request, cancellationToken);
+            var result = await traceService.CollectTraceAsync(request, cancellationToken);
             
             if (result.Artifact != null)
             {
-                _logger.LogInformation("Trace collected successfully: SessionId={SessionId}, ArtifactId={ArtifactId}", 
+                logger.LogInformation("Trace collected successfully: SessionId={SessionId}, ArtifactId={ArtifactId}", 
                     result.Session.SessionId.Value, result.Artifact.ArtifactId.Value);
                 
                 return new CollectTraceResult(
@@ -140,7 +138,7 @@ public sealed class CollectTools
             }
             else
             {
-                _logger.LogWarning("Trace collection failed for PID {Pid}: {Error}", pid, result.Error);
+                logger.LogWarning("Trace collection failed for PID {Pid}: {Error}", pid, result.Error);
                 return new CollectTraceResult(
                     Success: false,
                     SessionId: result.Session.SessionId.Value,
@@ -154,7 +152,7 @@ public sealed class CollectTools
         }
         catch (ArgumentException ex)
         {
-            _logger.LogError(ex, "Invalid input for trace collection: {Message}", ex.Message);
+            logger.LogError(ex, "Invalid input for trace collection: {Message}", ex.Message);
             return new CollectTraceResult(
                 Success: false,
                 SessionId: string.Empty,
@@ -167,7 +165,7 @@ public sealed class CollectTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Collect trace failed for PID {Pid}", pid);
+            logger.LogError(ex, "Collect trace failed for PID {Pid}", pid);
             return new CollectTraceResult(
                 Success: false,
                 SessionId: string.Empty,

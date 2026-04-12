@@ -1,5 +1,6 @@
 using ClrScope.Mcp.Domain;
 using ClrScope.Mcp.Infrastructure;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
 using System.ComponentModel;
@@ -9,20 +10,15 @@ namespace ClrScope.Mcp.Tools;
 [McpServerToolType]
 public sealed class ArtifactTools
 {
-    private readonly ISqliteArtifactStore _artifactStore;
-    private readonly ILogger<ArtifactTools> _logger;
-
-    public ArtifactTools(ISqliteArtifactStore artifactStore, ILogger<ArtifactTools> logger)
-    {
-        _artifactStore = artifactStore;
-        _logger = logger;
-    }
-
     [McpServerTool(Name = "artifact.get_metadata", Title = "Get Artifact Metadata", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Получение метаданных артефакта по ID")]
-    public async Task<ArtifactMetadataResult> GetArtifactMetadata(
+    public static async Task<ArtifactMetadataResult> GetArtifactMetadata(
         [Description("Artifact ID to get metadata for")] string artifactId,
+        IServiceProvider serviceProvider,
         CancellationToken cancellationToken = default)
     {
+        var artifactStore = serviceProvider.GetRequiredService<ISqliteArtifactStore>();
+        var logger = serviceProvider.GetRequiredService<ILogger<ArtifactTools>>();
+
         if (string.IsNullOrWhiteSpace(artifactId))
         {
             throw new ArgumentException("Artifact ID must not be empty", nameof(artifactId));
@@ -31,11 +27,11 @@ public sealed class ArtifactTools
         try
         {
             var id = new ArtifactId(artifactId);
-            var artifact = await _artifactStore.GetAsync(id, cancellationToken);
+            var artifact = await artifactStore.GetAsync(id, cancellationToken);
             
             if (artifact == null)
             {
-                _logger.LogWarning("Artifact {ArtifactId} not found", artifactId);
+                logger.LogWarning("Artifact {ArtifactId} not found", artifactId);
                 return new ArtifactMetadataResult(
                     Found: false,
                     ArtifactId: artifactId,
@@ -50,7 +46,7 @@ public sealed class ArtifactTools
                 );
             }
             
-            _logger.LogInformation("Retrieved metadata for artifact {ArtifactId}", artifactId);
+            logger.LogInformation("Retrieved metadata for artifact {ArtifactId}", artifactId);
             
             return new ArtifactMetadataResult(
                 Found: true,
@@ -67,7 +63,7 @@ public sealed class ArtifactTools
         }
         catch (ArgumentException ex)
         {
-            _logger.LogError(ex, "Invalid input for artifact metadata: {Message}", ex.Message);
+            logger.LogError(ex, "Invalid input for artifact metadata: {Message}", ex.Message);
             return new ArtifactMetadataResult(
                 Found: false,
                 ArtifactId: artifactId,
@@ -83,7 +79,7 @@ public sealed class ArtifactTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Get artifact metadata failed for {ArtifactId}", artifactId);
+            logger.LogError(ex, "Get artifact metadata failed for {ArtifactId}", artifactId);
             return new ArtifactMetadataResult(
                 Found: false,
                 ArtifactId: artifactId,
@@ -100,14 +96,18 @@ public sealed class ArtifactTools
     }
 
     [McpServerTool(Name = "artifact.list", Title = "List Artifacts", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Список всех артефактов с опциональной фильтрацией")]
-    public async Task<ArtifactListResult> ListArtifacts(
+    public static async Task<ArtifactListResult> ListArtifacts(
+        IServiceProvider serviceProvider,
         [Description("Filter by kind (optional)")] string? kind = null,
         [Description("Filter by status (optional)")] string? status = null,
         CancellationToken cancellationToken = default)
     {
+        var artifactStore = serviceProvider.GetRequiredService<ISqliteArtifactStore>();
+        var logger = serviceProvider.GetRequiredService<ILogger<ArtifactTools>>();
+
         try
         {
-            var artifacts = await _artifactStore.GetAllAsync(cancellationToken);
+            var artifacts = await artifactStore.GetAllAsync(cancellationToken);
             
             var filtered = artifacts.AsEnumerable();
             
@@ -123,7 +123,7 @@ public sealed class ArtifactTools
             
             var result = filtered.ToArray();
             
-            _logger.LogInformation("Listed {Count} artifacts", result.Length);
+            logger.LogInformation("Listed {Count} artifacts", result.Length);
             
             return new ArtifactListResult(
                 Count: result.Length,
@@ -139,7 +139,7 @@ public sealed class ArtifactTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "List artifacts failed");
+            logger.LogError(ex, "List artifacts failed");
             return new ArtifactListResult(
                 Count: 0,
                 Artifacts: Array.Empty<ArtifactSummary>()
@@ -148,10 +148,14 @@ public sealed class ArtifactTools
     }
 
     [McpServerTool(Name = "artifact.delete", Title = "Delete Artifact", Destructive = true, Idempotent = false), Description("Удаление артефакта по ID")]
-    public async Task<DeleteArtifactResult> DeleteArtifact(
+    public static async Task<DeleteArtifactResult> DeleteArtifact(
         [Description("Artifact ID to delete")] string artifactId,
+        IServiceProvider serviceProvider,
         CancellationToken cancellationToken = default)
     {
+        var artifactStore = serviceProvider.GetRequiredService<ISqliteArtifactStore>();
+        var logger = serviceProvider.GetRequiredService<ILogger<ArtifactTools>>();
+
         if (string.IsNullOrWhiteSpace(artifactId))
         {
             throw new ArgumentException("Artifact ID must not be empty", nameof(artifactId));
@@ -160,11 +164,11 @@ public sealed class ArtifactTools
         try
         {
             var id = new ArtifactId(artifactId);
-            var artifact = await _artifactStore.GetAsync(id, cancellationToken);
+            var artifact = await artifactStore.GetAsync(id, cancellationToken);
             
             if (artifact == null)
             {
-                _logger.LogWarning("Artifact {ArtifactId} not found for deletion", artifactId);
+                logger.LogWarning("Artifact {ArtifactId} not found for deletion", artifactId);
                 return new DeleteArtifactResult(
                     Success: false,
                     ArtifactId: artifactId,
@@ -177,9 +181,9 @@ public sealed class ArtifactTools
                 File.Delete(artifact.FilePath);
             }
             
-            await _artifactStore.DeleteAsync(id, cancellationToken);
+            await artifactStore.DeleteAsync(id, cancellationToken);
             
-            _logger.LogInformation("Deleted artifact {ArtifactId}", artifactId);
+            logger.LogInformation("Deleted artifact {ArtifactId}", artifactId);
             
             return new DeleteArtifactResult(
                 Success: true,
@@ -189,7 +193,7 @@ public sealed class ArtifactTools
         }
         catch (ArgumentException ex)
         {
-            _logger.LogError(ex, "Invalid input for artifact deletion: {Message}", ex.Message);
+            logger.LogError(ex, "Invalid input for artifact deletion: {Message}", ex.Message);
             return new DeleteArtifactResult(
                 Success: false,
                 ArtifactId: artifactId,
@@ -198,7 +202,7 @@ public sealed class ArtifactTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Delete artifact failed for {ArtifactId}", artifactId);
+            logger.LogError(ex, "Delete artifact failed for {ArtifactId}", artifactId);
             return new DeleteArtifactResult(
                 Success: false,
                 ArtifactId: artifactId,
@@ -208,10 +212,14 @@ public sealed class ArtifactTools
     }
 
     [McpServerTool(Name = "artifact.read_text", Title = "Read Artifact Text", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Чтение текстового содержимого артефакта (если применимо)")]
-    public async Task<ReadArtifactTextResult> ReadArtifactText(
+    public static async Task<ReadArtifactTextResult> ReadArtifactText(
         [Description("Artifact ID to read text from")] string artifactId,
+        IServiceProvider serviceProvider,
         CancellationToken cancellationToken = default)
     {
+        var artifactStore = serviceProvider.GetRequiredService<ISqliteArtifactStore>();
+        var logger = serviceProvider.GetRequiredService<ILogger<ArtifactTools>>();
+
         if (string.IsNullOrWhiteSpace(artifactId))
         {
             throw new ArgumentException("Artifact ID must not be empty", nameof(artifactId));
@@ -220,7 +228,7 @@ public sealed class ArtifactTools
         try
         {
             var id = new ArtifactId(artifactId);
-            var artifact = await _artifactStore.GetAsync(id, cancellationToken);
+            var artifact = await artifactStore.GetAsync(id, cancellationToken);
             
             if (artifact == null)
             {
@@ -255,7 +263,7 @@ public sealed class ArtifactTools
             
             var content = await File.ReadAllTextAsync(artifact.FilePath, cancellationToken);
             
-            _logger.LogInformation("Read text content for artifact {ArtifactId} ({Length} bytes)", artifactId, content.Length);
+            logger.LogInformation("Read text content for artifact {ArtifactId} ({Length} bytes)", artifactId, content.Length);
             
             return new ReadArtifactTextResult(
                 Success: true,
@@ -266,7 +274,7 @@ public sealed class ArtifactTools
         }
         catch (ArgumentException ex)
         {
-            _logger.LogError(ex, "Invalid input for artifact read: {Message}", ex.Message);
+            logger.LogError(ex, "Invalid input for artifact read: {Message}", ex.Message);
             return new ReadArtifactTextResult(
                 Success: false,
                 ArtifactId: artifactId,
@@ -276,7 +284,7 @@ public sealed class ArtifactTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Read artifact text failed for {ArtifactId}", artifactId);
+            logger.LogError(ex, "Read artifact text failed for {ArtifactId}", artifactId);
             return new ReadArtifactTextResult(
                 Success: false,
                 ArtifactId: artifactId,

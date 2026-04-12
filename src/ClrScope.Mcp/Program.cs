@@ -70,13 +70,6 @@ class Program
                 services.AddSingleton<CollectTraceService>();
                 services.AddSingleton<CollectDumpService>();
 
-                // Tools
-                services.AddSingleton<Tools.SystemTools>();
-                services.AddSingleton<Tools.RuntimeTools>();
-                services.AddSingleton<Tools.CollectTools>();
-                services.AddSingleton<Tools.ArtifactTools>();
-                services.AddSingleton<Tools.SessionTools>();
-
                 // MCP Server
                 services.AddMcpServer()
                     .WithStdioServerTransport()
