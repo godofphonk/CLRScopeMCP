@@ -6,6 +6,7 @@ using ClrScope.Mcp.Validation;
 using Microsoft.Diagnostics.NETCore.Client;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using ModelContextProtocol.Server;
 using System.Diagnostics.Tracing;
 
 namespace ClrScope.Mcp.Services;
@@ -56,8 +57,10 @@ public class CollectTraceService
 
     public async Task<CollectTraceResult> CollectTraceAsync(
         CollectTraceRequest request,
+        IProgress<double>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        progress?.Report(0);
         _logger.LogInformation("[{Phase}] Starting trace collection for PID {Pid}", CollectionPhase.Preflight, request.Pid);
 
         // Acquire PID lock to serialize operations on the same process
@@ -108,6 +111,7 @@ public class CollectTraceService
         var filePath = Path.Combine(tracesDir, fileName);
 
         // Start EventPipeSession with bounded timeout
+        progress?.Report(20);
         _logger.LogInformation("[{Phase}] Attaching to PID {Pid}", CollectionPhase.Attaching, request.Pid);
         Microsoft.Diagnostics.NETCore.Client.EventPipeSession? eventPipeSession = null;
         bool forced = false;
@@ -149,6 +153,7 @@ public class CollectTraceService
 
         try
         {
+            progress?.Report(60);
             _logger.LogInformation("[{Phase}] Collecting trace for {Duration}", CollectionPhase.Collecting, duration);
             // copyTask not tied to operation cancellation - lifecycle managed by session.Stop/Dispose
             var copyTask = eventPipeSession.EventStream.CopyToAsync(fileStream, CancellationToken.None);
@@ -225,6 +230,7 @@ public class CollectTraceService
         }
 
         // Persist artifact
+        progress?.Report(90);
         _logger.LogInformation("[{Phase}] Persisting artifact for session {SessionId}", CollectionPhase.Persisting, session.SessionId.Value);
         var artifact = await _artifactStore.CreateAsync(
             ArtifactKind.Trace,
@@ -245,6 +251,7 @@ public class CollectTraceService
         await _artifactStore.UpdateAsync(artifact with { Status = artifactStatus }, operationCts.Token);
         await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Completed, CompletedAtUtc = DateTime.UtcNow }, operationCts.Token);
 
+        progress?.Report(100);
         _logger.LogInformation("[{Phase}] Trace collection completed for PID {Pid}, SessionId {SessionId}, CompletionMode {CompletionMode}, Size {SizeBytes} bytes",
             CollectionPhase.Completed, request.Pid, session.SessionId.Value, completionMode, fileInfo.Length);
 

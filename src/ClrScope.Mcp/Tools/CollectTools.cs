@@ -14,6 +14,7 @@ public sealed class CollectTools
         [Description("Process ID to collect dump from")] int pid,
         McpServer server,
         [Description("Include heap in dump (default: true)")] bool includeHeap = true,
+        IProgress<double>? progress = null,
         CancellationToken cancellationToken = default)
     {
         var dumpService = server.Services.GetRequiredService<CollectDumpService>();
@@ -27,9 +28,9 @@ public sealed class CollectTools
             }
 
             logger.LogInformation("Starting dump collection for PID {Pid}, IncludeHeap={IncludeHeap}", pid, includeHeap);
-            
+
             var request = new CollectDumpRequest(pid, includeHeap);
-            var result = await dumpService.CollectDumpAsync(request, cancellationToken);
+            var result = await dumpService.CollectDumpAsync(request, progress, cancellationToken);
             
             if (result.Artifact != null)
             {
@@ -94,6 +95,7 @@ public sealed class CollectTools
         [Description("Duration in hh:mm:ss format (e.g., 00:01:30 for 1.5 minutes)")] string duration,
         McpServer server,
         [Description("Trace profile (optional)")] string? profile = null,
+        IProgress<double>? progress = null,
         CancellationToken cancellationToken = default)
     {
         var traceService = server.Services.GetRequiredService<CollectTraceService>();
@@ -117,9 +119,9 @@ public sealed class CollectTools
             }
 
             logger.LogInformation("Starting trace collection for PID {Pid}, Duration={Duration}, Profile={Profile}", pid, duration, profile);
-            
+
             var request = new CollectTraceRequest(pid, duration, profile);
-            var result = await traceService.CollectTraceAsync(request, cancellationToken);
+            var result = await traceService.CollectTraceAsync(request, progress, cancellationToken);
             
             if (result.Artifact != null)
             {

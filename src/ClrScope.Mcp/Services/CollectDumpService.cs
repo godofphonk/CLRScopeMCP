@@ -5,6 +5,7 @@ using ClrScope.Mcp.Options;
 using ClrScope.Mcp.Validation;
 using Microsoft.Diagnostics.NETCore.Client;
 using Microsoft.Extensions.Options;
+using ModelContextProtocol.Server;
 
 namespace ClrScope.Mcp.Services;
 
@@ -50,8 +51,11 @@ public class CollectDumpService
 
     public async Task<CollectDumpResult> CollectDumpAsync(
         CollectDumpRequest request,
+        IProgress<double>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        progress?.Report(0);
+
         // Acquire PID lock to serialize operations on the same process
         using var pidLock = await _pidLockManager.AcquireLockAsync(request.Pid, cancellationToken);
 
@@ -83,6 +87,7 @@ public class CollectDumpService
         var filePath = Path.Combine(dumpsDir, fileName);
 
         // Write dump
+        progress?.Report(20);
         try
         {
             var client = new DiagnosticsClient(request.Pid);
@@ -105,6 +110,7 @@ public class CollectDumpService
         }
 
         // Create artifact record
+        progress?.Report(70);
         var fileSize = new FileInfo(filePath).Length;
 
         var artifact = await _artifactStore.CreateAsync(
@@ -125,6 +131,7 @@ public class CollectDumpService
         await _artifactStore.UpdateAsync(artifact with { Status = ArtifactStatus.Completed }, operationCts.Token);
         await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Completed, CompletedAtUtc = DateTime.UtcNow }, operationCts.Token);
 
+        progress?.Report(100);
         return CollectDumpResult.Success(session, artifact);
         }
         finally
