@@ -1,0 +1,130 @@
+using ClrScope.Mcp.Domain;
+using ClrScope.Mcp.Infrastructure;
+using Microsoft.Extensions.Logging;
+using ModelContextProtocol.Server;
+using System.ComponentModel;
+
+namespace ClrScope.Mcp.Tools;
+
+[McpServerToolType]
+public sealed class SessionTools
+{
+    [McpServerTool(Name = "session.get", Title = "Get Session", ReadOnly = true, Idempotent = true), Description("Получение информации о сессии по ID")]
+    public static async Task<SessionResult> GetSession(
+        [Description("Session ID to get information for")] string sessionId,
+        ISqliteSessionStore sessionStore,
+        ISqliteArtifactStore artifactStore,
+        ILogger logger,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            throw new ArgumentException("Session ID must not be empty", nameof(sessionId));
+        }
+
+        try
+        {
+            var id = new SessionId(sessionId);
+            var session = await sessionStore.GetAsync(id, cancellationToken);
+            
+            if (session == null)
+            {
+                logger.LogWarning("Session {SessionId} not found", sessionId);
+                return new SessionResult(
+                    Found: false,
+                    SessionId: sessionId,
+                    Kind: null,
+                    Status: null,
+                    Pid: 0,
+                    StartedAtUtc: null,
+                    CompletedAtUtc: null,
+                    SessionError: null,
+                    ArtifactCount: 0,
+                    Artifacts: Array.Empty<SessionArtifactSummary>(),
+                    Error: "Session not found"
+                );
+            }
+            
+            // Get artifacts for this session
+            var artifacts = await artifactStore.GetBySessionAsync(id, cancellationToken);
+            
+            logger.LogInformation("Retrieved session {SessionId} with {ArtifactCount} artifacts", sessionId, artifacts.Count);
+            
+            return new SessionResult(
+                Found: true,
+                SessionId: session.SessionId.Value,
+                Kind: session.Kind.ToString(),
+                Status: session.Status.ToString(),
+                Pid: session.Pid,
+                StartedAtUtc: session.CreatedAtUtc,
+                CompletedAtUtc: session.CompletedAtUtc,
+                SessionError: session.Error,
+                ArtifactCount: artifacts.Count,
+                Artifacts: artifacts.Select(a => new SessionArtifactSummary(
+                    a.ArtifactId.Value,
+                    a.Kind.ToString(),
+                    a.Status.ToString(),
+                    a.FilePath,
+                    a.SizeBytes
+                )).ToArray(),
+                Error: null
+            );
+        }
+        catch (ArgumentException ex)
+        {
+            logger.LogError(ex, "Invalid input for session retrieval: {Message}", ex.Message);
+            return new SessionResult(
+                Found: false,
+                SessionId: sessionId,
+                Kind: null,
+                Status: null,
+                Pid: 0,
+                StartedAtUtc: null,
+                CompletedAtUtc: null,
+                SessionError: null,
+                ArtifactCount: 0,
+                Artifacts: Array.Empty<SessionArtifactSummary>(),
+                Error: $"Invalid input: {ex.Message}"
+            );
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Get session failed for {SessionId}", sessionId);
+            return new SessionResult(
+                Found: false,
+                SessionId: sessionId,
+                Kind: null,
+                Status: null,
+                Pid: 0,
+                StartedAtUtc: null,
+                CompletedAtUtc: null,
+                SessionError: null,
+                ArtifactCount: 0,
+                Artifacts: Array.Empty<SessionArtifactSummary>(),
+                Error: $"Get session failed: {ex.Message}"
+            );
+        }
+    }
+}
+
+public record SessionResult(
+    bool Found,
+    string SessionId,
+    string? Kind,
+    string? Status,
+    int Pid,
+    DateTime? StartedAtUtc,
+    DateTime? CompletedAtUtc,
+    string? SessionError,
+    int ArtifactCount,
+    SessionArtifactSummary[] Artifacts,
+    string? Error
+);
+
+public record SessionArtifactSummary(
+    string ArtifactId,
+    string Kind,
+    string Status,
+    string FilePath,
+    long SizeBytes
+);
