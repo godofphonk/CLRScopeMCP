@@ -10,7 +10,7 @@ namespace ClrScope.Mcp.Tools;
 [McpServerToolType]
 public sealed class SessionTools
 {
-    [McpServerTool(Name = "session.get", Title = "Get Session", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Получение информации о сессии по ID")]
+    [McpServerTool(Name = "session.get", Title = "Get Session Info", ReadOnly = true, Idempotent = true, UseStructuredContent = true), Description("Получить информацию о диагностической сессии")]
     public static async Task<SessionResult> GetSession(
         [Description("Session ID to get information for")] string sessionId,
         McpServer server,
@@ -36,12 +36,12 @@ public sealed class SessionTools
                 return new SessionResult(
                     Found: false,
                     SessionId: sessionId,
-                    Kind: string.Empty,
-                    Status: string.Empty,
+                    Kind: null,
+                    Status: null,
                     Pid: 0,
-                    StartedAtUtc: DateTime.UtcNow,
-                    CompletedAtUtc: DateTime.UtcNow,
-                    SessionError: string.Empty,
+                    StartedAtUtc: null,
+                    CompletedAtUtc: null,
+                    SessionError: null,
                     ArtifactCount: 0,
                     Artifacts: Array.Empty<SessionArtifactSummary>(),
                     Error: "Session not found"
@@ -50,40 +50,41 @@ public sealed class SessionTools
 
             var artifacts = await artifactStore.GetBySessionAsync(id, cancellationToken);
 
-            logger.LogInformation("Retrieved session {SessionId} with {ArtifactCount} artifacts", sessionId, artifacts.Count);
+            logger.LogInformation("Retrieved session {SessionId} with {ArtifactCount} artifacts, phase {Phase}", sessionId, artifacts.Count, session.Phase);
 
             return new SessionResult(
                 Found: true,
-                SessionId: session.SessionId.Value,
+                SessionId: sessionId,
                 Kind: session.Kind.ToString(),
                 Status: session.Status.ToString(),
                 Pid: session.Pid,
                 StartedAtUtc: session.CreatedAtUtc,
                 CompletedAtUtc: session.CompletedAtUtc,
-                SessionError: session.Error ?? string.Empty,
+                SessionError: session.Error,
                 ArtifactCount: artifacts.Count,
                 Artifacts: artifacts.Select(a => new SessionArtifactSummary(
-                    a.ArtifactId.Value,
-                    a.Kind.ToString(),
-                    a.Status.ToString(),
-                    a.FilePath,
-                    a.SizeBytes
+                    ArtifactId: a.ArtifactId.Value,
+                    Kind: a.Kind.ToString(),
+                    Status: a.Status.ToString(),
+                    FilePath: a.FilePath,
+                    SizeBytes: a.SizeBytes
                 )).ToArray(),
-                Error: string.Empty
+                Error: null,
+                Phase: session.Phase.ToString()
             );
         }
         catch (ArgumentException ex)
         {
-            logger.LogError(ex, "Invalid input for session retrieval: {Message}", ex.Message);
+            logger.LogError(ex, "Invalid input for session get: {Message}", ex.Message);
             return new SessionResult(
                 Found: false,
                 SessionId: sessionId,
-                Kind: string.Empty,
-                Status: string.Empty,
+                Kind: null,
+                Status: null,
                 Pid: 0,
-                StartedAtUtc: DateTime.UtcNow,
-                CompletedAtUtc: DateTime.UtcNow,
-                SessionError: string.Empty,
+                StartedAtUtc: null,
+                CompletedAtUtc: null,
+                SessionError: null,
                 ArtifactCount: 0,
                 Artifacts: Array.Empty<SessionArtifactSummary>(),
                 Error: $"Invalid input: {ex.Message}"
@@ -95,12 +96,12 @@ public sealed class SessionTools
             return new SessionResult(
                 Found: false,
                 SessionId: sessionId,
-                Kind: string.Empty,
-                Status: string.Empty,
+                Kind: null,
+                Status: null,
                 Pid: 0,
-                StartedAtUtc: DateTime.UtcNow,
-                CompletedAtUtc: DateTime.UtcNow,
-                SessionError: string.Empty,
+                StartedAtUtc: null,
+                CompletedAtUtc: null,
+                SessionError: null,
                 ArtifactCount: 0,
                 Artifacts: Array.Empty<SessionArtifactSummary>(),
                 Error: $"Get session failed: {ex.Message}"
@@ -193,7 +194,8 @@ public record SessionResult(
     string? SessionError,
     int ArtifactCount,
     SessionArtifactSummary[] Artifacts,
-    string? Error
+    string? Error,
+    string? Phase = null
 );
 
 public record CancelSessionResult(
