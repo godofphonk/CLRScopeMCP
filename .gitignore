@@ -1,4 +1,5 @@
 docs/
+.github/
 bin/
 obj/
 .vs/

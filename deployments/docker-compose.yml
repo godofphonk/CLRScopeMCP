@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  clrscope-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: clrscope-mcp
+    volumes:
+      - clrscope-artifacts:/root/.clrscope/artifacts
+      - clrscope-data:/root/.clrscope/data
+      - /proc:/host/proc:ro
+      - /sys/fs/cgroup:/host/sys/fs/cgroup:ro
+    environment:
+      - CLRSCOPE__ArtifactRoot=/root/.clrscope/artifacts
+      - CLRSCOPE__DatabasePath=/root/.clrscope/data/clrscope.db
+      - CLRSCOPE__MonitorUrl=http://dotnet-monitor:52323
+    depends_on:
+      - dotnet-monitor
+    cap_add:
+      - SYS_PTRACE
+    privileged: true
+    stdin_open: true
+    tty: true
+
+  dotnet-monitor:
+    image: mcr.microsoft.com/dotnet/monitor:9.0
+    container_name: dotnet-monitor
+    ports:
+      - "52323:52323"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys/fs/cgroup:/host/sys/fs/cgroup:ro
+      - dotnet-monitor-data:/tmp
+    environment:
+      - DOTNET_MONITOR_DiagnosticsPort__ConnectionMode=Connect
+      - DOTNET_MONITOR_DiagnosticsPort__HostName=0.0.0.0
+      - DOTNET_MONITOR_DiagnosticsPort__Port=52323
+    cap_add:
+      - SYS_PTRACE
+    privileged: true
+
+volumes:
+  clrscope-artifacts:
+  clrscope-data:
+  dotnet-monitor-data:

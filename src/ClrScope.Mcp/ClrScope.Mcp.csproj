@@ -5,6 +5,16 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>clrscope-mcp</ToolCommandName>
+    <PackageId>ClrScope.Mcp</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>godofphonk</Authors>
+    <Description>.NET diagnostics MCP server - MCP (Model Context Protocol) server for diagnosing .NET processes via EventPipe, memory dumps, and CLI tools.</Description>
+    <PackageProjectUrl>https://github.com/godofphonk/CLRScopeMCP</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/godofphonk/CLRScopeMCP</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <License>MIT</License>
   </PropertyGroup>
 
   <ItemGroup>
