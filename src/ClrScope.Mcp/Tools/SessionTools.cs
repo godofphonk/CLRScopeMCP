@@ -60,7 +60,7 @@ public sealed class SessionTools
                 Pid: session.Pid,
                 StartedAtUtc: session.CreatedAtUtc,
                 CompletedAtUtc: session.CompletedAtUtc,
-                SessionError: session.Error,
+                SessionError: session.Error ?? string.Empty,
                 ArtifactCount: artifacts.Count,
                 Artifacts: artifacts.Select(a => new SessionArtifactSummary(
                     a.ArtifactId.Value,
@@ -69,7 +69,7 @@ public sealed class SessionTools
                     a.FilePath,
                     a.SizeBytes
                 )).ToArray(),
-                Error: null
+                Error: string.Empty
             );
         }
         catch (ArgumentException ex)
