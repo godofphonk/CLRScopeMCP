@@ -33,6 +33,7 @@ public class CollectTraceService
     private readonly ISqliteSessionStore _sessionStore;
     private readonly ISqliteArtifactStore _artifactStore;
     private readonly IPidLockManager _pidLockManager;
+    private readonly IActiveOperationRegistry _activeOperationRegistry;
     private readonly ILogger<CollectTraceService> _logger;
 
     public CollectTraceService(
@@ -41,6 +42,7 @@ public class CollectTraceService
         ISqliteSessionStore sessionStore,
         ISqliteArtifactStore artifactStore,
         IPidLockManager pidLockManager,
+        IActiveOperationRegistry activeOperationRegistry,
         ILogger<CollectTraceService> logger)
     {
         _options = options;
@@ -48,6 +50,7 @@ public class CollectTraceService
         _sessionStore = sessionStore;
         _artifactStore = artifactStore;
         _pidLockManager = pidLockManager;
+        _activeOperationRegistry = activeOperationRegistry;
         _logger = logger;
     }
 
@@ -90,7 +93,13 @@ public class CollectTraceService
         var session = await _sessionStore.CreateAsync(SessionKind.Trace, request.Pid, request.Profile, cancellationToken);
         await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Running }, cancellationToken);
 
-        // Setup artifact path
+        // Create linked CTS for operation cancellation
+        using var operationCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        _activeOperationRegistry.TryRegister(session.SessionId, operationCts);
+
+        try
+        {
+            // Setup artifact path
         var artifactRoot = _options.Value.GetArtifactRoot();
         var tracesDir = Path.Combine(artifactRoot, "traces");
         Directory.CreateDirectory(tracesDir);
@@ -106,7 +115,7 @@ public class CollectTraceService
 
         try
         {
-            using var startCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            using var startCts = CancellationTokenSource.CreateLinkedTokenSource(operationCts.Token);
             startCts.CancelAfter(TimeSpan.FromSeconds(30)); // Bounded timeout for start
 
             var client = new DiagnosticsClient(request.Pid);
@@ -122,10 +131,10 @@ public class CollectTraceService
                 token: startCts.Token);
             _logger.LogInformation("[{Phase}] Successfully attached to PID {Pid}", CollectionPhase.Attaching, request.Pid);
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (!operationCts.Token.IsCancellationRequested)
         {
             _logger.LogError("[{Phase}] Attach timeout for PID {Pid}", CollectionPhase.Attaching, request.Pid);
-            await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = "StartEventPipeSession timed out" }, cancellationToken);
+            await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = "StartEventPipeSession timed out" }, operationCts.Token);
             return CollectTraceResult.Failure(session, "StartEventPipeSession timed out");
         }
 
@@ -144,7 +153,7 @@ public class CollectTraceService
             // copyTask not tied to operation cancellation - lifecycle managed by session.Stop/Dispose
             var copyTask = eventPipeSession.EventStream.CopyToAsync(fileStream, CancellationToken.None);
 
-            var winner = await Task.WhenAny(copyTask, Task.Delay(duration, cancellationToken));
+            var winner = await Task.WhenAny(copyTask, Task.Delay(duration, operationCts.Token));
 
             if (winner == copyTask)
             {
@@ -156,12 +165,12 @@ public class CollectTraceService
                 // Graceful stop with bounded timeout
                 try
                 {
-                    using var stopCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                    using var stopCts = CancellationTokenSource.CreateLinkedTokenSource(operationCts.Token);
                     stopCts.CancelAfter(TimeSpan.FromSeconds(15)); // Bounded timeout for stop
 
                     await eventPipeSession.StopAsync(stopCts.Token);
                 }
-                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                catch (OperationCanceledException) when (!operationCts.Token.IsCancellationRequested)
                 {
                     forced = true;
                     completionMode = TraceCompletionMode.Partial;
@@ -182,18 +191,18 @@ public class CollectTraceService
             // Flush with CancellationToken.None in cleanup
             await fileStream.FlushAsync(CancellationToken.None);
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (operationCts.Token.IsCancellationRequested)
         {
             _logger.LogWarning("[{Phase}] Collection cancelled for PID {Pid}", CollectionPhase.Cancelled, request.Pid);
             eventPipeSession?.Dispose();
-            await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Cancelled }, cancellationToken);
+            await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Cancelled }, operationCts.Token);
             return CollectTraceResult.Failure(session, "Collection cancelled", TraceCompletionMode.Cancelled);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "[{Phase}] Collection failed for PID {Pid}", CollectionPhase.Failed, request.Pid);
             eventPipeSession?.Dispose();
-            await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = ex.Message }, cancellationToken);
+            await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = ex.Message }, operationCts.Token);
             return CollectTraceResult.Failure(session, $"Failed to collect trace: {ex.Message}", TraceCompletionMode.Failed);
         }
         finally
@@ -204,14 +213,14 @@ public class CollectTraceService
         // Check if file was created
         if (!File.Exists(filePath))
         {
-            await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = "Trace file not created" }, cancellationToken);
+            await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = "Trace file not created" }, operationCts.Token);
             return CollectTraceResult.Failure(session, "Trace file was not created", TraceCompletionMode.Failed);
         }
 
         var fileInfo = new FileInfo(filePath);
         if (fileInfo.Length == 0)
         {
-            await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = "Trace file is empty" }, cancellationToken);
+            await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = "Trace file is empty" }, operationCts.Token);
             return CollectTraceResult.Failure(session, "Trace file is empty", TraceCompletionMode.Failed);
         }
 
@@ -223,7 +232,7 @@ public class CollectTraceService
             fileInfo.Length,
             request.Pid,
             session.SessionId,
-            cancellationToken
+            operationCts.Token
         );
 
         // Use the ArtifactId from store for URIs (fix double generation)
@@ -233,13 +242,18 @@ public class CollectTraceService
         // Update artifact with URIs and status
         artifact = artifact with { DiagUri = diagUri, FileUri = fileUri };
         var artifactStatus = forced ? ArtifactStatus.Partial : ArtifactStatus.Completed;
-        await _artifactStore.UpdateAsync(artifact with { Status = artifactStatus }, cancellationToken);
-        await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Completed, CompletedAtUtc = DateTime.UtcNow }, cancellationToken);
+        await _artifactStore.UpdateAsync(artifact with { Status = artifactStatus }, operationCts.Token);
+        await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Completed, CompletedAtUtc = DateTime.UtcNow }, operationCts.Token);
 
         _logger.LogInformation("[{Phase}] Trace collection completed for PID {Pid}, SessionId {SessionId}, CompletionMode {CompletionMode}, Size {SizeBytes} bytes",
             CollectionPhase.Completed, request.Pid, session.SessionId.Value, completionMode, fileInfo.Length);
 
         return CollectTraceResult.Success(session, artifact, completionMode);
+        }
+        finally
+        {
+            _activeOperationRegistry.Complete(session.SessionId);
+        }
     }
 
     private static TimeSpan ParseDuration(string duration)

@@ -30,19 +30,22 @@ public class CollectDumpService
     private readonly ISqliteSessionStore _sessionStore;
     private readonly ISqliteArtifactStore _artifactStore;
     private readonly IPidLockManager _pidLockManager;
+    private readonly IActiveOperationRegistry _activeOperationRegistry;
 
     public CollectDumpService(
         IOptions<ClrScopeOptions> options,
         IPreflightValidator preflightValidator,
         ISqliteSessionStore sessionStore,
         ISqliteArtifactStore artifactStore,
-        IPidLockManager pidLockManager)
+        IPidLockManager pidLockManager,
+        IActiveOperationRegistry activeOperationRegistry)
     {
         _options = options;
         _preflightValidator = preflightValidator;
         _sessionStore = sessionStore;
         _artifactStore = artifactStore;
         _pidLockManager = pidLockManager;
+        _activeOperationRegistry = activeOperationRegistry;
     }
 
     public async Task<CollectDumpResult> CollectDumpAsync(
@@ -65,7 +68,13 @@ public class CollectDumpService
         var session = await _sessionStore.CreateAsync(SessionKind.Dump, request.Pid, cancellationToken: cancellationToken);
         await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Running }, cancellationToken);
 
-        // Setup artifact path
+        // Create linked CTS for operation cancellation
+        using var operationCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        _activeOperationRegistry.TryRegister(session.SessionId, operationCts);
+
+        try
+        {
+            // Setup artifact path
         var artifactRoot = _options.Value.GetArtifactRoot();
         var dumpsDir = Path.Combine(artifactRoot, "dumps");
         Directory.CreateDirectory(dumpsDir);
@@ -84,14 +93,14 @@ public class CollectDumpService
         }
         catch (Exception ex)
         {
-            await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = ex.Message }, cancellationToken);
+            await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = ex.Message }, operationCts.Token);
             return CollectDumpResult.Failure(session, $"Failed to write dump: {ex.Message}");
         }
 
         // Check if file was created
         if (!File.Exists(filePath))
         {
-            await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = "Dump file not created" }, cancellationToken);
+            await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = "Dump file not created" }, operationCts.Token);
             return CollectDumpResult.Failure(session, "Dump file was not created");
         }
 
@@ -104,7 +113,7 @@ public class CollectDumpService
             fileSize,
             request.Pid,
             session.SessionId,
-            cancellationToken
+            operationCts.Token
         );
 
         // Use the ArtifactId from store for URIs (fix double generation)
@@ -113,9 +122,14 @@ public class CollectDumpService
 
         // Update artifact with URIs
         artifact = artifact with { DiagUri = diagUri, FileUri = fileUri };
-        await _artifactStore.UpdateAsync(artifact with { Status = ArtifactStatus.Completed }, cancellationToken);
-        await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Completed, CompletedAtUtc = DateTime.UtcNow }, cancellationToken);
+        await _artifactStore.UpdateAsync(artifact with { Status = ArtifactStatus.Completed }, operationCts.Token);
+        await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Completed, CompletedAtUtc = DateTime.UtcNow }, operationCts.Token);
 
         return CollectDumpResult.Success(session, artifact);
+        }
+        finally
+        {
+            _activeOperationRegistry.Complete(session.SessionId);
+        }
     }
 }

@@ -147,8 +147,13 @@ public sealed class SessionTools
                 );
             }
 
+            // Cancel the active operation via registry
+            var activeOperationRegistry = server.Services.GetRequiredService<IActiveOperationRegistry>();
+            var cancelled = activeOperationRegistry.TryCancel(session.SessionId, "Session cancelled via session.cancel");
+
+            // Update session status in database
             await sessionStore.UpdateAsync(session with { Status = SessionStatus.Cancelled, CompletedAtUtc = DateTime.UtcNow }, cancellationToken);
-            logger.LogInformation("Cancelled session {SessionId}", sessionId);
+            logger.LogInformation("Cancelled session {SessionId}, operation cancellation: {Cancelled}", sessionId, cancelled);
 
             return new CancelSessionResult(
                 Success: true,

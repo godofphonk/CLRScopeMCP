@@ -48,21 +48,7 @@ public class PreflightValidator : IPreflightValidator
                 $"Process with PID {pid} is not a .NET process or not attachable");
         }
 
-        // Validation 4: Diagnostics enabled
-        try
-        {
-            var client = new DiagnosticsClient(pid);
-            // If DiagnosticsClient can be created, diagnostics is enabled
-            _logger.LogDebug("Diagnostics is accessible for PID {Pid}", pid);
-        }
-        catch (Exception ex)
-        {
-            return PreflightResult.Failure(
-                ClrScopeError.PREFLIGHT_DIAGNOSTICS_DISABLED,
-                $"Diagnostics is not accessible for process {pid}: {ex.Message}");
-        }
-
-        // Validation 5: ArtifactRoot is writable
+        // Validation 4: ArtifactRoot is writable
         var artifactRoot = _options.Value.GetArtifactRoot();
         if (!Directory.Exists(artifactRoot))
         {

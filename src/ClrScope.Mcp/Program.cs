@@ -28,7 +28,7 @@ class Program
                 logging.ClearProviders();
                 logging.AddConsole(options =>
                 {
-                    options.LogToStandardErrorThreshold = LogLevel.None;
+                    options.LogToStandardErrorThreshold = LogLevel.Trace;
                 });
                 logging.SetMinimumLevel(LogLevel.Warning);
             })
@@ -74,6 +74,9 @@ class Program
 
                 // PID Lock Manager
                 services.AddSingleton<IPidLockManager, PidLockManager>();
+
+                // Active Operation Registry for session cancellation
+                services.AddSingleton<IActiveOperationRegistry, ActiveOperationRegistry>();
 
                 // Artifact Retention Service
                 services.AddSingleton<IArtifactRetentionService, ArtifactRetentionService>();
