@@ -1,5 +1,16 @@
 namespace ClrScope.Mcp.Domain;
 
+public enum SessionPhase
+{
+    Preflight,
+    Attaching,
+    Collecting,
+    Persisting,
+    Completed,
+    Failed,
+    Cancelled
+}
+
 public record Session(
     SessionId SessionId,
     SessionKind Kind,
@@ -8,5 +19,6 @@ public record Session(
     DateTime CreatedAtUtc,
     DateTime? CompletedAtUtc,
     string? Error,
-    string? Profile
+    string? Profile,
+    SessionPhase Phase = SessionPhase.Preflight
 );

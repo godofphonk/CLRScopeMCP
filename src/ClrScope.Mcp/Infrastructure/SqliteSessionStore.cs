@@ -19,7 +19,7 @@ public class SqliteSessionStore : ISqliteSessionStore
 
         var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT session_id, kind, pid, status, created_at_utc, completed_at_utc, error, profile
+            SELECT session_id, kind, pid, status, created_at_utc, completed_at_utc, error, profile, phase
             FROM sessions
             WHERE session_id = $sessionId
             """;
@@ -44,8 +44,8 @@ public class SqliteSessionStore : ISqliteSessionStore
 
         var command = connection.CreateCommand();
         command.CommandText = """
-            INSERT INTO sessions (session_id, kind, pid, status, created_at_utc, completed_at_utc, error, profile)
-            VALUES ($sessionId, $kind, $pid, $status, $createdAtUtc, $completedAtUtc, $error, $profile)
+            INSERT INTO sessions (session_id, kind, pid, status, created_at_utc, completed_at_utc, error, profile, phase)
+            VALUES ($sessionId, $kind, $pid, $status, $createdAtUtc, $completedAtUtc, $error, $profile, $phase)
             """;
         command.Parameters.AddWithValue("$sessionId", sessionId.Value);
         command.Parameters.AddWithValue("$kind", kind.ToString());
@@ -55,6 +55,7 @@ public class SqliteSessionStore : ISqliteSessionStore
         command.Parameters.AddWithValue("$completedAtUtc", DBNull.Value);
         command.Parameters.AddWithValue("$error", DBNull.Value);
         command.Parameters.AddWithValue("$profile", profile ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("$phase", SessionPhase.Preflight.ToString());
 
         await command.ExecuteNonQueryAsync(cancellationToken);
 
@@ -66,7 +67,8 @@ public class SqliteSessionStore : ISqliteSessionStore
             now,
             null,
             null,
-            profile
+            profile,
+            SessionPhase.Preflight
         );
     }
 
@@ -80,12 +82,14 @@ public class SqliteSessionStore : ISqliteSessionStore
             UPDATE sessions
             SET status = $status,
                 completed_at_utc = $completedAtUtc,
-                error = $error
+                error = $error,
+                phase = $phase
             WHERE session_id = $sessionId
             """;
         command.Parameters.AddWithValue("$status", session.Status.ToString());
         command.Parameters.AddWithValue("$completedAtUtc", session.CompletedAtUtc?.ToString("o") ?? (object)DBNull.Value);
         command.Parameters.AddWithValue("$error", session.Error ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("$phase", session.Phase.ToString());
         command.Parameters.AddWithValue("$sessionId", session.SessionId.Value);
 
         await command.ExecuteNonQueryAsync(cancellationToken);
@@ -101,7 +105,8 @@ public class SqliteSessionStore : ISqliteSessionStore
             DateTime.Parse(reader.GetString(4), null, System.Globalization.DateTimeStyles.RoundtripKind),
             reader.IsDBNull(5) ? null : DateTime.Parse(reader.GetString(5), null, System.Globalization.DateTimeStyles.RoundtripKind),
             reader.IsDBNull(6) ? null : reader.GetString(6),
-            reader.IsDBNull(7) ? null : reader.GetString(7)
+            reader.IsDBNull(7) ? null : reader.GetString(7),
+            reader.IsDBNull(8) ? SessionPhase.Preflight : Enum.Parse<SessionPhase>(reader.GetString(8))
         );
     }
 }
