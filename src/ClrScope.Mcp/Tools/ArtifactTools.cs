@@ -35,19 +35,19 @@ public sealed class ArtifactTools
                 return new ArtifactMetadataResult(
                     Found: false,
                     ArtifactId: artifactId,
-                    Kind: null,
-                    Status: null,
-                    FilePath: null,
+                    Kind: string.Empty,
+                    Status: string.Empty,
+                    FilePath: string.Empty,
                     SizeBytes: 0,
-                    Sha256: null,
+                    Sha256: string.Empty,
                     Pid: 0,
-                    CreatedAtUtc: null,
+                    CreatedAtUtc: DateTime.UtcNow,
                     Error: "Artifact not found"
                 );
             }
-            
+
             logger.LogInformation("Retrieved metadata for artifact {ArtifactId}", artifactId);
-            
+
             return new ArtifactMetadataResult(
                 Found: true,
                 ArtifactId: artifact.ArtifactId.Value,
@@ -58,7 +58,7 @@ public sealed class ArtifactTools
                 Sha256: artifact.Sha256,
                 Pid: artifact.Pid,
                 CreatedAtUtc: artifact.CreatedAtUtc,
-                Error: null
+                Error: string.Empty
             );
         }
         catch (ArgumentException ex)
@@ -67,13 +67,13 @@ public sealed class ArtifactTools
             return new ArtifactMetadataResult(
                 Found: false,
                 ArtifactId: artifactId,
-                Kind: null,
-                Status: null,
-                FilePath: null,
+                Kind: string.Empty,
+                Status: string.Empty,
+                FilePath: string.Empty,
                 SizeBytes: 0,
-                Sha256: null,
+                Sha256: string.Empty,
                 Pid: 0,
-                CreatedAtUtc: null,
+                CreatedAtUtc: DateTime.UtcNow,
                 Error: $"Invalid input: {ex.Message}"
             );
         }
@@ -83,13 +83,13 @@ public sealed class ArtifactTools
             return new ArtifactMetadataResult(
                 Found: false,
                 ArtifactId: artifactId,
-                Kind: null,
-                Status: null,
-                FilePath: null,
+                Kind: string.Empty,
+                Status: string.Empty,
+                FilePath: string.Empty,
                 SizeBytes: 0,
-                Sha256: null,
+                Sha256: string.Empty,
                 Pid: 0,
-                CreatedAtUtc: null,
+                CreatedAtUtc: DateTime.UtcNow,
                 Error: $"Get artifact metadata failed: {ex.Message}"
             );
         }
