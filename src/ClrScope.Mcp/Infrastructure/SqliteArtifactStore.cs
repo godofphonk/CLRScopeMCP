@@ -83,8 +83,8 @@ public class SqliteArtifactStore : ISqliteArtifactStore
         command.Parameters.AddWithValue("$kind", kind.ToString());
         command.Parameters.AddWithValue("$status", ArtifactStatus.Pending.ToString());
         command.Parameters.AddWithValue("$filePath", filePath);
-        command.Parameters.AddWithValue("$diagUri", DBNull.Value);
-        command.Parameters.AddWithValue("$fileUri", DBNull.Value);
+        command.Parameters.AddWithValue("$diagUri", string.Empty);
+        command.Parameters.AddWithValue("$fileUri", string.Empty);
         command.Parameters.AddWithValue("$sha256", sha256);
         command.Parameters.AddWithValue("$sizeBytes", sizeBytes);
         command.Parameters.AddWithValue("$pid", pid);
