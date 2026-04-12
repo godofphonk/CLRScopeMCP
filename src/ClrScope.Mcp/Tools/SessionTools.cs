@@ -20,13 +20,13 @@ public sealed class SessionTools
         var artifactStore = server.Services.GetRequiredService<ISqliteArtifactStore>();
         var logger = server.Services.GetRequiredService<ILogger<SessionTools>>();
 
-        if (string.IsNullOrWhiteSpace(sessionId))
-        {
-            throw new ArgumentException("Session ID must not be empty", nameof(sessionId));
-        }
-
         try
         {
+            if (string.IsNullOrWhiteSpace(sessionId))
+            {
+                throw new ArgumentException("Session ID must not be empty", nameof(sessionId));
+            }
+
             var id = new SessionId(sessionId);
             var session = await sessionStore.GetAsync(id, cancellationToken);
             

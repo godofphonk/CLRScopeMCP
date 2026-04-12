@@ -99,23 +99,23 @@ public sealed class CollectTools
         var traceService = server.Services.GetRequiredService<CollectTraceService>();
         var logger = server.Services.GetRequiredService<ILogger<CollectTools>>();
 
-        if (pid <= 0)
-        {
-            throw new ArgumentException("Process ID must be greater than 0", nameof(pid));
-        }
-
-        if (string.IsNullOrWhiteSpace(duration))
-        {
-            throw new ArgumentException("Duration must not be empty", nameof(duration));
-        }
-
-        if (!System.Text.RegularExpressions.Regex.IsMatch(duration, @"^\d{2}:\d{2}:\d{2}$"))
-        {
-            throw new ArgumentException("Duration must be in dd:hh:mm format (e.g., 00:01:30)", nameof(duration));
-        }
-
         try
         {
+            if (pid <= 0)
+            {
+                throw new ArgumentException("Process ID must be greater than 0", nameof(pid));
+            }
+
+            if (string.IsNullOrWhiteSpace(duration))
+            {
+                throw new ArgumentException("Duration must not be empty", nameof(duration));
+            }
+
+            if (!System.Text.RegularExpressions.Regex.IsMatch(duration, @"^\d{2}:\d{2}:\d{2}$"))
+            {
+                throw new ArgumentException("Duration must be in dd:hh:mm format (e.g., 00:01:30)", nameof(duration));
+            }
+
             logger.LogInformation("Starting trace collection for PID {Pid}, Duration={Duration}, Profile={Profile}", pid, duration, profile);
             
             var request = new CollectTraceRequest(pid, duration, profile);

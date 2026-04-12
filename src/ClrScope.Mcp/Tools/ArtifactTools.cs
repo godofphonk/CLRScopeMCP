@@ -19,13 +19,13 @@ public sealed class ArtifactTools
         var artifactStore = server.Services.GetRequiredService<ISqliteArtifactStore>();
         var logger = server.Services.GetRequiredService<ILogger<ArtifactTools>>();
 
-        if (string.IsNullOrWhiteSpace(artifactId))
-        {
-            throw new ArgumentException("Artifact ID must not be empty", nameof(artifactId));
-        }
-
         try
         {
+            if (string.IsNullOrWhiteSpace(artifactId))
+            {
+                throw new ArgumentException("Artifact ID must not be empty", nameof(artifactId));
+            }
+
             var id = new ArtifactId(artifactId);
             var artifact = await artifactStore.GetAsync(id, cancellationToken);
             
@@ -156,13 +156,13 @@ public sealed class ArtifactTools
         var artifactStore = server.Services.GetRequiredService<ISqliteArtifactStore>();
         var logger = server.Services.GetRequiredService<ILogger<ArtifactTools>>();
 
-        if (string.IsNullOrWhiteSpace(artifactId))
-        {
-            throw new ArgumentException("Artifact ID must not be empty", nameof(artifactId));
-        }
-
         try
         {
+            if (string.IsNullOrWhiteSpace(artifactId))
+            {
+                throw new ArgumentException("Artifact ID must not be empty", nameof(artifactId));
+            }
+
             var id = new ArtifactId(artifactId);
             var artifact = await artifactStore.GetAsync(id, cancellationToken);
             
@@ -220,13 +220,13 @@ public sealed class ArtifactTools
         var artifactStore = server.Services.GetRequiredService<ISqliteArtifactStore>();
         var logger = server.Services.GetRequiredService<ILogger<ArtifactTools>>();
 
-        if (string.IsNullOrWhiteSpace(artifactId))
-        {
-            throw new ArgumentException("Artifact ID must not be empty", nameof(artifactId));
-        }
-
         try
         {
+            if (string.IsNullOrWhiteSpace(artifactId))
+            {
+                throw new ArgumentException("Artifact ID must not be empty", nameof(artifactId));
+            }
+
             var id = new ArtifactId(artifactId);
             var artifact = await artifactStore.GetAsync(id, cancellationToken);
             

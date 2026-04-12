@@ -42,13 +42,14 @@ public sealed class RuntimeTools
     {
         var inspectService = server.Services.GetRequiredService<InspectTargetService>();
         var logger = server.Services.GetRequiredService<ILogger<RuntimeTools>>();
-        if (pid <= 0)
-        {
-            throw new ArgumentException("Process ID must be greater than 0", nameof(pid));
-        }
 
         try
         {
+            if (pid <= 0)
+            {
+                throw new ArgumentException("Process ID must be greater than 0", nameof(pid));
+            }
+
             var result = inspectService.InspectTarget(pid);
             
             if (!result.Found)
