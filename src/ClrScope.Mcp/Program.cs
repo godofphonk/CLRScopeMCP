@@ -23,6 +23,15 @@ class Program
                 config.SetBasePath(contentRoot);
                 config.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
             })
+            .ConfigureLogging(logging =>
+            {
+                logging.ClearProviders();
+                logging.AddConsole(options =>
+                {
+                    options.LogToStandardErrorThreshold = LogLevel.None;
+                });
+                logging.SetMinimumLevel(LogLevel.Warning);
+            })
             .ConfigureServices((context, services) =>
             {
                 // Configuration
@@ -87,10 +96,6 @@ class Program
         // Initialize database schema
         var schemaInitializer = host.Services.GetRequiredService<SqliteSchemaInitializer>();
         await schemaInitializer.InitializeAsync();
-
-        var logger = host.Services.GetRequiredService<ILogger<Program>>();
-        logger.LogInformation("CLRScope MCP Server - Stage 0c Integration");
-        logger.LogInformation("Starting MCP server with stdio transport");
 
         await host.RunAsync();
     }
