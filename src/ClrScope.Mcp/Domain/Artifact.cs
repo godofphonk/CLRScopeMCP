@@ -11,5 +11,6 @@ public record Artifact(
     long SizeBytes,
     int Pid,
     SessionId SessionId,
-    DateTime CreatedAtUtc
+    DateTime CreatedAtUtc,
+    bool Pinned = false
 );

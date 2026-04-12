@@ -21,7 +21,7 @@ public class SqliteArtifactStore : ISqliteArtifactStore
 
         var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT artifact_id, kind, status, file_path, diag_uri, file_uri, sha256, size_bytes, pid, session_id, created_at_utc
+            SELECT artifact_id, kind, status, file_path, diag_uri, file_uri, sha256, size_bytes, pid, session_id, created_at_utc, pinned
             FROM artifacts
             WHERE artifact_id = $artifactId
             """;
@@ -43,7 +43,7 @@ public class SqliteArtifactStore : ISqliteArtifactStore
 
         var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT artifact_id, kind, status, file_path, diag_uri, file_uri, sha256, size_bytes, pid, session_id, created_at_utc
+            SELECT artifact_id, kind, status, file_path, diag_uri, file_uri, sha256, size_bytes, pid, session_id, created_at_utc, pinned
             FROM artifacts
             WHERE session_id = $sessionId
             """;
@@ -76,8 +76,8 @@ public class SqliteArtifactStore : ISqliteArtifactStore
 
         var command = connection.CreateCommand();
         command.CommandText = """
-            INSERT INTO artifacts (artifact_id, kind, status, file_path, diag_uri, file_uri, sha256, size_bytes, pid, session_id, created_at_utc)
-            VALUES ($artifactId, $kind, $status, $filePath, $diagUri, $fileUri, $sha256, $sizeBytes, $pid, $sessionId, $createdAtUtc)
+            INSERT INTO artifacts (artifact_id, kind, status, file_path, diag_uri, file_uri, sha256, size_bytes, pid, session_id, created_at_utc, pinned)
+            VALUES ($artifactId, $kind, $status, $filePath, $diagUri, $fileUri, $sha256, $sizeBytes, $pid, $sessionId, $createdAtUtc, $pinned)
             """;
         command.Parameters.AddWithValue("$artifactId", artifactId.Value);
         command.Parameters.AddWithValue("$kind", kind.ToString());
@@ -90,6 +90,7 @@ public class SqliteArtifactStore : ISqliteArtifactStore
         command.Parameters.AddWithValue("$pid", pid);
         command.Parameters.AddWithValue("$sessionId", sessionId.Value);
         command.Parameters.AddWithValue("$createdAtUtc", now.ToString("o"));
+        command.Parameters.AddWithValue("$pinned", 0);
 
         await command.ExecuteNonQueryAsync(cancellationToken);
 
@@ -104,7 +105,8 @@ public class SqliteArtifactStore : ISqliteArtifactStore
             sizeBytes,
             pid,
             sessionId,
-            now
+            now,
+            false
         );
     }
 
@@ -115,7 +117,7 @@ public class SqliteArtifactStore : ISqliteArtifactStore
 
         var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT artifact_id, kind, status, file_path, diag_uri, file_uri, sha256, size_bytes, pid, session_id, created_at_utc
+            SELECT artifact_id, kind, status, file_path, diag_uri, file_uri, sha256, size_bytes, pid, session_id, created_at_utc, pinned
             FROM artifacts
             ORDER BY created_at_utc DESC
             """;
@@ -155,12 +157,14 @@ public class SqliteArtifactStore : ISqliteArtifactStore
             UPDATE artifacts
             SET status = $status,
                 diag_uri = $diagUri,
-                file_uri = $fileUri
+                file_uri = $fileUri,
+                pinned = $pinned
             WHERE artifact_id = $artifactId
             """;
         command.Parameters.AddWithValue("$status", artifact.Status.ToString());
         command.Parameters.AddWithValue("$diagUri", artifact.DiagUri ?? (object)DBNull.Value);
         command.Parameters.AddWithValue("$fileUri", artifact.FileUri ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("$pinned", artifact.Pinned ? 1 : 0);
         command.Parameters.AddWithValue("$artifactId", artifact.ArtifactId.Value);
 
         await command.ExecuteNonQueryAsync(cancellationToken);
@@ -179,7 +183,8 @@ public class SqliteArtifactStore : ISqliteArtifactStore
             reader.GetInt64(7),
             reader.GetInt32(8),
             new SessionId(reader.GetString(9)),
-            DateTime.Parse(reader.GetString(10), null, System.Globalization.DateTimeStyles.RoundtripKind)
+            DateTime.Parse(reader.GetString(10), null, System.Globalization.DateTimeStyles.RoundtripKind),
+            reader.IsDBNull(11) ? false : reader.GetInt32(11) == 1
         );
     }
 
