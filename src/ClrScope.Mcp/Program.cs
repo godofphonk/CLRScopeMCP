@@ -106,6 +106,18 @@ class Program
         var schemaInitializer = host.Services.GetRequiredService<SqliteSchemaInitializer>();
         await schemaInitializer.InitializeAsync();
 
+        // One-shot cleanup on startup (7 days max age)
+        var retentionService = host.Services.GetRequiredService<IArtifactRetentionService>();
+        try
+        {
+            var deletedCount = await retentionService.CleanupOldArtifactsAsync(TimeSpan.FromDays(7));
+            Console.WriteLine($"Startup cleanup: {deletedCount} artifacts deleted (older than 7 days)");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Startup cleanup failed: {ex.Message}");
+        }
+
         await host.RunAsync();
     }
 

@@ -293,6 +293,66 @@ public sealed class ArtifactTools
             );
         }
     }
+
+    [McpServerTool(Name = "artifact.cleanup", Title = "Cleanup Old Artifacts", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false, UseStructuredContent = true), Description("Удаление старых артефактов старше указанного возраста")]
+    public static async Task<CleanupArtifactsResult> CleanupArtifacts(
+        [Description("Максимальный возраст артефактов для сохранения (например, 7d для 7 дней)")] string maxAge,
+        McpServer server,
+        CancellationToken cancellationToken = default)
+    {
+        var retentionService = server.Services.GetRequiredService<IArtifactRetentionService>();
+        var logger = server.Services.GetRequiredService<ILogger<ArtifactTools>>();
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(maxAge))
+            {
+                throw new ArgumentException("Max age must not be empty", nameof(maxAge));
+            }
+
+            var timeSpan = ParseMaxAge(maxAge);
+            var deletedCount = await retentionService.CleanupOldArtifactsAsync(timeSpan, cancellationToken);
+
+            logger.LogInformation("Cleanup completed: {DeletedCount} artifacts deleted older than {MaxAge}", deletedCount, maxAge);
+
+            return new CleanupArtifactsResult(
+                DeletedCount: deletedCount,
+                Message: $"Deleted {deletedCount} artifacts older than {maxAge}"
+            );
+        }
+        catch (ArgumentException ex)
+        {
+            logger.LogError(ex, "Invalid input for artifact cleanup: {Message}", ex.Message);
+            return new CleanupArtifactsResult(
+                DeletedCount: 0,
+                Message: $"Invalid input: {ex.Message}"
+            );
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Artifact cleanup failed");
+            return new CleanupArtifactsResult(
+                DeletedCount: 0,
+                Message: $"Cleanup failed: {ex.Message}"
+            );
+        }
+    }
+
+    private static TimeSpan ParseMaxAge(string maxAge)
+    {
+        // Parse format like "7d", "24h", "60m", "3600s"
+        var value = int.Parse(maxAge.TrimEnd('d', 'h', 'm', 's'));
+        var unit = maxAge[^1];
+
+        return unit switch
+        {
+            'd' => TimeSpan.FromDays(value),
+            'h' => TimeSpan.FromHours(value),
+            'm' => TimeSpan.FromMinutes(value),
+            's' => TimeSpan.FromSeconds(value),
+            _ => throw new FormatException($"Unknown time unit: {unit}. Use d, h, m, or s.")
+        };
+    }
 }
 
 public record ArtifactMetadataResult(
