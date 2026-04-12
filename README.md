@@ -5,7 +5,7 @@
 ## Статус
 
 **Версия:** 0.1.0
-**Статус:** Core MCP Slice Ready (Stage 0c.1 Hardening)
+**Статус:** Core MCP Slice Ready for Testing
 
 Завершены стадии:
 - ✅ Stage 0a: Foundation + Native Core
@@ -14,7 +14,7 @@
 
 ## Реализованные MCP Tools
 
-Всего: **6 MCP tools** (placeholder CLI tools не зарегистрированы в MCP surface)
+Всего: **11 MCP tools** (placeholder CLI tools не зарегистрированы в MCP surface)
 
 **Core Diagnostics (Stage 0a):**
 - `system.health` — Проверка здоровья сервера
