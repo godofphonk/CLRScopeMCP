@@ -67,7 +67,7 @@ class Program
                 });
 
                 // Validation
-                services.AddSingleton<IPreflightValidator, PreflightValidator>();
+                services.AddSingleton<IPreflightValidator, FullPreflightValidator>();
 
                 // CLI Runner
                 services.AddSingleton<ICliCommandRunner, CliCommandRunner>();
