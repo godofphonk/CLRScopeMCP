@@ -31,8 +31,20 @@ public class PidLockManager : IPidLockManager, IDisposable
             entry.RefCount++;
         }
 
-        await entry.Semaphore.WaitAsync(cancellationToken);
-        return new PidLockHandle(() => ReleaseLock(pid, entry));
+        try
+        {
+            await entry.Semaphore.WaitAsync(cancellationToken);
+            return new PidLockHandle(() => ReleaseLock(pid, entry));
+        }
+        catch
+        {
+            lock (_syncRoot)
+            {
+                entry.RefCount--;
+                entry.LastReleasedUtc = DateTime.UtcNow;
+            }
+            throw;
+        }
     }
 
     private void ReleaseLock(int pid, LockEntry entry)

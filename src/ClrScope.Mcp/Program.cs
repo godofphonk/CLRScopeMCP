@@ -108,14 +108,15 @@ class Program
 
         // One-shot cleanup on startup (7 days max age)
         var retentionService = host.Services.GetRequiredService<IArtifactRetentionService>();
+        var logger = host.Services.GetRequiredService<ILogger<Program>>();
         try
         {
             var deletedCount = await retentionService.CleanupOldArtifactsAsync(TimeSpan.FromDays(7));
-            Console.WriteLine($"Startup cleanup: {deletedCount} artifacts deleted (older than 7 days)");
+            logger.LogInformation("Startup cleanup: {DeletedCount} artifacts deleted (older than 7 days)", deletedCount);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Startup cleanup failed: {ex.Message}");
+            logger.LogError(ex, "Startup cleanup failed");
         }
 
         await host.RunAsync();
