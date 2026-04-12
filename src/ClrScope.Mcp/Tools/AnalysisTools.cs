@@ -1,0 +1,148 @@
+using ClrScope.Mcp.Domain;
+using ClrScope.Mcp.Infrastructure;
+using Microsoft.Extensions.Logging;
+using ModelContextProtocol.Server;
+using System.ComponentModel;
+
+namespace ClrScope.Mcp.Tools;
+
+public sealed class AnalysisTools
+{
+    [McpServerTool(Name = "analyze.dump_sos", Title = "Analyze Dump with SOS", ReadOnly = false, Idempotent = false), Description("SOS анализ dump файла с custom commands (Stage 2)")]
+    public static async Task<AnalyzeDumpSosResult> AnalyzeDumpSos(
+        [Description("Artifact ID of the dump file to analyze")] string artifactId,
+        [Description("SOS command to execute (e.g., '!dumpheap -stat', '!threads', '!clrstack')")] string command,
+        ISqliteArtifactStore artifactStore,
+        ISosAnalyzer sosAnalyzer,
+        ILogger logger,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(artifactId))
+        {
+            throw new ArgumentException("Artifact ID is required", nameof(artifactId));
+        }
+
+        if (string.IsNullOrEmpty(command))
+        {
+            throw new ArgumentException("SOS command is required", nameof(command));
+        }
+
+        try
+        {
+            // Parse artifact ID
+            if (!Guid.TryParse(artifactId, out var artifactGuid))
+            {
+                return new AnalyzeDumpSosResult(
+                    Success: false,
+                    Output: string.Empty,
+                    Error: "Invalid artifact ID format"
+                );
+            }
+
+            // Get artifact from store
+            var artifact = await artifactStore.GetAsync(new ArtifactId(artifactId), cancellationToken);
+            if (artifact == null)
+            {
+                return new AnalyzeDumpSosResult(
+                    Success: false,
+                    Output: string.Empty,
+                    Error: $"Artifact not found: {artifactId}"
+                );
+            }
+
+            // Check if artifact is a dump
+            if (artifact.Kind != ArtifactKind.Dump)
+            {
+                return new AnalyzeDumpSosResult(
+                    Success: false,
+                    Output: string.Empty,
+                    Error: $"Artifact is not a dump file: {artifact.Kind}"
+                );
+            }
+
+            // Check if dotnet-sos is available
+            if (!await sosAnalyzer.IsAvailableAsync(cancellationToken))
+            {
+                return new AnalyzeDumpSosResult(
+                    Success: false,
+                    Output: string.Empty,
+                    Error: "dotnet-sos CLI is not available. Install it with: dotnet tool install -g dotnet-sos"
+                );
+            }
+
+            // Execute SOS command
+            var result = await sosAnalyzer.ExecuteCommandAsync(artifact.FilePath, command, cancellationToken);
+
+            return new AnalyzeDumpSosResult(
+                Success: result.Success,
+                Output: result.Output,
+                Error: result.Error
+            );
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "SOS analysis failed for artifact {ArtifactId}", artifactId);
+            return new AnalyzeDumpSosResult(
+                Success: false,
+                Output: string.Empty,
+                Error: $"SOS analysis failed: {ex.Message}"
+            );
+        }
+    }
+
+    [McpServerTool(Name = "symbols.resolve", Title = "Resolve Symbols", ReadOnly = false, Idempotent = false), Description("Загрузить символы для artifact через dotnet-symbol (Stage 2)")]
+    public static async Task<SymbolsResolveResult> ResolveSymbols(
+        [Description("Artifact ID to resolve symbols for")] string artifactId,
+        ISymbolResolver symbolResolver,
+        ILogger logger,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(artifactId))
+        {
+            throw new ArgumentException("Artifact ID is required", nameof(artifactId));
+        }
+
+        try
+        {
+            // Check if dotnet-symbol is available
+            if (!await symbolResolver.IsAvailableAsync(cancellationToken))
+            {
+                return new SymbolsResolveResult(
+                    Success: false,
+                    SymbolPath: string.Empty,
+                    Error: "dotnet-symbol CLI is not available. Install it with: dotnet tool install -g dotnet-symbol"
+                );
+            }
+
+            // Resolve symbols
+            var result = await symbolResolver.ResolveAsync(artifactId, cancellationToken);
+
+            return new SymbolsResolveResult(
+                Success: result.Success,
+                SymbolPath: result.SymbolPath,
+                Error: result.Error
+            );
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Symbol resolution failed for artifact {ArtifactId}", artifactId);
+            return new SymbolsResolveResult(
+                Success: false,
+                SymbolPath: string.Empty,
+                Error: $"Symbol resolution failed: {ex.Message}"
+            );
+        }
+    }
+}
+
+public record AnalyzeDumpSosResult(
+    bool Success,
+    string Output,
+    string? Error
+);
+
+public record SymbolsResolveResult(
+    bool Success,
+    string SymbolPath,
+    string? Error
+);
