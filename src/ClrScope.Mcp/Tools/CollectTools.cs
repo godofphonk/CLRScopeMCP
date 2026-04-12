@@ -123,9 +123,9 @@ public sealed class CollectTools
             
             if (result.Artifact != null)
             {
-                logger.LogInformation("Trace collected successfully: SessionId={SessionId}, ArtifactId={ArtifactId}", 
-                    result.Session.SessionId.Value, result.Artifact.ArtifactId.Value);
-                
+                logger.LogInformation("Trace collected successfully: SessionId={SessionId}, ArtifactId={ArtifactId}, CompletionMode={CompletionMode}",
+                    result.Session.SessionId.Value, result.Artifact.ArtifactId.Value, result.CompletionMode);
+
                 return new CollectTraceResult(
                     Success: true,
                     SessionId: result.Session.SessionId.Value,
@@ -133,12 +133,13 @@ public sealed class CollectTools
                     FilePath: result.Artifact.FilePath,
                     SizeBytes: result.Artifact.SizeBytes,
                     Sha256: result.Artifact.Sha256,
-                    Error: null
+                    Error: null,
+                    CompletionMode: result.CompletionMode.ToString()
                 );
             }
             else
             {
-                logger.LogWarning("Trace collection failed for PID {Pid}: {Error}", pid, result.Error);
+                logger.LogWarning("Trace collection failed for PID {Pid}: {Error}, CompletionMode={CompletionMode}", pid, result.Error, result.CompletionMode);
                 return new CollectTraceResult(
                     Success: false,
                     SessionId: result.Session.SessionId.Value,
@@ -146,7 +147,8 @@ public sealed class CollectTools
                     FilePath: null,
                     SizeBytes: 0,
                     Sha256: null,
-                    Error: result.Error
+                    Error: result.Error,
+                    CompletionMode: result.CompletionMode.ToString()
                 );
             }
         }
@@ -160,7 +162,8 @@ public sealed class CollectTools
                 FilePath: null,
                 SizeBytes: 0,
                 Sha256: null,
-                Error: $"Invalid input: {ex.Message}"
+                Error: $"Invalid input: {ex.Message}",
+                CompletionMode: "Failed"
             );
         }
         catch (Exception ex)
@@ -173,7 +176,8 @@ public sealed class CollectTools
                 FilePath: null,
                 SizeBytes: 0,
                 Sha256: null,
-                Error: $"Collect trace failed: {ex.Message}"
+                Error: $"Collect trace failed: {ex.Message}",
+                CompletionMode: "Failed"
             );
         }
     }
@@ -196,5 +200,6 @@ public record CollectTraceResult(
     string? FilePath,
     long SizeBytes,
     string? Sha256,
-    string? Error
+    string? Error,
+    string? CompletionMode = "Complete"
 );
