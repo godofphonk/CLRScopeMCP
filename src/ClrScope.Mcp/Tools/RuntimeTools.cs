@@ -57,24 +57,24 @@ public sealed class RuntimeTools
                 return new InspectTargetResult(
                     Found: false,
                     Attachable: false,
-                    ProcessName: null,
-                    CommandLine: null,
-                    OperatingSystem: null,
-                    ProcessArchitecture: null,
+                    ProcessName: string.Empty,
+                    CommandLine: string.Empty,
+                    OperatingSystem: string.Empty,
+                    ProcessArchitecture: string.Empty,
                     Warnings: Array.Empty<string>(),
                     Error: result.Error
                 );
             }
-            
+
             logger.LogInformation("Inspected process {Pid}: Found={Found}, Attachable={Attachable}", pid, result.Found, result.Attachable);
-            
+
             return new InspectTargetResult(
                 Found: result.Found,
                 Attachable: result.Attachable,
-                ProcessName: result.Details?.ProcessName,
-                CommandLine: result.Details?.CommandLine,
-                OperatingSystem: result.Details?.OperatingSystem,
-                ProcessArchitecture: result.Details?.ProcessArchitecture,
+                ProcessName: result.Details?.ProcessName ?? string.Empty,
+                CommandLine: result.Details?.CommandLine ?? string.Empty,
+                OperatingSystem: result.Details?.OperatingSystem ?? string.Empty,
+                ProcessArchitecture: result.Details?.ProcessArchitecture ?? string.Empty,
                 Warnings: result.Warnings,
                 Error: result.Error
             );
@@ -85,24 +85,24 @@ public sealed class RuntimeTools
             return new InspectTargetResult(
                 Found: false,
                 Attachable: false,
-                ProcessName: null,
-                CommandLine: null,
-                OperatingSystem: null,
-                ProcessArchitecture: null,
+                ProcessName: string.Empty,
+                CommandLine: string.Empty,
+                OperatingSystem: string.Empty,
+                ProcessArchitecture: string.Empty,
                 Warnings: Array.Empty<string>(),
                 Error: $"Invalid input: {ex.Message}"
             );
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Inspect target failed for PID {Pid}", pid);
+            logger.LogError(ex, "Inspect target failed for {Pid}", pid);
             return new InspectTargetResult(
                 Found: false,
                 Attachable: false,
-                ProcessName: null,
-                CommandLine: null,
-                OperatingSystem: null,
-                ProcessArchitecture: null,
+                ProcessName: string.Empty,
+                CommandLine: string.Empty,
+                OperatingSystem: string.Empty,
+                ProcessArchitecture: string.Empty,
                 Warnings: Array.Empty<string>(),
                 Error: $"Inspect target failed: {ex.Message}"
             );
