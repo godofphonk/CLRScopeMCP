@@ -235,41 +235,41 @@ public sealed class ArtifactTools
                 return new ReadArtifactTextResult(
                     Success: false,
                     ArtifactId: artifactId,
-                    Content: null,
+                    Content: string.Empty,
                     Error: "Artifact not found"
                 );
             }
-            
+
             if (!File.Exists(artifact.FilePath))
             {
                 return new ReadArtifactTextResult(
                     Success: false,
                     ArtifactId: artifactId,
-                    Content: null,
+                    Content: string.Empty,
                     Error: "File not found"
                 );
             }
-            
+
             var fileInfo = new FileInfo(artifact.FilePath);
             if (fileInfo.Length > 1024 * 1024)
             {
                 return new ReadArtifactTextResult(
                     Success: false,
                     ArtifactId: artifactId,
-                    Content: null,
+                    Content: string.Empty,
                     Error: "File too large for text reading (>1MB)"
                 );
             }
-            
+
             var content = await File.ReadAllTextAsync(artifact.FilePath, cancellationToken);
-            
+
             logger.LogInformation("Read text content for artifact {ArtifactId} ({Length} bytes)", artifactId, content.Length);
-            
+
             return new ReadArtifactTextResult(
                 Success: true,
                 ArtifactId: artifactId,
                 Content: content,
-                Error: null
+                Error: string.Empty
             );
         }
         catch (ArgumentException ex)
@@ -278,7 +278,7 @@ public sealed class ArtifactTools
             return new ReadArtifactTextResult(
                 Success: false,
                 ArtifactId: artifactId,
-                Content: null,
+                Content: string.Empty,
                 Error: $"Invalid input: {ex.Message}"
             );
         }
@@ -288,7 +288,7 @@ public sealed class ArtifactTools
             return new ReadArtifactTextResult(
                 Success: false,
                 ArtifactId: artifactId,
-                Content: null,
+                Content: string.Empty,
                 Error: $"Read artifact text failed: {ex.Message}"
             );
         }
