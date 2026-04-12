@@ -81,12 +81,28 @@ class Program
                 // Artifact Retention Service
                 services.AddSingleton<IArtifactRetentionService, ArtifactRetentionService>();
 
+                // Correlation ID Provider
+                services.AddSingleton<CorrelationIdProvider>();
+
+                // Counters Backend
+                services.AddSingleton<ICountersBackend, EventPipeCountersBackend>();
+
+                // Monitor Backend
+                services.AddSingleton<IMonitorBackend, MonitorBackend>();
+
+                // SOS Analyzer
+                services.AddSingleton<ISosAnalyzer, DotnetSosAnalyzer>();
+
+                // Symbol Resolver
+                services.AddSingleton<ISymbolResolver, SymbolResolver>();
+
                 // Services
                 services.AddSingleton<HealthService>();
                 services.AddSingleton<RuntimeService>();
                 services.AddSingleton<InspectTargetService>();
                 services.AddSingleton<CollectTraceService>();
                 services.AddSingleton<CollectDumpService>();
+                services.AddSingleton<CollectCountersService>();
 
                 // MCP Server
                 services.AddMcpServer()
