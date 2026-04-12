@@ -31,23 +31,29 @@ public class CollectTraceService
     private readonly IPreflightValidator _preflightValidator;
     private readonly ISqliteSessionStore _sessionStore;
     private readonly ISqliteArtifactStore _artifactStore;
+    private readonly IPidLockManager _pidLockManager;
 
     public CollectTraceService(
         IOptions<ClrScopeOptions> options,
         IPreflightValidator preflightValidator,
         ISqliteSessionStore sessionStore,
-        ISqliteArtifactStore artifactStore)
+        ISqliteArtifactStore artifactStore,
+        IPidLockManager pidLockManager)
     {
         _options = options;
         _preflightValidator = preflightValidator;
         _sessionStore = sessionStore;
         _artifactStore = artifactStore;
+        _pidLockManager = pidLockManager;
     }
 
     public async Task<CollectTraceResult> CollectTraceAsync(
         CollectTraceRequest request,
         CancellationToken cancellationToken = default)
     {
+        // Acquire PID lock to serialize operations on the same process
+        using var pidLock = await _pidLockManager.AcquireLockAsync(request.Pid, cancellationToken);
+
         // Preflight validation
         var preflightResult = await _preflightValidator.ValidateCollectAsync(request.Pid, cancellationToken);
         if (!preflightResult.IsValid)

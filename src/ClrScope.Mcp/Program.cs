@@ -72,6 +72,9 @@ class Program
                 // CLI Runner
                 services.AddSingleton<ICliCommandRunner, CliCommandRunner>();
 
+                // PID Lock Manager
+                services.AddSingleton<IPidLockManager, PidLockManager>();
+
                 // Services
                 services.AddSingleton<HealthService>();
                 services.AddSingleton<RuntimeService>();
