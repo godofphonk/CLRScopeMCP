@@ -164,7 +164,7 @@ public sealed class SessionTools
             }
 
             // Update session status in database
-            await sessionStore.UpdateAsync(session with { Status = SessionStatus.Cancelled, CompletedAtUtc = DateTime.UtcNow }, cancellationToken);
+            await sessionStore.UpdateAsync(session with { Status = SessionStatus.Cancelled, CompletedAtUtc = DateTime.UtcNow, Phase = SessionPhase.Cancelled }, cancellationToken);
             logger.LogInformation("Cancelled session {SessionId}", sessionId);
 
             return new CancelSessionResult(
