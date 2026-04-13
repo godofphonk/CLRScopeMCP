@@ -11,7 +11,7 @@ namespace ClrScope.Mcp.Tools.Analysis;
 [McpServerToolType]
 public sealed class AnalysisTools
 {
-    [McpServerTool(Name = "analyze_dump_sos", Title = "Analyze Dump with SOS", ReadOnly = false, Idempotent = false), Description("SOS analysis of dump file with custom commands (Stage 2)")]
+    [McpServerTool(Name = "analyze_dump_sos", Title = "Analyze Dump with SOS", ReadOnly = false, Idempotent = false), Description("SOS analysis of dump file with custom commands")]
     public static async Task<AnalyzeDumpSosResult> AnalyzeDumpSos(
         [Description("Artifact ID of the dump file to analyze")] string artifactId,
         [Description("SOS command to execute (e.g., 'dumpheap -stat', 'threads', 'clrstack')")] string command,
@@ -109,7 +109,7 @@ Restart MCP server / client after installation.
         }
     }
 
-    [McpServerTool(Name = "symbols_resolve", Title = "Resolve Symbols", ReadOnly = false, Idempotent = false), Description("Load symbols for artifact via dotnet-symbol (Stage 2)")]
+    [McpServerTool(Name = "symbols_resolve", Title = "Resolve Symbols", ReadOnly = false, Idempotent = false), Description("Load symbols for artifact via dotnet-symbol")]
     public static async Task<SymbolsResolveResult> ResolveSymbols(
         [Description("Artifact ID to resolve symbols for")] string artifactId,
         McpServer server,

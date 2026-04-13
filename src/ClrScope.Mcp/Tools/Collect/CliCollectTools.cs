@@ -11,7 +11,7 @@ namespace ClrScope.Mcp.Tools.Collect;
 [McpServerToolType]
 public sealed class CollectCountersTools
 {
-    [McpServerTool(Name = "collect_counters", Title = "Collect Performance Counters", ReadOnly = false, Idempotent = false), Description("Collect performance counters via dotnet-counters CLI (Stage 2)")]
+    [McpServerTool(Name = "collect_counters", Title = "Collect Performance Counters", ReadOnly = false, Idempotent = false), Description("Collect performance counters via dotnet-counters CLI")]
     public static async Task<CollectCountersResult> CollectCounters(
         [Description("Process ID to collect counters from")] int pid,
         McpServer server,
@@ -64,7 +64,7 @@ public sealed class CollectCountersTools
         }
     }
 
-    [McpServerTool(Name = "collect_gcdump", Title = "Collect GC Heap Snapshot", ReadOnly = false, Idempotent = false), Description("Collect GC heap snapshot via dotnet-gcdump CLI (Stage 0b)")]
+    [McpServerTool(Name = "collect_gcdump", Title = "Collect GC Heap Snapshot", ReadOnly = false, Idempotent = false), Description("Collect GC heap snapshot via dotnet-gcdump CLI")]
     public static async Task<CollectGcDumpResult> CollectGcDump(
         [Description("Process ID to collect GC heap snapshot from")] int pid,
         McpServer server,
@@ -111,7 +111,7 @@ public sealed class CollectCountersTools
         }
     }
 
-    [McpServerTool(Name = "collect_stacks", Title = "Collect Managed Stacks", ReadOnly = false, Idempotent = false), Description("Collect managed stacks via dotnet-stack CLI (Stage 0b)")]
+    [McpServerTool(Name = "collect_stacks", Title = "Collect Managed Stacks", ReadOnly = false, Idempotent = false), Description("Collect managed stacks via dotnet-stack CLI")]
     public static async Task<CollectStacksResult> CollectStacks(
         [Description("Process ID to collect managed stacks from")] int pid,
         McpServer server,
