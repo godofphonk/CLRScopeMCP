@@ -52,7 +52,7 @@ public sealed class ResourceTools
             }
 
             var artifactRoot = options.Value.GetArtifactRoot();
-            var preview = GetArtifactPreview(artifact, artifactRoot, logger);
+            var preview = await GetArtifactPreview(artifact, artifactRoot, logger);
             return preview;
         }
         catch (Exception ex)
@@ -146,7 +146,7 @@ public sealed class ResourceTools
         }
     }
 
-    private static string GetArtifactPreview(Artifact artifact, string artifactRoot, ILogger logger)
+    private static async Task<string> GetArtifactPreview(Artifact artifact, string artifactRoot, ILogger logger)
     {
         var sb = new System.Text.StringBuilder();
         sb.AppendLine($"# Artifact: {artifact.ArtifactId.Value}");
@@ -165,18 +165,37 @@ public sealed class ResourceTools
         {
             ValidateArtifactPath(artifact.FilePath, artifactRoot, logger);
 
-            if (System.IO.File.Exists(artifact.FilePath))
-            {
-                var content = System.IO.File.ReadAllText(artifact.FilePath);
-                var preview = content.Length > 500 ? content.Substring(0, 500) + "..." : content;
-                sb.AppendLine("```");
-                sb.AppendLine(preview);
-                sb.AppendLine("```");
-            }
-            else
+            if (!System.IO.File.Exists(artifact.FilePath))
             {
                 sb.AppendLine("File not found.");
+                return sb.ToString();
             }
+
+            var fileInfo = new System.IO.FileInfo(artifact.FilePath);
+
+            // Binary artifacts (Trace, Dump, GcDump) - don't read as text
+            if (artifact.Kind == ArtifactKind.Trace || artifact.Kind == ArtifactKind.Dump || artifact.Kind == ArtifactKind.GcDump)
+            {
+                sb.AppendLine("Binary artifact - content preview not available.");
+                sb.AppendLine($"File size: {FormatBytes(fileInfo.Length)}");
+                sb.AppendLine("Use artifact_read_text for text artifacts or download the file for binary analysis.");
+                return sb.ToString();
+            }
+
+            // Text artifacts (Counters) - read with size limit
+            const int maxPreviewSize = 10 * 1024; // 10KB limit
+            if (fileInfo.Length > maxPreviewSize)
+            {
+                sb.AppendLine($"File too large for preview ({FormatBytes(fileInfo.Length)}). Maximum preview size is {FormatBytes(maxPreviewSize)}.");
+                return sb.ToString();
+            }
+
+            // Read text file with encoding detection
+            var content = await System.IO.File.ReadAllTextAsync(artifact.FilePath);
+            var preview = content.Length > 500 ? content.Substring(0, 500) + "..." : content;
+            sb.AppendLine("```");
+            sb.AppendLine(preview);
+            sb.AppendLine("```");
         }
         catch (Exception ex)
         {
