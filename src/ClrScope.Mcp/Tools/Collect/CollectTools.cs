@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
 using System.ComponentModel;
 
-namespace ClrScope.Mcp.Tools;
+namespace ClrScope.Mcp.Tools.Collect;
 
 [McpServerToolType]
 public sealed class CollectTools

@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
 using System.ComponentModel;
 
-namespace ClrScope.Mcp.Tools;
+namespace ClrScope.Mcp.Tools.Sessions;
 
 [McpServerToolType]
 public sealed class SessionTools
