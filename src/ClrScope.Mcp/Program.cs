@@ -39,7 +39,7 @@ class Program
                 {
                     options.LogToStandardErrorThreshold = LogLevel.Trace;
                 });
-                logging.SetMinimumLevel(LogLevel.Warning);
+                logging.SetMinimumLevel(LogLevel.Information);
             })
             .ConfigureServices((context, services) =>
             {
