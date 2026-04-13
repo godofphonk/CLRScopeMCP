@@ -267,6 +267,17 @@ public sealed class ArtifactTools
                 );
             }
 
+            // Only allow text-only artifact kinds (Counters, Stacks)
+            if (artifact.Kind != ArtifactKind.Counters && artifact.Kind != ArtifactKind.Stacks)
+            {
+                return new ReadArtifactTextResult(
+                    Success: false,
+                    ArtifactId: artifactId,
+                    Content: string.Empty,
+                    Error: $"Artifact kind '{artifact.Kind}' is not text-only. Only Counters and Stacks can be read as text."
+                );
+            }
+
             var artifactRoot = options.Value.GetArtifactRoot();
             ValidateArtifactPath(artifact.FilePath, artifactRoot, logger);
 

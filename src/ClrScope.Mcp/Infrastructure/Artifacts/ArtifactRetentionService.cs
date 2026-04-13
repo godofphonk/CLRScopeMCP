@@ -46,8 +46,8 @@ public class ArtifactRetentionService : IArtifactRetentionService
 
         foreach (var artifact in candidates)
         {
-            // Check if we've exceeded max total size (if specified)
-            if (maxTotalSizeBytes.HasValue && totalDeletedSize >= maxTotalSizeBytes.Value)
+            // Check if we would exceed max total size after deleting this artifact (if specified)
+            if (maxTotalSizeBytes.HasValue && totalDeletedSize + artifact.SizeBytes > maxTotalSizeBytes.Value)
             {
                 _logger.LogInformation("Reached max total size limit {MaxSizeBytes}, stopping cleanup", maxTotalSizeBytes.Value);
                 break;

@@ -85,21 +85,10 @@ public sealed class SystemTools
         var dotnetStack = await dotnetStackTask;
         var dotnetCounters = await dotnetCountersTask;
 
-        // Check native capabilities by trying to list .NET processes
-        var nativeDumpAvailable = false;
-        var nativeTraceAvailable = false;
-
-        try
-        {
-            var targets = runtimeService.ListTargets();
-            nativeDumpAvailable = targets.Count > 0;
-            nativeTraceAvailable = targets.Count > 0;
-        }
-        catch
-        {
-            nativeDumpAvailable = false;
-            nativeTraceAvailable = false;
-        }
+        // Check native capabilities (DiagnosticsClient API availability)
+        // Native capabilities depend on runtime support, not on currently running processes
+        var nativeDumpAvailable = true; // DiagnosticsClient is always available if runtime is installed
+        var nativeTraceAvailable = true; // DiagnosticsClient is always available if runtime is installed
 
         return new CapabilitiesResult(
             NativeDumpAvailable: nativeDumpAvailable,

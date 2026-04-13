@@ -50,7 +50,8 @@ public class HealthService
         {
             try
             {
-                var testFile = Path.Combine(artifactRoot, ".write_test");
+                var testFileName = Path.GetRandomFileName();
+                var testFile = Path.Combine(artifactRoot, testFileName);
                 await File.WriteAllTextAsync(testFile, "test", cancellationToken);
                 File.Delete(testFile);
                 artifactRootWritable = true;
