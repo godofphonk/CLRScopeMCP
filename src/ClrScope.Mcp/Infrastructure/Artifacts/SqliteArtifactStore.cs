@@ -114,7 +114,10 @@ public class SqliteArtifactStore : ISqliteArtifactStore
         return await RetryAsync(async () =>
         {
             var artifactId = ArtifactId.New();
-            var sha256 = await ComputeSha256Async(filePath, cancellationToken);
+            var fileInfo = new FileInfo(filePath);
+            
+            // Skip SHA-256 for large files (>100MB) to avoid double disk pass and delayed completion
+            var sha256 = fileInfo.Length > 100 * 1024 * 1024 ? "skipped_for_large_file" : await ComputeSha256Async(filePath, cancellationToken);
             var now = DateTime.UtcNow;
 
             await using var connection = await SqliteSchemaInitializer.OpenConnectionWithForeignKeysAsync(_connectionString, cancellationToken);

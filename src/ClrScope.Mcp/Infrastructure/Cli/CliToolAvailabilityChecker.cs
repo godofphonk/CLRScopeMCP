@@ -4,12 +4,15 @@ using Microsoft.Extensions.Logging;
 namespace ClrScope.Mcp.Infrastructure;
 
 /// <summary>
-/// Checks availability of external CLI tools via dotnet tool list
+/// Checks availability of external CLI tools via dotnet tool list with caching
 /// </summary>
 public sealed class CliToolAvailabilityChecker : ICliToolAvailabilityChecker
 {
     private readonly ICliCommandRunner _cliRunner;
     private readonly ILogger<CliToolAvailabilityChecker> _logger;
+    private readonly Dictionary<string, (CliToolAvailability availability, DateTime timestamp)> _cache;
+    private readonly TimeSpan _cacheTtl = TimeSpan.FromMinutes(5);
+    private readonly object _cacheLock = new();
 
     public CliToolAvailabilityChecker(
         ICliCommandRunner cliRunner,
@@ -17,18 +20,42 @@ public sealed class CliToolAvailabilityChecker : ICliToolAvailabilityChecker
     {
         _cliRunner = cliRunner;
         _logger = logger;
+        _cache = new Dictionary<string, (CliToolAvailability, DateTime)>();
     }
 
     public async Task<CliToolAvailability> CheckAvailabilityAsync(string toolName, CancellationToken cancellationToken = default)
     {
-        return await CheckAvailabilityInternalAsync(toolName, cancellationToken);
+        // Check cache first
+        lock (_cacheLock)
+        {
+            if (_cache.TryGetValue(toolName, out var cached))
+            {
+                if (DateTime.UtcNow - cached.timestamp < _cacheTtl)
+                {
+                    _logger.LogDebug("CLI tool {ToolName} availability cached (expires in {Ttl})", toolName, _cacheTtl - (DateTime.UtcNow - cached.timestamp));
+                    return cached.availability;
+                }
+                // Cache expired, remove it
+                _cache.Remove(toolName);
+            }
+        }
+
+        var result = await CheckAvailabilityInternalAsync(toolName, cancellationToken);
+
+        // Update cache
+        lock (_cacheLock)
+        {
+            _cache[toolName] = (result, DateTime.UtcNow);
+        }
+
+        return result;
     }
 
     public CliToolAvailability CheckAvailabilitySync(string toolName)
     {
         try
         {
-            return CheckAvailabilityInternalAsync(toolName, CancellationToken.None).GetAwaiter().GetResult();
+            return CheckAvailabilityAsync(toolName, CancellationToken.None).GetAwaiter().GetResult();
         }
         catch
         {
