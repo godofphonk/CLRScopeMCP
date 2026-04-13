@@ -156,6 +156,19 @@ Install using one of the following methods:
 
 Restart MCP server / client after installation.
 """,
+            "dotnet-counters" => """
+Install using one of the following methods:
+
+1) Global:
+   dotnet tool install --global dotnet-counters
+
+2) Repo-local (recommended for teams):
+   dotnet new tool-manifest   # if manifest doesn't exist yet
+   dotnet tool install dotnet-counters
+   dotnet tool restore
+
+Restart MCP server / client after installation.
+""",
             _ => $"Install: dotnet tool install --global {toolName}"
         };
     }

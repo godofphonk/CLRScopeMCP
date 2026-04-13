@@ -89,7 +89,7 @@ class Program
                 services.AddSingleton<CorrelationIdProvider>();
 
                 // Counters Backend
-                services.AddSingleton<ICountersBackend, EventPipeCountersBackend>();
+                services.AddSingleton<ICountersBackend, CliCountersBackend>();
 
                 // Monitor Backend
                 services.AddSingleton<IMonitorBackend, MonitorBackend>();
