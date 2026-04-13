@@ -1,8 +1,10 @@
 using ClrScope.Mcp.Domain.Artifacts;
 using ClrScope.Mcp.Domain.Sessions;
 using ClrScope.Mcp.Infrastructure;
+using ClrScope.Mcp.Options;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using ModelContextProtocol.Server;
 
 namespace ClrScope.Mcp.Tools.Resources;
@@ -10,6 +12,27 @@ namespace ClrScope.Mcp.Tools.Resources;
 [McpServerToolType]
 public sealed class ResourceTools
 {
+    private static void ValidateArtifactPath(string filePath, string artifactRoot, ILogger logger)
+    {
+        try
+        {
+            var fullPath = Path.GetFullPath(filePath);
+            var rootPath = Path.GetFullPath(artifactRoot);
+
+            // Check if the full path starts with the artifact root
+            if (!fullPath.StartsWith(rootPath, StringComparison.OrdinalIgnoreCase))
+            {
+                logger.LogError("Path validation failed: {FilePath} is outside artifact root {ArtifactRoot}", fullPath, rootPath);
+                throw new UnauthorizedAccessException($"File path is outside artifact root");
+            }
+        }
+        catch (Exception ex) when (ex is not UnauthorizedAccessException)
+        {
+            logger.LogError(ex, "Path validation failed for {FilePath}", filePath);
+            throw new UnauthorizedAccessException("Invalid file path", ex);
+        }
+    }
+
     [McpServerTool(Name = "resource_artifact")]
     public static async Task<string> GetArtifactResource(
         string id,
@@ -18,6 +41,7 @@ public sealed class ResourceTools
     {
         var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
         var logger = server.Services!.GetRequiredService<ILogger<ResourceTools>>();
+        var options = server.Services!.GetRequiredService<IOptions<ClrScopeOptions>>();
 
         try
         {
@@ -27,7 +51,8 @@ public sealed class ResourceTools
                 return $"Error: Artifact not found: {id}";
             }
 
-            var preview = GetArtifactPreview(artifact);
+            var artifactRoot = options.Value.GetArtifactRoot();
+            var preview = GetArtifactPreview(artifact, artifactRoot, logger);
             return preview;
         }
         catch (Exception ex)
@@ -121,7 +146,7 @@ public sealed class ResourceTools
         }
     }
 
-    private static string GetArtifactPreview(Artifact artifact)
+    private static string GetArtifactPreview(Artifact artifact, string artifactRoot, ILogger logger)
     {
         var sb = new System.Text.StringBuilder();
         sb.AppendLine($"# Artifact: {artifact.ArtifactId.Value}");
@@ -135,9 +160,11 @@ public sealed class ResourceTools
         sb.AppendLine($"- File: {artifact.FilePath}");
         sb.AppendLine();
         sb.AppendLine("## Content Preview");
-        
+
         try
         {
+            ValidateArtifactPath(artifact.FilePath, artifactRoot, logger);
+
             if (System.IO.File.Exists(artifact.FilePath))
             {
                 var content = System.IO.File.ReadAllText(artifact.FilePath);

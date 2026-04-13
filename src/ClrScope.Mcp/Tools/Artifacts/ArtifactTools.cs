@@ -1,8 +1,10 @@
 using ClrScope.Mcp.Domain.Artifacts;
 using ClrScope.Mcp.Domain.Sessions;
 using ClrScope.Mcp.Infrastructure;
+using ClrScope.Mcp.Options;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using ModelContextProtocol.Server;
 using System.ComponentModel;
 
@@ -11,6 +13,27 @@ namespace ClrScope.Mcp.Tools.Artifacts;
 [McpServerToolType]
 public sealed class ArtifactTools
 {
+    private static void ValidateArtifactPath(string filePath, string artifactRoot, ILogger logger)
+    {
+        try
+        {
+            var fullPath = Path.GetFullPath(filePath);
+            var rootPath = Path.GetFullPath(artifactRoot);
+
+            // Check if the full path starts with the artifact root
+            if (!fullPath.StartsWith(rootPath, StringComparison.OrdinalIgnoreCase))
+            {
+                logger.LogError("Path validation failed: {FilePath} is outside artifact root {ArtifactRoot}", fullPath, rootPath);
+                throw new UnauthorizedAccessException($"File path is outside artifact root");
+            }
+        }
+        catch (Exception ex) when (ex is not UnauthorizedAccessException)
+        {
+            logger.LogError(ex, "Path validation failed for {FilePath}", filePath);
+            throw new UnauthorizedAccessException("Invalid file path", ex);
+        }
+    }
+
     [McpServerTool(Name = "artifact_get_metadata", Title = "Get Artifact Metadata", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Get artifact metadata by ID")]
     public static async Task<ArtifactMetadataResult> GetArtifactMetadata(
         [Description("Artifact ID to get metadata for")] string artifactId,
@@ -156,6 +179,7 @@ public sealed class ArtifactTools
     {
         var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
         var logger = server.Services!.GetRequiredService<ILogger<ArtifactTools>>();
+        var options = server.Services!.GetRequiredService<IOptions<ClrScopeOptions>>();
 
         try
         {
@@ -166,7 +190,7 @@ public sealed class ArtifactTools
 
             var id = new ArtifactId(artifactId);
             var artifact = await artifactStore.GetAsync(id, cancellationToken);
-            
+
             if (artifact == null)
             {
                 logger.LogWarning("Artifact {ArtifactId} not found for deletion", artifactId);
@@ -176,7 +200,10 @@ public sealed class ArtifactTools
                     Message: "Artifact not found"
                 );
             }
-            
+
+            var artifactRoot = options.Value.GetArtifactRoot();
+            ValidateArtifactPath(artifact.FilePath, artifactRoot, logger);
+
             if (File.Exists(artifact.FilePath))
             {
                 File.Delete(artifact.FilePath);
@@ -220,6 +247,7 @@ public sealed class ArtifactTools
     {
         var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
         var logger = server.Services!.GetRequiredService<ILogger<ArtifactTools>>();
+        var options = server.Services!.GetRequiredService<IOptions<ClrScopeOptions>>();
 
         try
         {
@@ -230,7 +258,7 @@ public sealed class ArtifactTools
 
             var id = new ArtifactId(artifactId);
             var artifact = await artifactStore.GetAsync(id, cancellationToken);
-            
+
             if (artifact == null)
             {
                 return new ReadArtifactTextResult(
@@ -240,6 +268,9 @@ public sealed class ArtifactTools
                     Error: "Artifact not found"
                 );
             }
+
+            var artifactRoot = options.Value.GetArtifactRoot();
+            ValidateArtifactPath(artifact.FilePath, artifactRoot, logger);
 
             if (!File.Exists(artifact.FilePath))
             {
