@@ -107,6 +107,8 @@ class Program
                 services.AddSingleton<CollectTraceService>();
                 services.AddSingleton<CollectDumpService>();
                 services.AddSingleton<CollectCountersService>();
+                services.AddSingleton<CollectGcDumpService>();
+                services.AddSingleton<CollectStacksService>();
 
                 // MCP Server
                 services.AddMcpServer()

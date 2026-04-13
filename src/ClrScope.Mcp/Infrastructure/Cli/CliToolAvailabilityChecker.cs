@@ -130,6 +130,32 @@ Install using one of the following methods:
 
 Restart MCP server / client after installation.
 """,
+            "dotnet-gcdump" => """
+Install using one of the following methods:
+
+1) Global:
+   dotnet tool install --global dotnet-gcdump
+
+2) Repo-local (recommended for teams):
+   dotnet new tool-manifest   # if manifest doesn't exist yet
+   dotnet tool install dotnet-gcdump
+   dotnet tool restore
+
+Restart MCP server / client after installation.
+""",
+            "dotnet-stack" => """
+Install using one of the following methods:
+
+1) Global:
+   dotnet tool install --global dotnet-stack
+
+2) Repo-local (recommended for teams):
+   dotnet new tool-manifest   # if manifest doesn't exist yet
+   dotnet tool install dotnet-stack
+   dotnet tool restore
+
+Restart MCP server / client after installation.
+""",
             _ => $"Install: dotnet tool install --global {toolName}"
         };
     }

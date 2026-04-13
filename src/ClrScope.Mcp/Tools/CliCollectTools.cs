@@ -64,46 +64,98 @@ public sealed class CollectCountersTools
         }
     }
 
-    [McpServerTool(Name = "collect_gcdump", Title = "Collect GC Heap Snapshot", ReadOnly = false, Idempotent = false), Description("Collect GC heap snapshot via dotnet-gcdump CLI (NOT YET IMPLEMENTED - placeholder for Stage 0b)")]
-    public static Task<CollectGcDumpResult> CollectGcDump(
+    [McpServerTool(Name = "collect_gcdump", Title = "Collect GC Heap Snapshot", ReadOnly = false, Idempotent = false), Description("Collect GC heap snapshot via dotnet-gcdump CLI (Stage 0b)")]
+    public static async Task<CollectGcDumpResult> CollectGcDump(
         [Description("Process ID to collect GC heap snapshot from")] int pid,
         McpServer server,
         CancellationToken cancellationToken = default)
     {
+        var gcdumpService = server.Services!.GetRequiredService<CollectGcDumpService>();
         var logger = server.Services!.GetRequiredService<ILogger<CollectCountersTools>>();
 
-        if (pid <= 0)
+        try
         {
-            throw new ArgumentException("Process ID must be greater than 0", nameof(pid));
-        }
+            if (pid <= 0)
+            {
+                throw new ArgumentException("Process ID must be greater than 0", nameof(pid));
+            }
 
-        logger.LogWarning("collect.gcdump not yet implemented for PID {Pid}", pid);
-        return Task.FromResult(new CollectGcDumpResult(
-            Success: false,
-            Message: "CLI fallback tools not yet implemented. This is a placeholder for Stage 0b.",
-            ArtifactId: null
-        ));
+            var request = new ClrScope.Mcp.Services.CollectGcDumpRequest(pid);
+            var result = await gcdumpService.CollectGcDumpAsync(request, cancellationToken: cancellationToken);
+
+            if (result.Artifact != null)
+            {
+                return new CollectGcDumpResult(
+                    Success: true,
+                    Message: $"GC heap snapshot collected successfully: {result.Artifact.ArtifactId.Value}",
+                    ArtifactId: result.Artifact.ArtifactId.Value
+                );
+            }
+            else
+            {
+                return new CollectGcDumpResult(
+                    Success: false,
+                    Message: result.Error ?? "GC heap snapshot collection failed",
+                    ArtifactId: null
+                );
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Collect GC heap snapshot failed for PID {Pid}", pid);
+            return new CollectGcDumpResult(
+                Success: false,
+                Message: $"Collect GC heap snapshot failed: {ex.Message}",
+                ArtifactId: null
+            );
+        }
     }
 
-    [McpServerTool(Name = "collect_stacks", Title = "Collect Managed Stacks", ReadOnly = false, Idempotent = false), Description("Collect managed stacks via dotnet-stack CLI (NOT YET IMPLEMENTED - placeholder for Stage 0b)")]
-    public static Task<CollectStacksResult> CollectStacks(
+    [McpServerTool(Name = "collect_stacks", Title = "Collect Managed Stacks", ReadOnly = false, Idempotent = false), Description("Collect managed stacks via dotnet-stack CLI (Stage 0b)")]
+    public static async Task<CollectStacksResult> CollectStacks(
         [Description("Process ID to collect managed stacks from")] int pid,
         McpServer server,
         CancellationToken cancellationToken = default)
     {
+        var stacksService = server.Services!.GetRequiredService<CollectStacksService>();
         var logger = server.Services!.GetRequiredService<ILogger<CollectCountersTools>>();
 
-        if (pid <= 0)
+        try
         {
-            throw new ArgumentException("Process ID must be greater than 0", nameof(pid));
-        }
+            if (pid <= 0)
+            {
+                throw new ArgumentException("Process ID must be greater than 0", nameof(pid));
+            }
 
-        logger.LogWarning("collect.stacks not yet implemented for PID {Pid}", pid);
-        return Task.FromResult(new CollectStacksResult(
-            Success: false,
-            Message: "CLI fallback tools not yet implemented. This is a placeholder for Stage 0b.",
-            ArtifactId: null
-        ));
+            var request = new ClrScope.Mcp.Services.CollectStacksRequest(pid);
+            var result = await stacksService.CollectStacksAsync(request, cancellationToken: cancellationToken);
+
+            if (result.Artifact != null)
+            {
+                return new CollectStacksResult(
+                    Success: true,
+                    Message: $"Managed stacks collected successfully: {result.Artifact.ArtifactId.Value}",
+                    ArtifactId: result.Artifact.ArtifactId.Value
+                );
+            }
+            else
+            {
+                return new CollectStacksResult(
+                    Success: false,
+                    Message: result.Error ?? "Managed stacks collection failed",
+                    ArtifactId: null
+                );
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Collect managed stacks failed for PID {Pid}", pid);
+            return new CollectStacksResult(
+                Success: false,
+                Message: $"Collect managed stacks failed: {ex.Message}",
+                ArtifactId: null
+            );
+        }
     }
 }
 
