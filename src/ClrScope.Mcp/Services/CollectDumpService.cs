@@ -100,8 +100,9 @@ public class CollectDumpService
                 var client = new DiagnosticsClient(request.Pid);
                 var dumpType = request.IncludeHeap ? DumpType.WithHeap : DumpType.Normal;
 
-                // WriteDump is synchronous and doesn't support cancellation
-                // Run it in a separate task to allow cancellation
+                // WriteDump is synchronous and doesn't support cancellation from DiagnosticsClient API
+                // Task.Run with cancellation token only prevents the task from starting if cancelled before execution
+                // Once WriteDump starts, it cannot be cancelled - it will complete regardless of session.cancel
                 await Task.Run(() =>
                 {
                     client.WriteDump(dumpType, filePath, false);
@@ -109,9 +110,9 @@ public class CollectDumpService
             }
             catch (OperationCanceledException)
             {
-                _logger.LogInformation("Dump collection cancelled for session {SessionId}", session.SessionId);
+                _logger.LogWarning("Dump collection cancellation requested for session {SessionId}, but WriteDump is synchronous and may still complete. Cancellation is best-effort only.", session.SessionId);
                 await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Cancelled, CompletedAtUtc = DateTime.UtcNow, Phase = SessionPhase.Cancelled }, CancellationToken.None);
-                return CollectDumpResult.Failure(session, "Dump collection cancelled");
+                return CollectDumpResult.Failure(session, "Dump collection cancellation requested (best-effort only - operation may still complete)");
             }
             catch (Exception ex)
             {

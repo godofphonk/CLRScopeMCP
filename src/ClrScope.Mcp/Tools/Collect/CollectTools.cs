@@ -9,7 +9,7 @@ namespace ClrScope.Mcp.Tools.Collect;
 [McpServerToolType]
 public sealed class CollectTools
 {
-    [McpServerTool(Name = "collect_dump", Title = "Collect Memory Dump", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false), Description("Collect memory dump from .NET process via WriteDump(). Returns Session ID and Artifact ID.")]
+    [McpServerTool(Name = "collect_dump", Title = "Collect Memory Dump", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false), Description("Collect memory dump from .NET process via WriteDump(). Returns Session ID and Artifact ID. NOTE: Cancellation is best-effort only - once dump collection starts, it cannot be reliably cancelled due to DiagnosticsClient API limitations.")]
     public static async Task<CollectDumpResult> CollectDump(
         [Description("Process ID to collect dump from")] int pid,
         McpServer server,
