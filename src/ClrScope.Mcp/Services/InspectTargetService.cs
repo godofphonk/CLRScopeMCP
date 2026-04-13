@@ -35,33 +35,15 @@ public class InspectTargetService
         // Get process name (guaranteed)
         var processName = process.ProcessName;
 
-        // Command line (best-effort - not available for external processes)
-        string? commandLine = null;
-        try
-        {
-            commandLine = process.StartInfo?.Arguments;
-            if (string.IsNullOrEmpty(commandLine))
-            {
-                warnings.Add("commandLine is not available for external processes");
-            }
-        }
-        catch
-        {
-            warnings.Add("commandLine is not available for external processes");
-        }
-
-        // Operating system (host-derived)
-        var operatingSystem = Environment.OSVersion.Platform.ToString();
-
-        // Process architecture (host-derived)
-        var processArchitecture = Environment.Is64BitOperatingSystem ? "x64" : "x86";
+        // Note: CommandLine, OperatingSystem, and ProcessArchitecture are not reliably available for external processes
+        // and are omitted to avoid misleading information. These would require platform-specific inspection.
 
         var details = new RuntimeTargetDetails(
             pid,
             processName,
-            commandLine,
-            operatingSystem,
-            processArchitecture
+            CommandLine: null,
+            OperatingSystem: "Unknown",
+            ProcessArchitecture: "Unknown"
         );
 
         return InspectTargetResult.Success(details, warnings.ToArray());
