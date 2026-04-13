@@ -89,7 +89,7 @@ public class CliCountersBackend : ICountersBackend
         catch (OperationCanceledException)
         {
             _logger.LogInformation("Counters collection cancelled");
-            return CountersResult.FailureResult("Counters collection cancelled");
+            throw; // Re-throw to allow upper layer to handle cancellation properly
         }
         catch (Exception ex)
         {

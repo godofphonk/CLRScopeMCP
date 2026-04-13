@@ -100,14 +100,24 @@ public class CollectDumpService
                 var client = new DiagnosticsClient(request.Pid);
                 var dumpType = request.IncludeHeap ? DumpType.WithHeap : DumpType.Normal;
 
-            // Use working signature: WriteDump(DumpType, path, bool)
-            client.WriteDump(dumpType, filePath, false);
-        }
-        catch (Exception ex)
-        {
-            await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = ex.Message, Phase = SessionPhase.Failed }, CancellationToken.None);
-            return CollectDumpResult.Failure(session, $"Failed to write dump: {ex.Message}");
-        }
+                // WriteDump is synchronous and doesn't support cancellation
+                // Run it in a separate task to allow cancellation
+                await Task.Run(() =>
+                {
+                    client.WriteDump(dumpType, filePath, false);
+                }, operationCts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogInformation("Dump collection cancelled for session {SessionId}", session.SessionId);
+                await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Cancelled, CompletedAtUtc = DateTime.UtcNow, Phase = SessionPhase.Cancelled }, CancellationToken.None);
+                return CollectDumpResult.Failure(session, "Dump collection cancelled");
+            }
+            catch (Exception ex)
+            {
+                await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = ex.Message, Phase = SessionPhase.Failed }, CancellationToken.None);
+                return CollectDumpResult.Failure(session, $"Failed to write dump: {ex.Message}");
+            }
 
         // Check if file was created and has valid size
         if (!File.Exists(filePath))

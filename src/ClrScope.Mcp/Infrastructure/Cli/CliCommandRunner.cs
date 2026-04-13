@@ -52,7 +52,7 @@ public class CliCommandRunner : ICliCommandRunner
         catch (OperationCanceledException)
         {
             _logger.LogWarning("Command cancelled, killing process {Pid}", process.Id);
-            
+
             // Kill the process and its children
             try
             {
@@ -66,8 +66,9 @@ public class CliCommandRunner : ICliCommandRunner
 
             // Wait a bit for cleanup
             await Task.Delay(100, CancellationToken.None);
-            
-            return new CommandLineResult(-1, "", "Command cancelled", false);
+
+            // Re-throw to allow upper layers to handle cancellation properly
+            throw;
         }
 
         var output = await outputTask;

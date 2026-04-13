@@ -166,6 +166,12 @@ public class CollectCountersService
             progress?.Report(100);
             return CollectCountersResult.Success(updatedSession ?? session, updatedArtifact ?? artifact);
         }
+        catch (OperationCanceledException)
+        {
+            _logger.LogInformation("Counters collection cancelled for session {SessionId}", session.SessionId);
+            await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Cancelled, CompletedAtUtc = DateTime.UtcNow, Phase = SessionPhase.Cancelled }, CancellationToken.None);
+            return CollectCountersResult.Failure(session, "Counters collection cancelled");
+        }
         catch (Exception) when (!operationCts.Token.IsCancellationRequested)
         {
             // Cleanup orphaned file on unexpected failure

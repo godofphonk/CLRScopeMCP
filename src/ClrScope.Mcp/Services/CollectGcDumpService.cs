@@ -161,6 +161,12 @@ public class CollectGcDumpService
             progress?.Report(100);
             return CollectGcDumpResult.Success(updatedSession ?? session, updatedArtifact ?? artifact);
         }
+        catch (OperationCanceledException)
+        {
+            _logger.LogInformation("GC dump collection cancelled for session {SessionId}", session.SessionId);
+            await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Cancelled, CompletedAtUtc = DateTime.UtcNow, Phase = SessionPhase.Cancelled }, CancellationToken.None);
+            return CollectGcDumpResult.Failure(session, "GC dump collection cancelled");
+        }
         catch (Exception) when (!operationCts.Token.IsCancellationRequested)
         {
             // Cleanup orphaned file on unexpected failure
