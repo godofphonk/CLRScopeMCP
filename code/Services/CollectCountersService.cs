@@ -4,27 +4,27 @@ using ClrScope.Mcp.Domain.Sessions;
 using ClrScope.Mcp.Infrastructure;
 using ClrScope.Mcp.Options;
 using ClrScope.Mcp.Validation;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Server;
 
 namespace ClrScope.Mcp.Services;
 
-public record CollectStacksRequest(int Pid);
+public record CollectCountersRequest(int Pid, string Duration, string[] Providers);
 
-public record CollectStacksResult(
+public record CollectCountersResult(
     Session Session,
     Artifact? Artifact,
-    string? Error)
+    string? Error
+)
 {
-    public static CollectStacksResult Success(Session session, Artifact artifact) =>
+    public static CollectCountersResult Success(Session session, Artifact artifact) =>
         new(session, artifact, null);
 
-    public static CollectStacksResult Failure(Session session, string error) =>
+    public static CollectCountersResult Failure(Session session, string error) =>
         new(session, null, error);
 }
 
-public class CollectStacksService
+public class CollectCountersService
 {
     private readonly IOptions<ClrScopeOptions> _options;
     private readonly IPreflightValidator _preflightValidator;
@@ -32,20 +32,16 @@ public class CollectStacksService
     private readonly ISqliteArtifactStore _artifactStore;
     private readonly IPidLockManager _pidLockManager;
     private readonly IActiveOperationRegistry _activeOperationRegistry;
-    private readonly ICliCommandRunner _cliRunner;
-    private readonly ICliToolAvailabilityChecker _availabilityChecker;
-    private readonly ILogger<CollectStacksService> _logger;
+    private readonly ICountersBackend _countersBackend;
 
-    public CollectStacksService(
+    public CollectCountersService(
         IOptions<ClrScopeOptions> options,
         IPreflightValidator preflightValidator,
         ISqliteSessionStore sessionStore,
         ISqliteArtifactStore artifactStore,
         IPidLockManager pidLockManager,
         IActiveOperationRegistry activeOperationRegistry,
-        ICliCommandRunner cliRunner,
-        ICliToolAvailabilityChecker availabilityChecker,
-        ILogger<CollectStacksService> logger)
+        ICountersBackend countersBackend)
     {
         _options = options;
         _preflightValidator = preflightValidator;
@@ -53,26 +49,15 @@ public class CollectStacksService
         _artifactStore = artifactStore;
         _pidLockManager = pidLockManager;
         _activeOperationRegistry = activeOperationRegistry;
-        _cliRunner = cliRunner;
-        _availabilityChecker = availabilityChecker;
-        _logger = logger;
+        _countersBackend = countersBackend;
     }
 
-    public async Task<CollectStacksResult> CollectStacksAsync(
-        CollectStacksRequest request,
+    public async Task<CollectCountersResult> CollectCountersAsync(
+        CollectCountersRequest request,
         IProgress<double>? progress = null,
         CancellationToken cancellationToken = default)
     {
         progress?.Report(0);
-
-        // Check dotnet-stack availability
-        var availability = await _availabilityChecker.CheckAvailabilityAsync("dotnet-stack", cancellationToken);
-        if (!availability.IsAvailable)
-        {
-            var failedSession = await _sessionStore.CreateAsync(SessionKind.Stacks, request.Pid, cancellationToken: cancellationToken);
-            await _sessionStore.UpdateAsync(failedSession with { Status = SessionStatus.Failed, Error = availability.InstallHint, Phase = SessionPhase.Failed }, cancellationToken);
-            return CollectStacksResult.Failure(failedSession, availability.InstallHint ?? "dotnet-stack CLI not found");
-        }
 
         // Acquire PID lock
         using var pidLock = await _pidLockManager.AcquireLockAsync(request.Pid, cancellationToken);
@@ -81,13 +66,26 @@ public class CollectStacksService
         var preflightResult = await _preflightValidator.ValidateCollectAsync(request.Pid, cancellationToken);
         if (!preflightResult.IsValid)
         {
-            var failedSession = await _sessionStore.CreateAsync(SessionKind.Stacks, request.Pid, cancellationToken: cancellationToken);
+            var failedSession = await _sessionStore.CreateAsync(SessionKind.Counters, request.Pid, cancellationToken: cancellationToken);
             await _sessionStore.UpdateAsync(failedSession with { Status = SessionStatus.Failed, Error = preflightResult.Message, Phase = SessionPhase.Failed }, cancellationToken);
-            return CollectStacksResult.Failure(failedSession, preflightResult.Message ?? "Preflight validation failed");
+            return CollectCountersResult.Failure(failedSession, preflightResult.Message ?? "Preflight validation failed");
+        }
+
+        // Parse duration
+        TimeSpan duration;
+        try
+        {
+            duration = ParseDuration(request.Duration);
+        }
+        catch (FormatException ex)
+        {
+            var failedSession = await _sessionStore.CreateAsync(SessionKind.Counters, request.Pid, cancellationToken: cancellationToken);
+            await _sessionStore.UpdateAsync(failedSession with { Status = SessionStatus.Failed, Error = ex.Message, Phase = SessionPhase.Failed }, cancellationToken);
+            return CollectCountersResult.Failure(failedSession, $"Invalid duration format: {ex.Message}");
         }
 
         // Create session
-        var session = await _sessionStore.CreateAsync(SessionKind.Stacks, request.Pid, cancellationToken: cancellationToken);
+        var session = await _sessionStore.CreateAsync(SessionKind.Counters, request.Pid, cancellationToken: cancellationToken);
         await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Running, Phase = SessionPhase.Attaching }, cancellationToken);
 
         // Create linked CTS
@@ -98,41 +96,41 @@ public class CollectStacksService
         {
             // Setup artifact path
             var artifactRoot = _options.Value.GetArtifactRoot();
-            var stacksDir = Path.Combine(artifactRoot, "stacks");
-            Directory.CreateDirectory(stacksDir);
+            var countersDir = Path.Combine(artifactRoot, "counters");
+            Directory.CreateDirectory(countersDir);
 
-            var fileName = $"stacks_{session.SessionId.Value}.txt";
-            var filePath = Path.Combine(stacksDir, fileName);
+            var fileName = $"counters_{session.SessionId.Value}.csv";
+            var filePath = Path.Combine(countersDir, fileName);
 
             progress?.Report(20);
             await _sessionStore.UpdateAsync(session with { Phase = SessionPhase.Collecting }, operationCts.Token);
 
-            // Collect stacks via dotnet-stack CLI
-            _logger.LogInformation("Collecting managed stacks for PID {Pid} to {FilePath}", request.Pid, filePath);
-            var result = await _cliRunner.ExecuteAsync("dotnet-stack", new[] { "report", "-p", request.Pid.ToString() }, operationCts.Token);
+            // Collect counters via backend
+            var countersResult = await _countersBackend.CollectAsync(
+                request.Pid,
+                request.Providers,
+                duration,
+                filePath,
+                operationCts.Token);
 
-            if (result.ExitCode != 0)
+            if (!countersResult.Success)
             {
-                var error = !string.IsNullOrEmpty(result.StandardError) ? result.StandardError : result.StandardOutput;
-                await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = error, Phase = SessionPhase.Failed }, operationCts.Token);
-                return CollectStacksResult.Failure(session, error ?? "Stacks collection failed");
+                await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = countersResult.Error, Phase = SessionPhase.Failed }, operationCts.Token);
+                return CollectCountersResult.Failure(session, countersResult.Error ?? "Counter collection failed");
             }
-
-            // Write output to file
-            await File.WriteAllTextAsync(filePath, result.StandardOutput, operationCts.Token);
 
             // Check if file was created
             if (!File.Exists(filePath))
             {
-                await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = "Stacks file not created", Phase = SessionPhase.Failed }, operationCts.Token);
-                return CollectStacksResult.Failure(session, "Stacks file was not created");
+                await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = "Counter file not created", Phase = SessionPhase.Failed }, operationCts.Token);
+                return CollectCountersResult.Failure(session, "Counter file was not created");
             }
 
             var fileInfo = new FileInfo(filePath);
             if (fileInfo.Length == 0)
             {
-                await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = "Stacks file is empty", Phase = SessionPhase.Failed }, operationCts.Token);
-                return CollectStacksResult.Failure(session, "Stacks file is empty");
+                await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = "Counter file is empty", Phase = SessionPhase.Failed }, operationCts.Token);
+                return CollectCountersResult.Failure(session, "Counter file is empty");
             }
 
             progress?.Report(70);
@@ -140,7 +138,7 @@ public class CollectStacksService
 
             // Create artifact record
             var artifact = await _artifactStore.CreateAsync(
-                ArtifactKind.Stacks,
+                ArtifactKind.Counters,
                 filePath,
                 fileInfo.Length,
                 request.Pid,
@@ -157,11 +155,27 @@ public class CollectStacksService
             await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Completed, CompletedAtUtc = DateTime.UtcNow, Phase = SessionPhase.Completed }, operationCts.Token);
 
             progress?.Report(100);
-            return CollectStacksResult.Success(session, artifact);
+            return CollectCountersResult.Success(session, artifact);
         }
         finally
         {
             _activeOperationRegistry.Complete(session.SessionId);
         }
+    }
+
+    private static TimeSpan ParseDuration(string duration)
+    {
+        // Parse hh:mm:ss format
+        var parts = duration.Split(':');
+        if (parts.Length != 3)
+        {
+            throw new FormatException("Duration must be in hh:mm:ss format");
+        }
+
+        var hours = int.Parse(parts[0]);
+        var minutes = int.Parse(parts[1]);
+        var seconds = int.Parse(parts[2]);
+
+        return new TimeSpan(hours, minutes, seconds);
     }
 }
