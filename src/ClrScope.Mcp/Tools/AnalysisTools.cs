@@ -34,16 +34,6 @@ public sealed class AnalysisTools
 
         try
         {
-            // Parse artifact ID
-            if (!Guid.TryParse(artifactId, out var artifactGuid))
-            {
-                return new AnalyzeDumpSosResult(
-                    Success: false,
-                    Output: string.Empty,
-                    Error: "Invalid artifact ID format"
-                );
-            }
-
             // Get artifact from store
             var artifact = await artifactStore.GetAsync(new ArtifactId(artifactId), cancellationToken);
             if (artifact == null)
