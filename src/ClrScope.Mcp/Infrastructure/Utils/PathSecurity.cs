@@ -1,12 +1,13 @@
 namespace ClrScope.Mcp.Infrastructure.Utils;
 
 /// <summary>
-/// Path security utilities to prevent arbitrary file deletion
+/// Path security utilities to prevent arbitrary file access
 /// </summary>
 public static class PathSecurity
 {
     /// <summary>
     /// Validate that a file path is within a trusted directory
+    /// Prevents bypass via paths like /root/.clrscope_evil/file.txt matching /root/.clrscope
     /// </summary>
     /// <param name="filePath">File path to validate</param>
     /// <param name="trustedDirectory">Trusted directory (e.g., artifact root)</param>
@@ -20,13 +21,14 @@ public static class PathSecurity
             var normalizedTrustedDir = Path.GetFullPath(trustedDirectory);
 
             // Ensure the normalized trusted directory ends with directory separator
+            // This prevents /root/.clrscope_evil from matching /root/.clrscope
             if (!normalizedTrustedDir.EndsWith(Path.DirectorySeparatorChar) &&
                 !normalizedTrustedDir.EndsWith(Path.AltDirectorySeparatorChar))
             {
                 normalizedTrustedDir += Path.DirectorySeparatorChar;
             }
 
-            // Check if the file path starts with the trusted directory
+            // Check if the file path starts with the trusted directory with separator
             return normalizedFilePath.StartsWith(normalizedTrustedDir, StringComparison.OrdinalIgnoreCase);
         }
         catch

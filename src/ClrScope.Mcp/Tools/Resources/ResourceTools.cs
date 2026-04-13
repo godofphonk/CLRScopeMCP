@@ -1,6 +1,7 @@
 using ClrScope.Mcp.Domain.Artifacts;
 using ClrScope.Mcp.Domain.Sessions;
 using ClrScope.Mcp.Infrastructure;
+using ClrScope.Mcp.Infrastructure.Utils;
 using ClrScope.Mcp.Options;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -16,17 +17,14 @@ public sealed class ResourceTools
     {
         try
         {
-            var fullPath = Path.GetFullPath(filePath);
-            var rootPath = Path.GetFullPath(artifactRoot);
-
-            // Check if the full path starts with the artifact root
-            if (!fullPath.StartsWith(rootPath, StringComparison.OrdinalIgnoreCase))
-            {
-                logger.LogError("Path validation failed: {FilePath} is outside artifact root {ArtifactRoot}", fullPath, rootPath);
-                throw new UnauthorizedAccessException($"File path is outside artifact root");
-            }
+            PathSecurity.EnsurePathWithinDirectory(filePath, artifactRoot);
         }
-        catch (Exception ex) when (ex is not UnauthorizedAccessException)
+        catch (UnauthorizedAccessException)
+        {
+            logger.LogError("Path validation failed: {FilePath} is outside artifact root {ArtifactRoot}", filePath, artifactRoot);
+            throw;
+        }
+        catch (Exception ex)
         {
             logger.LogError(ex, "Path validation failed for {FilePath}", filePath);
             throw new UnauthorizedAccessException("Invalid file path", ex);
