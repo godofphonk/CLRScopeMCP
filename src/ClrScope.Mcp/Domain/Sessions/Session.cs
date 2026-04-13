@@ -25,6 +25,7 @@ public record Session(
     /// <summary>
     /// Transitions session to Failed state with CompletedAtUtc set.
     /// Enforces invariant: terminal states must have CompletedAtUtc.
+    /// Preserves existing CompletedAtUtc if already set (e.g., by session_cancel).
     /// </summary>
     public Session AsFailed(string? error = null)
     {
@@ -33,13 +34,14 @@ public record Session(
             Status = SessionStatus.Failed,
             Phase = SessionPhase.Failed,
             Error = error,
-            CompletedAtUtc = DateTime.UtcNow
+            CompletedAtUtc = CompletedAtUtc ?? DateTime.UtcNow
         };
     }
 
     /// <summary>
     /// Transitions session to Cancelled state with CompletedAtUtc set.
     /// Enforces invariant: terminal states must have CompletedAtUtc.
+    /// Preserves existing CompletedAtUtc if already set (e.g., by session_cancel).
     /// </summary>
     public Session AsCancelled()
     {
@@ -47,13 +49,14 @@ public record Session(
         {
             Status = SessionStatus.Cancelled,
             Phase = SessionPhase.Cancelled,
-            CompletedAtUtc = DateTime.UtcNow
+            CompletedAtUtc = CompletedAtUtc ?? DateTime.UtcNow
         };
     }
 
     /// <summary>
     /// Transitions session to Completed state with CompletedAtUtc set.
     /// Enforces invariant: terminal states must have CompletedAtUtc.
+    /// Preserves existing CompletedAtUtc if already set (e.g., by session_cancel).
     /// </summary>
     public Session AsCompleted()
     {
@@ -61,7 +64,7 @@ public record Session(
         {
             Status = SessionStatus.Completed,
             Phase = SessionPhase.Completed,
-            CompletedAtUtc = DateTime.UtcNow
+            CompletedAtUtc = CompletedAtUtc ?? DateTime.UtcNow
         };
     }
 }
