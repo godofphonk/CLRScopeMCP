@@ -89,4 +89,29 @@ public class FullPreflightValidatorTests
         Assert.False(result.IsValid);
         Assert.Equal(ClrScopeError.PREFLIGHT_PROCESS_NOT_FOUND, result.Error.Value);
     }
+
+    [Fact]
+    public async Task ValidateCollectAsync_ReturnsSuccess_WhenValidPidProvided()
+    {
+        // Arrange
+        var artifactRoot = Path.Combine(Path.GetTempPath(), $"clrscope_test_{Guid.NewGuid()}");
+        var options = new ClrScopeOptions
+        {
+            ArtifactRoot = artifactRoot
+        };
+        var optionsMock = new Mock<IOptions<ClrScopeOptions>>();
+        optionsMock.Setup(x => x.Value).Returns(options);
+        var loggerMock = new Mock<ILogger<FullPreflightValidator>>();
+        var validator = new FullPreflightValidator(optionsMock.Object, loggerMock.Object);
+
+        // Use current process PID
+        var currentPid = Environment.ProcessId;
+
+        // Act
+        var result = await validator.ValidateCollectAsync(currentPid, CancellationToken.None);
+
+        // Assert
+        Assert.True(result.IsValid);
+        Assert.Null(result.Error);
+    }
 }
