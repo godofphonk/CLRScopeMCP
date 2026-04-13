@@ -14,17 +14,20 @@ public class SymbolResolver : ISymbolResolver
     private readonly ICliCommandRunner _cliRunner;
     private readonly CorrelationIdProvider _correlationIdProvider;
     private readonly IOptions<ClrScopeOptions> _options;
+    private readonly ICliToolAvailabilityChecker _availabilityChecker;
 
     public SymbolResolver(
         ILogger<SymbolResolver> logger,
         ICliCommandRunner cliRunner,
         CorrelationIdProvider correlationIdProvider,
-        IOptions<ClrScopeOptions> options)
+        IOptions<ClrScopeOptions> options,
+        ICliToolAvailabilityChecker availabilityChecker)
     {
         _logger = logger;
         _cliRunner = cliRunner;
         _correlationIdProvider = correlationIdProvider;
         _options = options;
+        _availabilityChecker = availabilityChecker;
     }
 
     public async Task<bool> IsAvailableAsync(CancellationToken cancellationToken = default)
@@ -34,12 +37,22 @@ public class SymbolResolver : ISymbolResolver
             var correlationId = _correlationIdProvider.GetCorrelationId();
             _logger.LogInformation("[{CorrelationId}] Checking dotnet-symbol availability", correlationId);
 
-            var result = await _cliRunner.ExecuteAsync(
-                "dotnet-symbol",
-                new[] { "--version" },
-                cancellationToken);
+            // First check via availability checker
+            var availability = await _availabilityChecker.CheckAvailabilityAsync("dotnet-symbol", cancellationToken);
+            if (!availability.IsAvailable)
+            {
+                return false;
+            }
 
-            return result.ExitCode == 0;
+            // Additional check: try to run dotnet-symbol --help to ensure it actually works
+            var helpResult = await _cliRunner.ExecuteAsync("dotnet-symbol", new[] { "--help" }, cancellationToken);
+            if (helpResult.ExitCode != 0)
+            {
+                _logger.LogWarning("[{CorrelationId}] dotnet-symbol found but --help failed with exit code {ExitCode}", correlationId, helpResult.ExitCode);
+                return false;
+            }
+
+            return true;
         }
         catch (Exception ex)
         {

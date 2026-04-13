@@ -14,7 +14,7 @@ public sealed class AnalysisTools
     [McpServerTool(Name = "analyze_dump_sos", Title = "Analyze Dump with SOS", ReadOnly = false, Idempotent = false), Description("SOS analysis of dump file with custom commands (Stage 2)")]
     public static async Task<AnalyzeDumpSosResult> AnalyzeDumpSos(
         [Description("Artifact ID of the dump file to analyze")] string artifactId,
-        [Description("SOS command to execute (e.g., '!dumpheap -stat', '!threads', '!clrstack')")] string command,
+        [Description("SOS command to execute (e.g., 'dumpheap -stat', 'threads', 'clrstack')")] string command,
         McpServer server,
         CancellationToken cancellationToken = default)
     {
@@ -29,7 +29,17 @@ public sealed class AnalysisTools
 
         if (string.IsNullOrEmpty(command))
         {
-            throw new ArgumentException("SOS command is required", nameof(command));
+            return new AnalyzeDumpSosResult(
+                Success: false,
+                Output: string.Empty,
+                Error: "SOS command is required"
+            );
+        }
+
+        // Remove ! prefix if present (dotnet-dump analyze doesn't require it)
+        if (command.StartsWith("!"))
+        {
+            command = command.Substring(1);
         }
 
         try
