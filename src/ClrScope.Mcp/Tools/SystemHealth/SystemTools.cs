@@ -27,8 +27,8 @@ public sealed class SystemTools
             var diagnosticsClientAvailable = false;
             try
             {
-                var targets = runtimeService.ListTargets();
-                diagnosticsClientAvailable = targets.Count > 0;
+                runtimeService.ListTargets(); // If this doesn't throw, DiagnosticsClient is available
+                diagnosticsClientAvailable = true;
             }
             catch
             {
