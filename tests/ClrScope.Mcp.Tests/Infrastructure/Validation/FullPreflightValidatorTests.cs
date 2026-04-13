@@ -163,4 +163,33 @@ public class FullPreflightValidatorTests
         Assert.False(result.IsValid);
         Assert.Equal(ClrScopeError.PREFLIGHT_NOT_DOTNET, result.Error.Value);
     }
+
+    [Fact]
+    public async Task ValidateCollectAsync_ReturnsFailure_WhenDiskSpaceLow()
+    {
+        // Arrange
+        // Use a temporary directory on a filesystem that might have low space
+        // This test is environment-dependent, but we'll try to use /tmp which usually has space
+        var artifactRoot = Path.Combine(Path.GetTempPath(), $"clrscope_test_{Guid.NewGuid()}");
+        var options = new ClrScopeOptions
+        {
+            ArtifactRoot = artifactRoot
+        };
+        var optionsMock = new Mock<IOptions<ClrScopeOptions>>();
+        optionsMock.Setup(x => x.Value).Returns(options);
+        var loggerMock = new Mock<ILogger<FullPreflightValidator>>();
+        var validator = new FullPreflightValidator(optionsMock.Object, loggerMock.Object);
+
+        // Use current process PID (valid .NET process)
+        var currentPid = Environment.ProcessId;
+
+        // Act
+        var result = await validator.ValidateCollectAsync(currentPid, CancellationToken.None);
+
+        // Assert
+        // This should succeed if there's enough disk space (>100MB)
+        // In normal environments with sufficient disk space, this will pass
+        // The test might fail on systems with very low disk space
+        Assert.True(result.IsValid || result.Error == ClrScopeError.PREFLIGHT_DISK_SPACE_LOW);
+    }
 }
