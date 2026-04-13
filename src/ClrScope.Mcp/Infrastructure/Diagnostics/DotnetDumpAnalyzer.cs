@@ -72,9 +72,14 @@ public class DotnetDumpAnalyzer : ISosAnalyzer
                 return SosAnalysisResult.FailureResult($"Dump file not found: {dumpFilePath}");
             }
 
+            // Add timeout to prevent hanging
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(30)); // 30 second timeout
+
             // Execute dotnet-dump analyze with the SOS command
-            var args = new[] { "analyze", dumpFilePath, "-c", command };
-            var commandResult = await _cliRunner.ExecuteAsync("dotnet-dump", args, cancellationToken);
+            // Add 'exit' at the end to ensure dotnet-dump terminates after command execution
+            var args = new[] { "analyze", dumpFilePath, "-c", command, "-c", "exit" };
+            var commandResult = await _cliRunner.ExecuteAsync("dotnet-dump", args, timeoutCts.Token);
 
             if (commandResult.ExitCode == 0)
             {
@@ -92,6 +97,11 @@ public class DotnetDumpAnalyzer : ISosAnalyzer
                 _logger.LogWarning("[{CorrelationId}] SOS command failed: {Error}", correlationId, errorOutput);
                 return SosAnalysisResult.FailureResult($"SOS command failed: {errorOutput}");
             }
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogWarning("[{CorrelationId}] SOS command timed out after 30 seconds", correlationId);
+            return SosAnalysisResult.FailureResult("SOS command timed out after 30 seconds. The dump file may be too large or dotnet-dump analyze may be hanging.");
         }
         catch (Exception ex)
         {
