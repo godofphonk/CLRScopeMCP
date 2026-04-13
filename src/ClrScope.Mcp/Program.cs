@@ -99,9 +99,6 @@ class Program
                 // Counters Backend
                 services.AddSingleton<ICountersBackend, CliCountersBackend>();
 
-                // Monitor Backend (not used yet, commented out to avoid DI issues)
-                // services.AddHttpClient<IMonitorBackend, MonitorBackend>();
-
                 // SOS Analyzer
                 services.AddSingleton<ISosAnalyzer, DotnetDumpAnalyzer>();
 
