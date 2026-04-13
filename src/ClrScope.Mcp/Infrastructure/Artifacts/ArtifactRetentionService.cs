@@ -1,4 +1,7 @@
+using ClrScope.Mcp.Infrastructure.Utils;
+using ClrScope.Mcp.Options;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace ClrScope.Mcp.Infrastructure;
 
@@ -9,13 +12,16 @@ public class ArtifactRetentionService : IArtifactRetentionService
 {
     private readonly ISqliteArtifactStore _artifactStore;
     private readonly ILogger<ArtifactRetentionService> _logger;
+    private readonly IOptions<ClrScopeOptions> _options;
 
     public ArtifactRetentionService(
         ISqliteArtifactStore artifactStore,
-        ILogger<ArtifactRetentionService> logger)
+        ILogger<ArtifactRetentionService> logger,
+        IOptions<ClrScopeOptions> options)
     {
         _artifactStore = artifactStore;
         _logger = logger;
+        _options = options;
     }
 
     public async Task<int> CleanupOldArtifactsAsync(TimeSpan maxAge, CancellationToken cancellationToken = default)
@@ -27,6 +33,7 @@ public class ArtifactRetentionService : IArtifactRetentionService
     {
         var cutoffTime = DateTime.UtcNow - maxAge;
         var artifacts = await _artifactStore.GetAllAsync(cancellationToken);
+        var artifactRoot = _options.Value.GetArtifactRoot();
 
         // Filter by age and pin status
         var candidates = artifacts
@@ -48,6 +55,17 @@ public class ArtifactRetentionService : IArtifactRetentionService
 
             try
             {
+                // Validate that file path is within artifact root before deletion
+                if (!PathSecurity.IsPathWithinDirectory(artifact.FilePath, artifactRoot))
+                {
+                    _logger.LogWarning(
+                        "Skipping artifact {ArtifactId} - file path {FilePath} is outside artifact root {ArtifactRoot}. This may indicate data corruption or security issue.",
+                        artifact.ArtifactId.Value, artifact.FilePath, artifactRoot);
+                    // Delete database record but skip file deletion for security
+                    await _artifactStore.DeleteAsync(artifact.ArtifactId, cancellationToken);
+                    continue;
+                }
+
                 // Delete file if it exists
                 if (File.Exists(artifact.FilePath))
                 {
