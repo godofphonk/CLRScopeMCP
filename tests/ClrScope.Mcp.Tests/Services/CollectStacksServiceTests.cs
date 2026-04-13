@@ -9,9 +9,9 @@ using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 
-namespace ClrScope.Mcp.Tests;
+namespace ClrScope.Mcp.Tests.Services;
 
-public class CollectGcDumpServiceTests
+public class CollectStacksServiceTests
 {
     [Fact]
     public void Constructor_DoesNotThrow_WhenAllDependenciesAreProvided()
@@ -25,10 +25,10 @@ public class CollectGcDumpServiceTests
         var activeOperationRegistryMock = new Mock<IActiveOperationRegistry>();
         var cliRunnerMock = new Mock<ICliCommandRunner>();
         var availabilityCheckerMock = new Mock<ICliToolAvailabilityChecker>();
-        var loggerMock = new Mock<ILogger<CollectGcDumpService>>();
+        var loggerMock = new Mock<ILogger<CollectStacksService>>();
 
         // Act & Assert
-        var exception = Record.Exception(() => new CollectGcDumpService(
+        var exception = Record.Exception(() => new CollectStacksService(
             optionsMock.Object,
             preflightValidatorMock.Object,
             sessionStoreMock.Object,

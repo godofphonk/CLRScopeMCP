@@ -1,7 +1,7 @@
 using ClrScope.Mcp.Domain.Artifacts;
 using Xunit;
 
-namespace ClrScope.Mcp.Tests;
+namespace ClrScope.Mcp.Tests.Utils;
 
 public class ArtifactReadTextTests
 {

@@ -3,7 +3,7 @@ using ClrScope.Mcp.Domain.Sessions;
 using ClrScope.Mcp.Infrastructure;
 using Xunit;
 
-namespace ClrScope.Mcp.Tests;
+namespace ClrScope.Mcp.Tests.Infrastructure;
 
 public class SqliteArtifactStoreTests : IDisposable
 {

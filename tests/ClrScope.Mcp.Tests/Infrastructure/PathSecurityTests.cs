@@ -1,7 +1,7 @@
 using ClrScope.Mcp.Infrastructure.Utils;
 using Xunit;
 
-namespace ClrScope.Mcp.Tests;
+namespace ClrScope.Mcp.Tests.Infrastructure;
 
 public class PathSecurityTests : IDisposable
 {

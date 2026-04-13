@@ -9,7 +9,7 @@ using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 
-namespace ClrScope.Mcp.Tests;
+namespace ClrScope.Mcp.Tests.Services;
 
 public class CollectTraceServiceTests
 {

@@ -1,7 +1,7 @@
 using ClrScope.Mcp.Domain.Sessions;
 using Xunit;
 
-namespace ClrScope.Mcp.Tests;
+namespace ClrScope.Mcp.Tests.Domain;
 
 public class SessionIdTests
 {

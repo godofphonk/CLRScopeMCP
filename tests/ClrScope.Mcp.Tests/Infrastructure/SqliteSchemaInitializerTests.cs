@@ -1,7 +1,8 @@
 using ClrScope.Mcp.Infrastructure;
+using Microsoft.Data.Sqlite;
 using Xunit;
 
-namespace ClrScope.Mcp.Tests;
+namespace ClrScope.Mcp.Tests.Infrastructure;
 
 public class SqliteSchemaInitializerTests : IDisposable
 {

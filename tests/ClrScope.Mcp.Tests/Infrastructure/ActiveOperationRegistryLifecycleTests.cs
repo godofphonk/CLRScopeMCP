@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
 
-namespace ClrScope.Mcp.Tests;
+namespace ClrScope.Mcp.Tests.Infrastructure;
 
 public class ActiveOperationRegistryLifecycleTests : IDisposable
 {

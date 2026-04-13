@@ -1,8 +1,9 @@
 using ClrScope.Mcp.Domain.Artifacts;
 using ClrScope.Mcp.Infrastructure.Utils;
+using ClrScope.Mcp.Tools.Analysis;
 using Xunit;
 
-namespace ClrScope.Mcp.Tests;
+namespace ClrScope.Mcp.Tests.Infrastructure;
 
 public class AnalysisToolsSecurityTests : IDisposable
 {
