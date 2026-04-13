@@ -76,16 +76,6 @@ class Program
                 // CLI Tool Availability Checker
                 services.AddSingleton<ICliToolAvailabilityChecker, CliToolAvailabilityChecker>();
 
-                // Check CLI tool availability for conditional registration
-                var loggerFactory = LoggerFactory.Create(b => b.AddConsole());
-                var toolChecker = new CliToolAvailabilityChecker(
-                    new CliCommandRunner(loggerFactory.CreateLogger<CliCommandRunner>()),
-                    loggerFactory.CreateLogger<CliToolAvailabilityChecker>()
-                );
-                
-                var dotnetDumpAvailable = toolChecker.CheckAvailabilitySync("dotnet-dump").IsAvailable;
-                var dotnetSymbolAvailable = toolChecker.CheckAvailabilitySync("dotnet-symbol").IsAvailable;
-
                 // PID Lock Manager
                 services.AddSingleton<IPidLockManager, PidLockManager>();
 
@@ -119,20 +109,15 @@ class Program
                 services.AddSingleton<CollectCountersService>();
 
                 // MCP Server
-                var mcpBuilder = services.AddMcpServer()
+                services.AddMcpServer()
                     .WithStdioServerTransport()
                     .WithTools<RuntimeTools>()
                     .WithTools<CollectTools>()
                     .WithTools<CollectCountersTools>()
                     .WithTools<SystemTools>()
                     .WithTools<SessionTools>()
-                    .WithTools<ArtifactTools>();
-
-                // Conditionally register advanced tools only if dependencies are available
-                if (dotnetDumpAvailable && dotnetSymbolAvailable)
-                {
-                    mcpBuilder.WithTools<AnalysisTools>();
-                }
+                    .WithTools<ArtifactTools>()
+                    .WithTools<AnalysisTools>();
             })
             .Build();
 
