@@ -1,6 +1,7 @@
 using ClrScope.Mcp.Domain.Artifacts;
 using ClrScope.Mcp.Domain.Sessions;
 using ClrScope.Mcp.Infrastructure;
+using ClrScope.Mcp.Infrastructure.Utils;
 using ClrScope.Mcp.Options;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -343,7 +344,7 @@ public sealed class ArtifactTools
                 throw new ArgumentException("Max age must not be empty", nameof(maxAge));
             }
 
-            var timeSpan = ParseMaxAge(maxAge);
+            var timeSpan = TimeSpanParser.ParseMaxAge(maxAge);
             var deletedCount = await retentionService.CleanupOldArtifactsAsync(timeSpan, maxSizeBytes, cancellationToken);
 
             var message = maxSizeBytes.HasValue
@@ -376,21 +377,6 @@ public sealed class ArtifactTools
         }
     }
 
-    private static TimeSpan ParseMaxAge(string maxAge)
-    {
-        // Parse format like "7d", "24h", "60m", "3600s"
-        var value = int.Parse(maxAge.TrimEnd('d', 'h', 'm', 's'));
-        var unit = maxAge[^1];
-
-        return unit switch
-        {
-            'd' => TimeSpan.FromDays(value),
-            'h' => TimeSpan.FromHours(value),
-            'm' => TimeSpan.FromMinutes(value),
-            's' => TimeSpan.FromSeconds(value),
-            _ => throw new FormatException($"Unknown time unit: {unit}. Use d, h, m, or s.")
-        };
-    }
 
     [McpServerTool(Name = "artifact_pin", Title = "Pin Artifact", ReadOnly = false, Idempotent = false, UseStructuredContent = true), Description("Pin artifact to protect from automatic deletion")]
     public static async Task<PinArtifactResult> PinArtifact(

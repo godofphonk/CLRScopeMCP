@@ -2,6 +2,7 @@ using ClrScope.Mcp.Contracts;
 using ClrScope.Mcp.Domain.Artifacts;
 using ClrScope.Mcp.Domain.Sessions;
 using ClrScope.Mcp.Infrastructure;
+using ClrScope.Mcp.Infrastructure.Utils;
 using ClrScope.Mcp.Options;
 using ClrScope.Mcp.Validation;
 using Microsoft.Diagnostics.NETCore.Client;
@@ -83,7 +84,7 @@ public class CollectTraceService
         TimeSpan duration;
         try
         {
-            duration = ParseDuration(request.Duration);
+            duration = TimeSpanParser.ParseDuration(request.Duration);
         }
         catch (FormatException ex)
         {
@@ -299,19 +300,4 @@ public class CollectTraceService
         }
     }
 
-    private static TimeSpan ParseDuration(string duration)
-    {
-        // Parse hh:mm:ss format (3 parts: hours, minutes, seconds)
-        var parts = duration.Split(':');
-        if (parts.Length != 3)
-        {
-            throw new FormatException("Duration must be in hh:mm:ss format");
-        }
-
-        var hours = int.Parse(parts[0]);
-        var minutes = int.Parse(parts[1]);
-        var seconds = int.Parse(parts[2]);
-
-        return new TimeSpan(hours, minutes, seconds);
-    }
 }
