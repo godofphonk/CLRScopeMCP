@@ -114,4 +114,30 @@ public class FullPreflightValidatorTests
         Assert.True(result.IsValid);
         Assert.Null(result.Error);
     }
+
+    [Fact]
+    public async Task ValidateCollectAsync_ReturnsFailure_WhenArtifactRootNotWritable()
+    {
+        // Arrange
+        // Use a path that cannot be created (e.g., /root/test or a non-existent directory in a restricted path)
+        var artifactRoot = "/root/nonexistent_clrscope_test";
+        var options = new ClrScopeOptions
+        {
+            ArtifactRoot = artifactRoot
+        };
+        var optionsMock = new Mock<IOptions<ClrScopeOptions>>();
+        optionsMock.Setup(x => x.Value).Returns(options);
+        var loggerMock = new Mock<ILogger<FullPreflightValidator>>();
+        var validator = new FullPreflightValidator(optionsMock.Object, loggerMock.Object);
+
+        // Use current process PID (valid process)
+        var currentPid = Environment.ProcessId;
+
+        // Act
+        var result = await validator.ValidateCollectAsync(currentPid, CancellationToken.None);
+
+        // Assert
+        Assert.False(result.IsValid);
+        Assert.Equal(ClrScopeError.PREFLIGHT_ARTIFACT_ROOT_NOT_WRITABLE, result.Error.Value);
+    }
 }
