@@ -170,8 +170,19 @@ public class CollectStacksService
             await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Cancelled, CompletedAtUtc = DateTime.UtcNow, Phase = SessionPhase.Cancelled }, CancellationToken.None);
             return CollectStacksResult.Failure(session, "Stacks collection cancelled");
         }
-        catch (Exception) when (!operationCts.Token.IsCancellationRequested)
+        catch (Exception ex) when (!operationCts.Token.IsCancellationRequested)
         {
+            // Best-effort: mark session as failed
+            try
+            {
+                await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, CompletedAtUtc = DateTime.UtcNow, Phase = SessionPhase.Failed, Error = ex.Message }, CancellationToken.None);
+                _logger.LogInformation("Marked session {SessionId} as failed due to exception: {Error}", session.SessionId, ex.Message);
+            }
+            catch (Exception updateEx)
+            {
+                _logger.LogError(updateEx, "Failed to mark session {SessionId} as failed", session.SessionId);
+            }
+
             // Cleanup orphaned file on unexpected failure
             if (filePath != null && File.Exists(filePath))
             {
