@@ -148,7 +148,7 @@ public class CollectGcDumpService
 
             // Update artifact with URIs
             var diagUri = $"clrscope://artifact/{artifact.ArtifactId.Value}";
-            var fileUri = $"file://{filePath}";
+            var fileUri = new Uri(filePath).AbsoluteUri;
             artifact = artifact with { DiagUri = diagUri, FileUri = fileUri };
             await _artifactStore.UpdateAsync(artifact with { Status = ArtifactStatus.Completed }, CancellationToken.None);
 

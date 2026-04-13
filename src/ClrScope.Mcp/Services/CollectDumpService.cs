@@ -149,7 +149,7 @@ public class CollectDumpService
 
         // Use the ArtifactId from store for URIs (fix double generation)
         var diagUri = $"clrscope://artifact/{artifact.ArtifactId.Value}";
-        var fileUri = $"file://{filePath}";
+        var fileUri = new Uri(filePath).AbsoluteUri;
 
         // Update artifact with URIs
         artifact = artifact with { DiagUri = diagUri, FileUri = fileUri };
