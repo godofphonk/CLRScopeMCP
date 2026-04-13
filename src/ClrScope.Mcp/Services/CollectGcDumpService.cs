@@ -94,6 +94,7 @@ public class CollectGcDumpService
         using var operationCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _activeOperationRegistry.TryRegister(session.SessionId, operationCts);
 
+        string? filePath = null;
         try
         {
             // Setup artifact path
@@ -102,7 +103,7 @@ public class CollectGcDumpService
             Directory.CreateDirectory(gcdumpsDir);
 
             var fileName = $"gcdump_{session.SessionId.Value}.gcdump";
-            var filePath = Path.Combine(gcdumpsDir, fileName);
+            filePath = Path.Combine(gcdumpsDir, fileName);
 
             progress?.Report(20);
             await _sessionStore.UpdateAsync(session with { Phase = SessionPhase.Collecting }, operationCts.Token);
@@ -153,8 +154,29 @@ public class CollectGcDumpService
 
             await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Completed, CompletedAtUtc = DateTime.UtcNow, Phase = SessionPhase.Completed }, CancellationToken.None);
 
+            // Re-read to get updated state
+            var updatedSession = await _sessionStore.GetAsync(session.SessionId, CancellationToken.None);
+            var updatedArtifact = await _artifactStore.GetAsync(artifact.ArtifactId, CancellationToken.None);
+
             progress?.Report(100);
-            return CollectGcDumpResult.Success(session, artifact);
+            return CollectGcDumpResult.Success(updatedSession ?? session, updatedArtifact ?? artifact);
+        }
+        catch (Exception) when (!operationCts.Token.IsCancellationRequested)
+        {
+            // Cleanup orphaned file on unexpected failure
+            if (filePath != null && File.Exists(filePath))
+            {
+                try
+                {
+                    File.Delete(filePath);
+                    _logger.LogInformation("Cleaned up orphaned file: {FilePath}", filePath);
+                }
+                catch (Exception deleteEx)
+                {
+                    _logger.LogWarning(deleteEx, "Failed to cleanup orphaned file: {FilePath}", filePath);
+                }
+            }
+            throw;
         }
         finally
         {

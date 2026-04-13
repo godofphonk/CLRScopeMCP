@@ -94,30 +94,31 @@ public class CollectTraceService
         }
 
         // Create session
-        var session = await _sessionStore.CreateAsync(SessionKind.Trace, request.Pid, request.Profile, cancellationToken);
+        var session = await _sessionStore.CreateAsync(SessionKind.Trace, request.Pid, cancellationToken: cancellationToken);
         await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Running, Phase = SessionPhase.Attaching }, cancellationToken);
 
-        // Create linked CTS for operation cancellation
+        // Create linked CTS
         using var operationCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _activeOperationRegistry.TryRegister(session.SessionId, operationCts);
 
+        string? filePath = null;
         try
         {
             // Setup artifact path
-        var artifactRoot = _options.Value.GetArtifactRoot();
-        var tracesDir = Path.Combine(artifactRoot, "traces");
-        Directory.CreateDirectory(tracesDir);
+            var artifactRoot = _options.Value.GetArtifactRoot();
+            var tracesDir = Path.Combine(artifactRoot, "traces");
+            Directory.CreateDirectory(tracesDir);
 
-        var fileName = $"trace_{session.SessionId.Value}.nettrace";
-        var filePath = Path.Combine(tracesDir, fileName);
+            var fileName = $"trace_{session.SessionId.Value}.nettrace";
+            filePath = Path.Combine(tracesDir, fileName);
 
-        // Start EventPipeSession with bounded timeout
-        progress?.Report(20);
-        _logger.LogInformation("[{Phase}] Attaching to PID {Pid}", CollectionPhase.Attaching, request.Pid);
-        await _sessionStore.UpdateAsync(session with { Phase = SessionPhase.Collecting }, operationCts.Token);
-        Microsoft.Diagnostics.NETCore.Client.EventPipeSession? eventPipeSession = null;
-        bool forced = false;
-        TraceCompletionMode completionMode = TraceCompletionMode.Complete;
+            // Start EventPipeSession with bounded timeout
+            progress?.Report(20);
+            _logger.LogInformation("[{Phase}] Attaching to PID {Pid}", CollectionPhase.Attaching, request.Pid);
+            await _sessionStore.UpdateAsync(session with { Phase = SessionPhase.Collecting }, operationCts.Token);
+            Microsoft.Diagnostics.NETCore.Client.EventPipeSession? eventPipeSession = null;
+            bool forced = false;
+            TraceCompletionMode completionMode = TraceCompletionMode.Complete;
 
         try
         {
@@ -254,11 +255,32 @@ public class CollectTraceService
         await _artifactStore.UpdateAsync(artifact with { Status = artifactStatus }, CancellationToken.None);
         await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Completed, CompletedAtUtc = DateTime.UtcNow, Phase = SessionPhase.Completed }, CancellationToken.None);
 
+        // Re-read to get updated state
+        var updatedSession = await _sessionStore.GetAsync(session.SessionId, CancellationToken.None);
+        var updatedArtifact = await _artifactStore.GetAsync(artifact.ArtifactId, CancellationToken.None);
+
         progress?.Report(100);
         _logger.LogInformation("[{Phase}] Trace collection completed for PID {Pid}, SessionId {SessionId}, CompletionMode {CompletionMode}, Size {SizeBytes} bytes",
             CollectionPhase.Completed, request.Pid, session.SessionId.Value, completionMode, fileInfo.Length);
 
-        return CollectTraceResult.Success(session, artifact, completionMode);
+        return CollectTraceResult.Success(updatedSession ?? session, updatedArtifact ?? artifact, completionMode);
+        }
+        catch (Exception) when (!operationCts.Token.IsCancellationRequested)
+        {
+            // Cleanup orphaned file on unexpected failure
+            if (filePath != null && File.Exists(filePath))
+            {
+                try
+                {
+                    File.Delete(filePath);
+                    _logger.LogInformation("Cleaned up orphaned file: {FilePath}", filePath);
+                }
+                catch (Exception deleteEx)
+                {
+                    _logger.LogWarning(deleteEx, "Failed to cleanup orphaned file: {FilePath}", filePath);
+                }
+            }
+            throw;
         }
         finally
         {

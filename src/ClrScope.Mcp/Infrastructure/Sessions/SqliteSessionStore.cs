@@ -14,85 +14,133 @@ public class SqliteSessionStore : ISqliteSessionStore
 
     public async Task<Session?> GetAsync(SessionId sessionId, CancellationToken cancellationToken = default)
     {
-        await using var connection = new SqliteConnection(_connectionString);
-        await connection.OpenAsync(cancellationToken);
-
-        var command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT session_id, kind, pid, status, created_at_utc, completed_at_utc, error, profile, phase
-            FROM sessions
-            WHERE session_id = $sessionId
-            """;
-        command.Parameters.AddWithValue("$sessionId", sessionId.Value);
-
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        if (await reader.ReadAsync(cancellationToken))
+        return await RetryAsync(async () =>
         {
-            return MapFromReader(reader);
-        }
+            await using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync(cancellationToken);
 
-        return null;
+            var command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT session_id, kind, pid, status, created_at_utc, completed_at_utc, error, profile, phase
+                FROM sessions
+                WHERE session_id = $sessionId
+                """;
+            command.Parameters.AddWithValue("$sessionId", sessionId.Value);
+
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            if (await reader.ReadAsync(cancellationToken))
+            {
+                return MapFromReader(reader);
+            }
+
+            return null;
+        }, cancellationToken);
+    }
+
+    private static async Task<T> RetryAsync<T>(Func<Task<T>> operation, CancellationToken cancellationToken, int maxRetries = 3)
+    {
+        for (int i = 0; i < maxRetries; i++)
+        {
+            try
+            {
+                return await operation();
+            }
+            catch (SqliteException ex) when (ex.SqliteErrorCode == 5 || ex.SqliteErrorCode == 6) // SQLITE_BUSY or SQLITE_LOCKED
+            {
+                if (i == maxRetries - 1)
+                    throw;
+
+                await Task.Delay(TimeSpan.FromMilliseconds(100 * (i + 1)), cancellationToken);
+            }
+        }
+        throw new InvalidOperationException("Retry failed");
+    }
+
+    private static async Task RetryAsync(Func<Task> operation, CancellationToken cancellationToken, int maxRetries = 3)
+    {
+        for (int i = 0; i < maxRetries; i++)
+        {
+            try
+            {
+                await operation();
+                return;
+            }
+            catch (SqliteException ex) when (ex.SqliteErrorCode == 5 || ex.SqliteErrorCode == 6) // SQLITE_BUSY or SQLITE_LOCKED
+            {
+                if (i == maxRetries - 1)
+                    throw;
+
+                await Task.Delay(TimeSpan.FromMilliseconds(100 * (i + 1)), cancellationToken);
+            }
+        }
+        throw new InvalidOperationException("Retry failed");
     }
 
     public async Task<Session> CreateAsync(SessionKind kind, int pid, string? profile = null, CancellationToken cancellationToken = default)
     {
-        var sessionId = SessionId.New();
-        var now = DateTime.UtcNow;
+        return await RetryAsync(async () =>
+        {
+            var sessionId = SessionId.New();
+            var now = DateTime.UtcNow;
 
-        await using var connection = new SqliteConnection(_connectionString);
-        await connection.OpenAsync(cancellationToken);
+            await using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync(cancellationToken);
 
-        var command = connection.CreateCommand();
-        command.CommandText = """
-            INSERT INTO sessions (session_id, kind, pid, status, created_at_utc, completed_at_utc, error, profile, phase)
-            VALUES ($sessionId, $kind, $pid, $status, $createdAtUtc, $completedAtUtc, $error, $profile, $phase)
-            """;
-        command.Parameters.AddWithValue("$sessionId", sessionId.Value);
-        command.Parameters.AddWithValue("$kind", kind.ToString());
-        command.Parameters.AddWithValue("$pid", pid);
-        command.Parameters.AddWithValue("$status", SessionStatus.Pending.ToString());
-        command.Parameters.AddWithValue("$createdAtUtc", now.ToString("o"));
-        command.Parameters.AddWithValue("$completedAtUtc", DBNull.Value);
-        command.Parameters.AddWithValue("$error", DBNull.Value);
-        command.Parameters.AddWithValue("$profile", profile ?? (object)DBNull.Value);
-        command.Parameters.AddWithValue("$phase", SessionPhase.Preflight.ToString());
+            var command = connection.CreateCommand();
+            command.CommandText = """
+                INSERT INTO sessions (session_id, kind, pid, status, created_at_utc, completed_at_utc, error, profile, phase)
+                VALUES ($sessionId, $kind, $pid, $status, $createdAtUtc, $completedAtUtc, $error, $profile, $phase)
+                """;
+            command.Parameters.AddWithValue("$sessionId", sessionId.Value);
+            command.Parameters.AddWithValue("$kind", kind.ToString());
+            command.Parameters.AddWithValue("$pid", pid);
+            command.Parameters.AddWithValue("$status", SessionStatus.Pending.ToString());
+            command.Parameters.AddWithValue("$createdAtUtc", now.ToString("o"));
+            command.Parameters.AddWithValue("$completedAtUtc", DBNull.Value);
+            command.Parameters.AddWithValue("$error", DBNull.Value);
+            command.Parameters.AddWithValue("$profile", profile ?? (object)DBNull.Value);
+            command.Parameters.AddWithValue("$phase", SessionPhase.Preflight.ToString());
 
-        await command.ExecuteNonQueryAsync(cancellationToken);
+            await command.ExecuteNonQueryAsync(cancellationToken);
 
-        return new Session(
-            sessionId,
-            kind,
-            pid,
-            SessionStatus.Pending,
-            now,
-            null,
-            null,
-            profile,
-            SessionPhase.Preflight
-        );
+            return new Session(
+                sessionId,
+                kind,
+                pid,
+                SessionStatus.Pending,
+                now,
+                null,
+                null,
+                profile,
+                SessionPhase.Preflight
+            );
+        }, cancellationToken);
     }
 
     public async Task UpdateAsync(Session session, CancellationToken cancellationToken = default)
     {
-        await using var connection = new SqliteConnection(_connectionString);
-        await connection.OpenAsync(cancellationToken);
+        await RetryAsync(async () =>
+        {
+            await using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync(cancellationToken);
 
-        var command = connection.CreateCommand();
-        command.CommandText = """
-            UPDATE sessions
-            SET status = $status,
-                completed_at_utc = $completedAtUtc,
-                error = $error,
-                phase = $phase
-            WHERE session_id = $sessionId
-            """;
-        command.Parameters.AddWithValue("$status", session.Status.ToString());
-        command.Parameters.AddWithValue("$completedAtUtc", session.CompletedAtUtc?.ToString("o") ?? (object)DBNull.Value);
-        command.Parameters.AddWithValue("$error", session.Error ?? (object)DBNull.Value);
-        command.Parameters.AddWithValue("$phase", session.Phase.ToString());
-        command.Parameters.AddWithValue("$sessionId", session.SessionId.Value);
+            var command = connection.CreateCommand();
+            command.CommandText = """
+                UPDATE sessions
+                SET status = $status,
+                    completed_at_utc = $completedAtUtc,
+                    error = $error,
+                    phase = $phase
+                WHERE session_id = $sessionId
+                """;
+            command.Parameters.AddWithValue("$status", session.Status.ToString());
+            command.Parameters.AddWithValue("$completedAtUtc", session.CompletedAtUtc?.ToString("o") ?? (object)DBNull.Value);
+            command.Parameters.AddWithValue("$error", session.Error ?? (object)DBNull.Value);
+            command.Parameters.AddWithValue("$phase", session.Phase.ToString());
+            command.Parameters.AddWithValue("$sessionId", session.SessionId.Value);
 
-        await command.ExecuteNonQueryAsync(cancellationToken);
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }, cancellationToken);
     }
 
     private static Session MapFromReader(SqliteDataReader reader)

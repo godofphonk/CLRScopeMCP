@@ -16,8 +16,28 @@ public class SqliteSchemaInitializer
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync(cancellationToken);
 
+        // Enable WAL mode for better concurrency
+        await EnableWalModeAsync(connection, cancellationToken);
+        
+        // Set busy timeout to 5 seconds
+        await SetBusyTimeoutAsync(connection, cancellationToken);
+
         await CreateSchemaInfoTableAsync(connection, cancellationToken);
         await RunMigrationsAsync(connection, cancellationToken);
+    }
+
+    private static async Task EnableWalModeAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    {
+        var command = connection.CreateCommand();
+        command.CommandText = "PRAGMA journal_mode=WAL;";
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static async Task SetBusyTimeoutAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    {
+        var command = connection.CreateCommand();
+        command.CommandText = "PRAGMA busy_timeout=5000;";
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private static async Task CreateSchemaInfoTableAsync(SqliteConnection connection, CancellationToken cancellationToken)

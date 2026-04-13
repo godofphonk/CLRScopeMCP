@@ -5,6 +5,7 @@ using ClrScope.Mcp.Infrastructure;
 using ClrScope.Mcp.Options;
 using ClrScope.Mcp.Validation;
 using Microsoft.Diagnostics.NETCore.Client;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Server;
 
@@ -28,26 +29,29 @@ public record CollectDumpResult(
 public class CollectDumpService
 {
     private readonly IOptions<ClrScopeOptions> _options;
-    private readonly IPreflightValidator _preflightValidator;
     private readonly ISqliteSessionStore _sessionStore;
     private readonly ISqliteArtifactStore _artifactStore;
+    private readonly IPreflightValidator _preflightValidator;
     private readonly IPidLockManager _pidLockManager;
     private readonly IActiveOperationRegistry _activeOperationRegistry;
+    private readonly ILogger<CollectDumpService> _logger;
 
     public CollectDumpService(
         IOptions<ClrScopeOptions> options,
-        IPreflightValidator preflightValidator,
         ISqliteSessionStore sessionStore,
         ISqliteArtifactStore artifactStore,
+        IPreflightValidator preflightValidator,
         IPidLockManager pidLockManager,
-        IActiveOperationRegistry activeOperationRegistry)
+        IActiveOperationRegistry activeOperationRegistry,
+        ILogger<CollectDumpService> logger)
     {
         _options = options;
-        _preflightValidator = preflightValidator;
         _sessionStore = sessionStore;
         _artifactStore = artifactStore;
+        _preflightValidator = preflightValidator;
         _pidLockManager = pidLockManager;
         _activeOperationRegistry = activeOperationRegistry;
+        _logger = logger;
     }
 
     public async Task<CollectDumpResult> CollectDumpAsync(
@@ -73,27 +77,28 @@ public class CollectDumpService
         var session = await _sessionStore.CreateAsync(SessionKind.Dump, request.Pid, cancellationToken: cancellationToken);
         await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Running, Phase = SessionPhase.Attaching }, cancellationToken);
 
-        // Create linked CTS for operation cancellation
+        // Create linked CTS
         using var operationCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _activeOperationRegistry.TryRegister(session.SessionId, operationCts);
 
+        string? filePath = null;
         try
         {
             // Setup artifact path
-        var artifactRoot = _options.Value.GetArtifactRoot();
-        var dumpsDir = Path.Combine(artifactRoot, "dumps");
-        Directory.CreateDirectory(dumpsDir);
+            var artifactRoot = _options.Value.GetArtifactRoot();
+            var dumpsDir = Path.Combine(artifactRoot, "dumps");
+            Directory.CreateDirectory(dumpsDir);
 
-        var fileName = $"dump_{session.SessionId.Value}.dmp";
-        var filePath = Path.Combine(dumpsDir, fileName);
+            var fileName = $"dump_{session.SessionId.Value}.dmp";
+            filePath = Path.Combine(dumpsDir, fileName);
 
-        // Write dump
-        progress?.Report(20);
-        await _sessionStore.UpdateAsync(session with { Phase = SessionPhase.Collecting }, operationCts.Token);
-        try
-        {
-            var client = new DiagnosticsClient(request.Pid);
-            var dumpType = request.IncludeHeap ? DumpType.WithHeap : DumpType.Normal;
+            // Write dump
+            progress?.Report(20);
+            await _sessionStore.UpdateAsync(session with { Phase = SessionPhase.Collecting }, operationCts.Token);
+            try
+            {
+                var client = new DiagnosticsClient(request.Pid);
+                var dumpType = request.IncludeHeap ? DumpType.WithHeap : DumpType.Normal;
 
             // Use working signature: WriteDump(DumpType, path, bool)
             client.WriteDump(dumpType, filePath, false);
@@ -104,11 +109,18 @@ public class CollectDumpService
             return CollectDumpResult.Failure(session, $"Failed to write dump: {ex.Message}");
         }
 
-        // Check if file was created
+        // Check if file was created and has valid size
         if (!File.Exists(filePath))
         {
             await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = "Dump file not created", Phase = SessionPhase.Failed }, CancellationToken.None);
             return CollectDumpResult.Failure(session, "Dump file was not created");
+        }
+
+        var fileInfo = new FileInfo(filePath);
+        if (fileInfo.Length == 0)
+        {
+            await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = "Dump file is empty", Phase = SessionPhase.Failed }, CancellationToken.None);
+            return CollectDumpResult.Failure(session, "Dump file is empty");
         }
 
         // Create artifact record
@@ -134,8 +146,29 @@ public class CollectDumpService
         await _artifactStore.UpdateAsync(artifact with { Status = ArtifactStatus.Completed }, CancellationToken.None);
         await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Completed, CompletedAtUtc = DateTime.UtcNow, Phase = SessionPhase.Completed }, CancellationToken.None);
 
+        // Re-read to get updated state
+        var updatedSession = await _sessionStore.GetAsync(session.SessionId, CancellationToken.None);
+        var updatedArtifact = await _artifactStore.GetAsync(artifact.ArtifactId, CancellationToken.None);
+
         progress?.Report(100);
-        return CollectDumpResult.Success(session, artifact);
+        return CollectDumpResult.Success(updatedSession ?? session, updatedArtifact ?? artifact);
+        }
+        catch (Exception) when (!operationCts.Token.IsCancellationRequested)
+        {
+            // Cleanup orphaned file on unexpected failure
+            if (filePath != null && File.Exists(filePath))
+            {
+                try
+                {
+                    File.Delete(filePath);
+                    _logger.LogInformation("Cleaned up orphaned file: {FilePath}", filePath);
+                }
+                catch (Exception deleteEx)
+                {
+                    _logger.LogWarning(deleteEx, "Failed to cleanup orphaned file: {FilePath}", filePath);
+                }
+            }
+            throw;
         }
         finally
         {

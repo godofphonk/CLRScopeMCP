@@ -17,47 +17,92 @@ public class SqliteArtifactStore : ISqliteArtifactStore
 
     public async Task<Artifact?> GetAsync(ArtifactId artifactId, CancellationToken cancellationToken = default)
     {
-        await using var connection = new SqliteConnection(_connectionString);
-        await connection.OpenAsync(cancellationToken);
-
-        var command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT artifact_id, kind, status, file_path, diag_uri, file_uri, sha256, size_bytes, pid, session_id, created_at_utc, pinned
-            FROM artifacts
-            WHERE artifact_id = $artifactId
-            """;
-        command.Parameters.AddWithValue("$artifactId", artifactId.Value);
-
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        if (await reader.ReadAsync(cancellationToken))
+        return await RetryAsync(async () =>
         {
-            return MapFromReader(reader);
-        }
+            await using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync(cancellationToken);
 
-        return null;
+            var command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT artifact_id, kind, status, file_path, diag_uri, file_uri, sha256, size_bytes, pid, session_id, created_at_utc, pinned
+                FROM artifacts
+                WHERE artifact_id = $artifactId
+                """;
+            command.Parameters.AddWithValue("$artifactId", artifactId.Value);
+
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            if (await reader.ReadAsync(cancellationToken))
+            {
+                return MapFromReader(reader);
+            }
+
+            return null;
+        }, cancellationToken);
+    }
+
+    private static async Task<T> RetryAsync<T>(Func<Task<T>> operation, CancellationToken cancellationToken, int maxRetries = 3)
+    {
+        for (int i = 0; i < maxRetries; i++)
+        {
+            try
+            {
+                return await operation();
+            }
+            catch (SqliteException ex) when (ex.SqliteErrorCode == 5 || ex.SqliteErrorCode == 6) // SQLITE_BUSY or SQLITE_LOCKED
+            {
+                if (i == maxRetries - 1)
+                    throw;
+
+                await Task.Delay(TimeSpan.FromMilliseconds(100 * (i + 1)), cancellationToken);
+            }
+        }
+        throw new InvalidOperationException("Retry failed");
+    }
+
+    private static async Task RetryAsync(Func<Task> operation, CancellationToken cancellationToken, int maxRetries = 3)
+    {
+        for (int i = 0; i < maxRetries; i++)
+        {
+            try
+            {
+                await operation();
+                return;
+            }
+            catch (SqliteException ex) when (ex.SqliteErrorCode == 5 || ex.SqliteErrorCode == 6) // SQLITE_BUSY or SQLITE_LOCKED
+            {
+                if (i == maxRetries - 1)
+                    throw;
+
+                await Task.Delay(TimeSpan.FromMilliseconds(100 * (i + 1)), cancellationToken);
+            }
+        }
+        throw new InvalidOperationException("Retry failed");
     }
 
     public async Task<IReadOnlyList<Artifact>> GetBySessionAsync(SessionId sessionId, CancellationToken cancellationToken = default)
     {
-        await using var connection = new SqliteConnection(_connectionString);
-        await connection.OpenAsync(cancellationToken);
-
-        var command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT artifact_id, kind, status, file_path, diag_uri, file_uri, sha256, size_bytes, pid, session_id, created_at_utc, pinned
-            FROM artifacts
-            WHERE session_id = $sessionId
-            """;
-        command.Parameters.AddWithValue("$sessionId", sessionId.Value);
-
-        var artifacts = new List<Artifact>();
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        while (await reader.ReadAsync(cancellationToken))
+        return await RetryAsync(async () =>
         {
-            artifacts.Add(MapFromReader(reader));
-        }
+            await using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync(cancellationToken);
 
-        return artifacts;
+            var command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT artifact_id, kind, status, file_path, diag_uri, file_uri, sha256, size_bytes, pid, session_id, created_at_utc, pinned
+                FROM artifacts
+                WHERE session_id = $sessionId
+                """;
+            command.Parameters.AddWithValue("$sessionId", sessionId.Value);
+
+            var artifacts = new List<Artifact>();
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                artifacts.Add(MapFromReader(reader));
+            }
+
+            return artifacts;
+        }, cancellationToken);
     }
 
     public async Task<Artifact> CreateAsync(
@@ -68,107 +113,119 @@ public class SqliteArtifactStore : ISqliteArtifactStore
         SessionId sessionId,
         CancellationToken cancellationToken = default)
     {
-        var artifactId = ArtifactId.New();
-        var sha256 = await ComputeSha256Async(filePath, cancellationToken);
-        var now = DateTime.UtcNow;
+        return await RetryAsync(async () =>
+        {
+            var artifactId = ArtifactId.New();
+            var sha256 = await ComputeSha256Async(filePath, cancellationToken);
+            var now = DateTime.UtcNow;
 
-        await using var connection = new SqliteConnection(_connectionString);
-        await connection.OpenAsync(cancellationToken);
+            await using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync(cancellationToken);
 
-        var command = connection.CreateCommand();
-        command.CommandText = """
-            INSERT INTO artifacts (artifact_id, kind, status, file_path, diag_uri, file_uri, sha256, size_bytes, pid, session_id, created_at_utc, pinned)
-            VALUES ($artifactId, $kind, $status, $filePath, $diagUri, $fileUri, $sha256, $sizeBytes, $pid, $sessionId, $createdAtUtc, $pinned)
-            """;
-        command.Parameters.AddWithValue("$artifactId", artifactId.Value);
-        command.Parameters.AddWithValue("$kind", kind.ToString());
-        command.Parameters.AddWithValue("$status", ArtifactStatus.Pending.ToString());
-        command.Parameters.AddWithValue("$filePath", filePath);
-        command.Parameters.AddWithValue("$diagUri", string.Empty);
-        command.Parameters.AddWithValue("$fileUri", string.Empty);
-        command.Parameters.AddWithValue("$sha256", sha256);
-        command.Parameters.AddWithValue("$sizeBytes", sizeBytes);
-        command.Parameters.AddWithValue("$pid", pid);
-        command.Parameters.AddWithValue("$sessionId", sessionId.Value);
-        command.Parameters.AddWithValue("$createdAtUtc", now.ToString("o"));
-        command.Parameters.AddWithValue("$pinned", 0);
+            var command = connection.CreateCommand();
+            command.CommandText = """
+                INSERT INTO artifacts (artifact_id, kind, status, file_path, diag_uri, file_uri, sha256, size_bytes, pid, session_id, created_at_utc, pinned)
+                VALUES ($artifactId, $kind, $status, $filePath, $diagUri, $fileUri, $sha256, $sizeBytes, $pid, $sessionId, $createdAtUtc, $pinned)
+                """;
+            command.Parameters.AddWithValue("$artifactId", artifactId.Value);
+            command.Parameters.AddWithValue("$kind", kind.ToString());
+            command.Parameters.AddWithValue("$status", ArtifactStatus.Pending.ToString());
+            command.Parameters.AddWithValue("$filePath", filePath);
+            command.Parameters.AddWithValue("$diagUri", string.Empty);
+            command.Parameters.AddWithValue("$fileUri", string.Empty);
+            command.Parameters.AddWithValue("$sha256", sha256);
+            command.Parameters.AddWithValue("$sizeBytes", sizeBytes);
+            command.Parameters.AddWithValue("$pid", pid);
+            command.Parameters.AddWithValue("$sessionId", sessionId.Value);
+            command.Parameters.AddWithValue("$createdAtUtc", now.ToString("o"));
+            command.Parameters.AddWithValue("$pinned", 0);
 
-        await command.ExecuteNonQueryAsync(cancellationToken);
+            await command.ExecuteNonQueryAsync(cancellationToken);
 
-        return new Artifact(
-            artifactId,
-            kind,
-            ArtifactStatus.Pending,
-            filePath,
-            null,
-            null,
-            sha256,
-            sizeBytes,
-            pid,
-            sessionId,
-            now,
-            false
-        );
+            return new Artifact(
+                artifactId,
+                kind,
+                ArtifactStatus.Pending,
+                filePath,
+                null,
+                null,
+                sha256,
+                sizeBytes,
+                pid,
+                sessionId,
+                now,
+                false
+            );
+        }, cancellationToken);
     }
 
     public async Task<IReadOnlyList<Artifact>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        await using var connection = new SqliteConnection(_connectionString);
-        await connection.OpenAsync(cancellationToken);
-
-        var command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT artifact_id, kind, status, file_path, diag_uri, file_uri, sha256, size_bytes, pid, session_id, created_at_utc, pinned
-            FROM artifacts
-            ORDER BY created_at_utc DESC
-            """;
-
-        var artifacts = new List<Artifact>();
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        
-        while (await reader.ReadAsync(cancellationToken))
+        return await RetryAsync(async () =>
         {
-            artifacts.Add(MapFromReader(reader));
-        }
+            await using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync(cancellationToken);
 
-        return artifacts;
+            var command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT artifact_id, kind, status, file_path, diag_uri, file_uri, sha256, size_bytes, pid, session_id, created_at_utc, pinned
+                FROM artifacts
+                ORDER BY created_at_utc DESC
+                """;
+
+            var artifacts = new List<Artifact>();
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                artifacts.Add(MapFromReader(reader));
+            }
+
+            return artifacts;
+        }, cancellationToken);
     }
 
     public async Task DeleteAsync(ArtifactId artifactId, CancellationToken cancellationToken = default)
     {
-        await using var connection = new SqliteConnection(_connectionString);
-        await connection.OpenAsync(cancellationToken);
+        await RetryAsync(async () =>
+        {
+            await using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync(cancellationToken);
 
-        var command = connection.CreateCommand();
-        command.CommandText = """
-            DELETE FROM artifacts WHERE artifact_id = $artifactId
-            """;
-        command.Parameters.AddWithValue("$artifactId", artifactId.Value);
+            var command = connection.CreateCommand();
+            command.CommandText = """
+                DELETE FROM artifacts WHERE artifact_id = $artifactId
+                """;
+            command.Parameters.AddWithValue("$artifactId", artifactId.Value);
 
-        await command.ExecuteNonQueryAsync(cancellationToken);
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }, cancellationToken);
     }
 
     public async Task UpdateAsync(Artifact artifact, CancellationToken cancellationToken = default)
     {
-        await using var connection = new SqliteConnection(_connectionString);
-        await connection.OpenAsync(cancellationToken);
+        await RetryAsync(async () =>
+        {
+            await using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync(cancellationToken);
 
-        var command = connection.CreateCommand();
-        command.CommandText = """
-            UPDATE artifacts
-            SET status = $status,
-                diag_uri = $diagUri,
-                file_uri = $fileUri,
-                pinned = $pinned
-            WHERE artifact_id = $artifactId
-            """;
-        command.Parameters.AddWithValue("$status", artifact.Status.ToString());
-        command.Parameters.AddWithValue("$diagUri", artifact.DiagUri ?? (object)DBNull.Value);
-        command.Parameters.AddWithValue("$fileUri", artifact.FileUri ?? (object)DBNull.Value);
-        command.Parameters.AddWithValue("$pinned", artifact.Pinned ? 1 : 0);
-        command.Parameters.AddWithValue("$artifactId", artifact.ArtifactId.Value);
+            var command = connection.CreateCommand();
+            command.CommandText = """
+                UPDATE artifacts
+                SET status = $status,
+                    diag_uri = $diagUri,
+                    file_uri = $fileUri,
+                    pinned = $pinned
+                WHERE artifact_id = $artifactId
+                """;
+            command.Parameters.AddWithValue("$status", artifact.Status.ToString());
+            command.Parameters.AddWithValue("$diagUri", artifact.DiagUri ?? (object)DBNull.Value);
+            command.Parameters.AddWithValue("$fileUri", artifact.FileUri ?? (object)DBNull.Value);
+            command.Parameters.AddWithValue("$pinned", artifact.Pinned ? 1 : 0);
+            command.Parameters.AddWithValue("$artifactId", artifact.ArtifactId.Value);
 
-        await command.ExecuteNonQueryAsync(cancellationToken);
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }, cancellationToken);
     }
 
     private static Artifact MapFromReader(SqliteDataReader reader)

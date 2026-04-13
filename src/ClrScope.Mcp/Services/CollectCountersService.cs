@@ -4,6 +4,7 @@ using ClrScope.Mcp.Domain.Sessions;
 using ClrScope.Mcp.Infrastructure;
 using ClrScope.Mcp.Options;
 using ClrScope.Mcp.Validation;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Server;
 
@@ -33,6 +34,7 @@ public class CollectCountersService
     private readonly IPidLockManager _pidLockManager;
     private readonly IActiveOperationRegistry _activeOperationRegistry;
     private readonly ICountersBackend _countersBackend;
+    private readonly ILogger<CollectCountersService> _logger;
 
     public CollectCountersService(
         IOptions<ClrScopeOptions> options,
@@ -41,7 +43,8 @@ public class CollectCountersService
         ISqliteArtifactStore artifactStore,
         IPidLockManager pidLockManager,
         IActiveOperationRegistry activeOperationRegistry,
-        ICountersBackend countersBackend)
+        ICountersBackend countersBackend,
+        ILogger<CollectCountersService> logger)
     {
         _options = options;
         _preflightValidator = preflightValidator;
@@ -50,6 +53,7 @@ public class CollectCountersService
         _pidLockManager = pidLockManager;
         _activeOperationRegistry = activeOperationRegistry;
         _countersBackend = countersBackend;
+        _logger = logger;
     }
 
     public async Task<CollectCountersResult> CollectCountersAsync(
@@ -92,6 +96,7 @@ public class CollectCountersService
         using var operationCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _activeOperationRegistry.TryRegister(session.SessionId, operationCts);
 
+        string? filePath = null;
         try
         {
             // Setup artifact path
@@ -100,7 +105,7 @@ public class CollectCountersService
             Directory.CreateDirectory(countersDir);
 
             var fileName = $"counters_{session.SessionId.Value}.csv";
-            var filePath = Path.Combine(countersDir, fileName);
+            filePath = Path.Combine(countersDir, fileName);
 
             progress?.Report(20);
             await _sessionStore.UpdateAsync(session with { Phase = SessionPhase.Collecting }, operationCts.Token);
@@ -154,8 +159,29 @@ public class CollectCountersService
 
             await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Completed, CompletedAtUtc = DateTime.UtcNow, Phase = SessionPhase.Completed }, CancellationToken.None);
 
+            // Re-read to get updated state
+            var updatedSession = await _sessionStore.GetAsync(session.SessionId, CancellationToken.None);
+            var updatedArtifact = await _artifactStore.GetAsync(artifact.ArtifactId, CancellationToken.None);
+
             progress?.Report(100);
-            return CollectCountersResult.Success(session, artifact);
+            return CollectCountersResult.Success(updatedSession ?? session, updatedArtifact ?? artifact);
+        }
+        catch (Exception) when (!operationCts.Token.IsCancellationRequested)
+        {
+            // Cleanup orphaned file on unexpected failure
+            if (filePath != null && File.Exists(filePath))
+            {
+                try
+                {
+                    File.Delete(filePath);
+                    _logger.LogInformation("Cleaned up orphaned file: {FilePath}", filePath);
+                }
+                catch (Exception deleteEx)
+                {
+                    _logger.LogWarning(deleteEx, "Failed to cleanup orphaned file: {FilePath}", filePath);
+                }
+            }
+            throw;
         }
         finally
         {
