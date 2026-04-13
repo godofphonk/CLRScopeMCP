@@ -4,8 +4,9 @@ namespace ClrScope.Mcp.Infrastructure;
 
 /// <summary>
 /// Registry for tracking active operations and supporting cancellation by session ID
+/// Implements IDisposable to ensure proper cleanup of CancellationTokenSource resources
 /// </summary>
-public interface IActiveOperationRegistry
+public interface IActiveOperationRegistry : IDisposable
 {
     /// <summary>
     /// Register an active operation with its cancellation token source
