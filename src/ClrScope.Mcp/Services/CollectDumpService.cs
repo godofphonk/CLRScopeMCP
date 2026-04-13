@@ -69,7 +69,8 @@ public class CollectDumpService
         if (!preflightResult.IsValid)
         {
             var failedSession = await _sessionStore.CreateAsync(SessionKind.Dump, request.Pid, cancellationToken: cancellationToken);
-            await _sessionStore.UpdateAsync(failedSession with { Status = SessionStatus.Failed, Error = preflightResult.Message, Phase = SessionPhase.Failed }, cancellationToken);
+            failedSession = failedSession with { Status = SessionStatus.Failed, Error = preflightResult.Message, Phase = SessionPhase.Failed };
+            await _sessionStore.UpdateAsync(failedSession, cancellationToken);
             return CollectDumpResult.Failure(failedSession, preflightResult.Message ?? "Preflight validation failed");
         }
 
@@ -111,26 +112,30 @@ public class CollectDumpService
             catch (OperationCanceledException)
             {
                 _logger.LogWarning("Dump collection cancellation requested for session {SessionId}, but WriteDump is synchronous and may still complete. Cancellation is best-effort only.", session.SessionId);
-                await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Cancelled, CompletedAtUtc = DateTime.UtcNow, Phase = SessionPhase.Cancelled }, CancellationToken.None);
+                session = session with { Status = SessionStatus.Cancelled, CompletedAtUtc = DateTime.UtcNow, Phase = SessionPhase.Cancelled };
+                await _sessionStore.UpdateAsync(session, CancellationToken.None);
                 return CollectDumpResult.Failure(session, "Dump collection cancellation requested (best-effort only - operation may still complete)");
             }
             catch (Exception ex)
             {
-                await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = ex.Message, Phase = SessionPhase.Failed }, CancellationToken.None);
+                session = session with { Status = SessionStatus.Failed, Error = ex.Message, Phase = SessionPhase.Failed };
+                await _sessionStore.UpdateAsync(session, CancellationToken.None);
                 return CollectDumpResult.Failure(session, $"Failed to write dump: {ex.Message}");
             }
 
         // Check if file was created and has valid size
         if (!File.Exists(filePath))
         {
-            await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = "Dump file not created", Phase = SessionPhase.Failed }, CancellationToken.None);
+            session = session with { Status = SessionStatus.Failed, Error = "Dump file not created", Phase = SessionPhase.Failed };
+            await _sessionStore.UpdateAsync(session, CancellationToken.None);
             return CollectDumpResult.Failure(session, "Dump file was not created");
         }
 
         var fileInfo = new FileInfo(filePath);
         if (fileInfo.Length == 0)
         {
-            await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = "Dump file is empty", Phase = SessionPhase.Failed }, CancellationToken.None);
+            session = session with { Status = SessionStatus.Failed, Error = "Dump file is empty", Phase = SessionPhase.Failed };
+            await _sessionStore.UpdateAsync(session, CancellationToken.None);
             return CollectDumpResult.Failure(session, "Dump file is empty");
         }
 
@@ -169,7 +174,8 @@ public class CollectDumpService
             // Best-effort: mark session as failed
             try
             {
-                await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, CompletedAtUtc = DateTime.UtcNow, Phase = SessionPhase.Failed, Error = ex.Message }, CancellationToken.None);
+                session = session with { Status = SessionStatus.Failed, CompletedAtUtc = DateTime.UtcNow, Phase = SessionPhase.Failed, Error = ex.Message };
+                await _sessionStore.UpdateAsync(session, CancellationToken.None);
                 _logger.LogInformation("Marked session {SessionId} as failed due to exception: {Error}", session.SessionId, ex.Message);
             }
             catch (Exception updateEx)

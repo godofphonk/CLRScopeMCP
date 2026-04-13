@@ -70,7 +70,8 @@ public class CollectStacksService
         if (!availability.IsAvailable)
         {
             var failedSession = await _sessionStore.CreateAsync(SessionKind.Stacks, request.Pid, cancellationToken: cancellationToken);
-            await _sessionStore.UpdateAsync(failedSession with { Status = SessionStatus.Failed, Error = availability.InstallHint, Phase = SessionPhase.Failed }, cancellationToken);
+            failedSession = failedSession with { Status = SessionStatus.Failed, Error = availability.InstallHint, Phase = SessionPhase.Failed };
+            await _sessionStore.UpdateAsync(failedSession, cancellationToken);
             return CollectStacksResult.Failure(failedSession, availability.InstallHint ?? "dotnet-stack CLI not found");
         }
 
@@ -82,7 +83,8 @@ public class CollectStacksService
         if (!preflightResult.IsValid)
         {
             var failedSession = await _sessionStore.CreateAsync(SessionKind.Stacks, request.Pid, cancellationToken: cancellationToken);
-            await _sessionStore.UpdateAsync(failedSession with { Status = SessionStatus.Failed, Error = preflightResult.Message, Phase = SessionPhase.Failed }, cancellationToken);
+            failedSession = failedSession with { Status = SessionStatus.Failed, Error = preflightResult.Message, Phase = SessionPhase.Failed };
+            await _sessionStore.UpdateAsync(failedSession, cancellationToken);
             return CollectStacksResult.Failure(failedSession, preflightResult.Message ?? "Preflight validation failed");
         }
 
@@ -115,7 +117,8 @@ public class CollectStacksService
             if (result.ExitCode != 0)
             {
                 var error = !string.IsNullOrEmpty(result.StandardError) ? result.StandardError : result.StandardOutput;
-                await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = error, Phase = SessionPhase.Failed }, CancellationToken.None);
+                session = session with { Status = SessionStatus.Failed, Error = error, Phase = SessionPhase.Failed };
+                await _sessionStore.UpdateAsync(session, CancellationToken.None);
                 return CollectStacksResult.Failure(session, error ?? "Stacks collection failed");
             }
 
@@ -125,18 +128,21 @@ public class CollectStacksService
             // Check if file was created
             if (!File.Exists(filePath))
             {
-                await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = "Stacks file not created", Phase = SessionPhase.Failed }, CancellationToken.None);
+                session = session with { Status = SessionStatus.Failed, Error = "Stacks file not created", Phase = SessionPhase.Failed };
+                await _sessionStore.UpdateAsync(session, CancellationToken.None);
                 return CollectStacksResult.Failure(session, "Stacks file was not created");
             }
 
             var fileInfo = new FileInfo(filePath);
             if (fileInfo.Length == 0)
             {
-                await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = "Stacks file is empty", Phase = SessionPhase.Failed }, CancellationToken.None);
+                session = session with { Status = SessionStatus.Failed, Error = "Stacks file is empty", Phase = SessionPhase.Failed };
+                await _sessionStore.UpdateAsync(session, CancellationToken.None);
                 return CollectStacksResult.Failure(session, "Stacks file is empty");
             }
 
             progress?.Report(70);
+            session = await _sessionStore.GetAsync(session.SessionId, operationCts.Token);
             await _sessionStore.UpdateAsync(session with { Phase = SessionPhase.Persisting }, operationCts.Token);
 
             // Create artifact record
@@ -167,7 +173,8 @@ public class CollectStacksService
         catch (OperationCanceledException)
         {
             _logger.LogInformation("Stacks collection cancelled for session {SessionId}", session.SessionId);
-            await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Cancelled, CompletedAtUtc = DateTime.UtcNow, Phase = SessionPhase.Cancelled }, CancellationToken.None);
+            session = session with { Status = SessionStatus.Cancelled, CompletedAtUtc = DateTime.UtcNow, Phase = SessionPhase.Cancelled };
+            await _sessionStore.UpdateAsync(session, CancellationToken.None);
             return CollectStacksResult.Failure(session, "Stacks collection cancelled");
         }
         catch (Exception ex) when (!operationCts.Token.IsCancellationRequested)
@@ -175,7 +182,8 @@ public class CollectStacksService
             // Best-effort: mark session as failed
             try
             {
-                await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, CompletedAtUtc = DateTime.UtcNow, Phase = SessionPhase.Failed, Error = ex.Message }, CancellationToken.None);
+                session = session with { Status = SessionStatus.Failed, CompletedAtUtc = DateTime.UtcNow, Phase = SessionPhase.Failed, Error = ex.Message };
+                await _sessionStore.UpdateAsync(session, CancellationToken.None);
                 _logger.LogInformation("Marked session {SessionId} as failed due to exception: {Error}", session.SessionId, ex.Message);
             }
             catch (Exception updateEx)
