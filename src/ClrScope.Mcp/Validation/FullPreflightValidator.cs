@@ -148,8 +148,9 @@ public class FullPreflightValidator : IPreflightValidator
         try
         {
             var process = System.Diagnostics.Process.GetProcessById(pid);
-            var processTmpdir = Environment.GetEnvironmentVariable("TMPDIR");
-            var systemTmpdir = Environment.GetEnvironmentVariable("TMPDIR");
+
+            // Read TMPDIR from target process environment
+            var processTmpdir = GetProcessEnvironmentVariable(pid, "TMPDIR");
 
             // If TMPDIR is set, check if it's accessible
             if (!string.IsNullOrEmpty(processTmpdir) && !Directory.Exists(processTmpdir))
@@ -166,14 +167,50 @@ public class FullPreflightValidator : IPreflightValidator
         }
     }
 
+    private string? GetProcessEnvironmentVariable(int pid, string variableName)
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return null; // Only supported on Linux
+        }
+
+        try
+        {
+            var environPath = $"/proc/{pid}/environ";
+            if (!File.Exists(environPath))
+            {
+                return null;
+            }
+
+            var environContent = File.ReadAllText(environPath);
+            var variables = environContent.Split('\0', StringSplitOptions.RemoveEmptyEntries);
+
+            foreach (var variable in variables)
+            {
+                var parts = variable.Split('=', 2);
+                if (parts.Length == 2 && parts[0] == variableName)
+                {
+                    return parts[1];
+                }
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Could not read environment variable {VariableName} from process {Pid}", variableName, pid);
+            return null;
+        }
+    }
+
     private bool CheckDiagnosticsDisabled(int pid)
     {
         try
         {
             var process = System.Diagnostics.Process.GetProcessById(pid);
-            
-            // Check DOTNET_EnableDiagnostics environment variable
-            var enableDiagnostics = Environment.GetEnvironmentVariable("DOTNET_EnableDiagnostics");
+
+            // Check DOTNET_EnableDiagnostics environment variable from target process
+            var enableDiagnostics = GetProcessEnvironmentVariable(pid, "DOTNET_EnableDiagnostics");
             if (enableDiagnostics == "0" || enableDiagnostics == "1")
             {
                 return true;
