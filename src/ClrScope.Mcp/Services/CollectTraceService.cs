@@ -13,7 +13,7 @@ using System.Diagnostics.Tracing;
 
 namespace ClrScope.Mcp.Services;
 
-public record CollectTraceRequest(int Pid, string Duration);
+public record CollectTraceRequest(int Pid, string Duration, string? Profile = null);
 
 public record CollectTraceResult(
     Session Session,
@@ -129,10 +129,8 @@ public class CollectTraceService
             startCts.CancelAfter(TimeSpan.FromSeconds(30)); // Bounded timeout for start
 
             var client = new DiagnosticsClient(request.Pid);
-            var providers = new List<EventPipeProvider>
-            {
-                new("Microsoft-Windows-DotNETRuntime", EventLevel.Informational)
-            };
+            var providers = GetProvidersForProfile(request.Profile);
+            _logger.LogInformation("[{Phase}] Using profile {Profile} with {ProviderCount} providers", SessionPhase.Attaching, request.Profile ?? "default", providers.Count);
 
             eventPipeSession = await client.StartEventPipeSessionAsync(
                 providers,
@@ -308,4 +306,24 @@ public class CollectTraceService
         }
     }
 
+    private static List<EventPipeProvider> GetProvidersForProfile(string? profile)
+    {
+        // Map profile names to EventPipeProvider configurations
+        // Based on dotnet-trace profiles: https://learn.microsoft.com/en-us/dotnet/core/diagnostics/dotnet-trace
+        return profile?.ToLowerInvariant() switch
+        {
+            "cpu-sampling" => new List<EventPipeProvider>
+            {
+                new("Microsoft-Windows-DotNETRuntime", EventLevel.Informational, (long)0x00000001) // CPU sampling
+            },
+            "gc-heap" => new List<EventPipeProvider>
+            {
+                new("Microsoft-Windows-DotNETRuntime", EventLevel.Informational, (long)0x00000001 | 0x00000010) // CPU sampling + GC
+            },
+            _ => new List<EventPipeProvider>
+            {
+                new("Microsoft-Windows-DotNETRuntime", EventLevel.Informational) // Default: basic runtime events
+            }
+        };
+    }
 }

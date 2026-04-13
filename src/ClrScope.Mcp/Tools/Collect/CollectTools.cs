@@ -89,12 +89,13 @@ public sealed class CollectTools
         }
     }
 
-    [McpServerTool(Name = "collect_trace", Title = "Collect EventPipe Trace (Experimental)", ReadOnly = false, Idempotent = false), Description("Collect EventPipe trace from .NET process via StartEventPipeSession(). Duration format: hh:mm:ss")]
+    [McpServerTool(Name = "collect_trace", Title = "Collect EventPipe Trace (Experimental)", ReadOnly = false, Idempotent = false), Description("Collect EventPipe trace from .NET process via StartEventPipeSession(). Duration format: hh:mm:ss. Profile: cpu-sampling, gc-heap, or default")]
     public static async Task<CollectTraceResult> CollectTrace(
         [Description("Process ID to collect trace from")] int pid,
         [Description("Duration in hh:mm:ss format (e.g., 00:01:30 for 1.5 minutes)")] string duration,
         McpServer server,
         IProgress<double>? progress = null,
+        [Description("Trace profile: cpu-sampling, gc-heap, or default")] string? profile = null,
         CancellationToken cancellationToken = default)
     {
         var traceService = server.Services!.GetRequiredService<CollectTraceService>();
@@ -117,9 +118,9 @@ public sealed class CollectTools
                 throw new ArgumentException("Duration must be in hh:mm:ss format (e.g., 00:01:30)", nameof(duration));
             }
 
-            logger.LogInformation("Starting trace collection for PID {Pid}, Duration={Duration}", pid, duration);
+            logger.LogInformation("Starting trace collection for PID {Pid}, Duration={Duration}, Profile={Profile}", pid, duration, profile ?? "default");
 
-            var request = new CollectTraceRequest(pid, duration);
+            var request = new CollectTraceRequest(pid, duration, profile);
             var result = await traceService.CollectTraceAsync(request, progress, cancellationToken);
             
             if (result.Artifact != null)

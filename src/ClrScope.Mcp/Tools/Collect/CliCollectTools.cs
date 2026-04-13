@@ -88,7 +88,8 @@ public sealed class CollectCountersTools
                 return new CollectGcDumpResult(
                     Success: true,
                     Message: $"GC heap snapshot collected successfully: {result.Artifact.ArtifactId.Value}",
-                    ArtifactId: result.Artifact.ArtifactId.Value
+                    ArtifactId: result.Artifact.ArtifactId.Value,
+                    SessionId: result.Session.SessionId.Value
                 );
             }
             else
@@ -96,7 +97,8 @@ public sealed class CollectCountersTools
                 return new CollectGcDumpResult(
                     Success: false,
                     Message: result.Error ?? "GC heap snapshot collection failed",
-                    ArtifactId: null
+                    ArtifactId: null,
+                    SessionId: result.Session.SessionId.Value
                 );
             }
         }
@@ -106,7 +108,8 @@ public sealed class CollectCountersTools
             return new CollectGcDumpResult(
                 Success: false,
                 Message: $"Collect GC heap snapshot failed: {ex.Message}",
-                ArtifactId: null
+                ArtifactId: null,
+                SessionId: null
             );
         }
     }
@@ -135,7 +138,8 @@ public sealed class CollectCountersTools
                 return new CollectStacksResult(
                     Success: true,
                     Message: $"Managed stacks collected successfully: {result.Artifact.ArtifactId.Value}",
-                    ArtifactId: result.Artifact.ArtifactId.Value
+                    ArtifactId: result.Artifact.ArtifactId.Value,
+                    SessionId: result.Session.SessionId.Value
                 );
             }
             else
@@ -143,7 +147,8 @@ public sealed class CollectCountersTools
                 return new CollectStacksResult(
                     Success: false,
                     Message: result.Error ?? "Managed stacks collection failed",
-                    ArtifactId: null
+                    ArtifactId: null,
+                    SessionId: result.Session.SessionId.Value
                 );
             }
         }
@@ -153,7 +158,8 @@ public sealed class CollectCountersTools
             return new CollectStacksResult(
                 Success: false,
                 Message: $"Collect managed stacks failed: {ex.Message}",
-                ArtifactId: null
+                ArtifactId: null,
+                SessionId: null
             );
         }
     }
@@ -169,11 +175,13 @@ public record CollectCountersResult(
 public record CollectGcDumpResult(
     bool Success,
     string Message,
-    string? ArtifactId
+    string? ArtifactId,
+    string? SessionId = null
 );
 
 public record CollectStacksResult(
     bool Success,
     string Message,
-    string? ArtifactId
+    string? ArtifactId,
+    string? SessionId = null
 );
