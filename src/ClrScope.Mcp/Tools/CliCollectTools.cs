@@ -18,31 +18,44 @@ public sealed class CollectCountersTools
         [Description("Counter providers (e.g., System.Runtime, Microsoft.AspNetCore.Hosting)")] string[]? providers = null,
         CancellationToken cancellationToken = default)
     {
-        if (pid <= 0)
+        try
         {
-            throw new ArgumentException("Process ID must be greater than 0", nameof(pid));
-        }
+            if (pid <= 0)
+            {
+                throw new ArgumentException("Process ID must be greater than 0", nameof(pid));
+            }
 
-        var providerList = providers != null && providers.Length > 0 ? providers : new[] { "System.Runtime" };
-        var request = new CollectCountersRequest(pid, duration, providerList);
-        var result = await countersService.CollectCountersAsync(request, cancellationToken: cancellationToken);
+            var providerList = providers != null && providers.Length > 0 ? providers : new[] { "System.Runtime" };
+            var request = new CollectCountersRequest(pid, duration, providerList);
+            var result = await countersService.CollectCountersAsync(request, cancellationToken: cancellationToken);
 
-        if (result.Artifact != null)
-        {
-            return new CollectCountersResult(
-                Success: true,
-                Message: $"Counters collected successfully: {result.Artifact.ArtifactId.Value}",
-                ArtifactId: result.Artifact.ArtifactId.Value,
-                SessionId: result.Session.SessionId.Value
-            );
+            if (result.Artifact != null)
+            {
+                return new CollectCountersResult(
+                    Success: true,
+                    Message: $"Counters collected successfully: {result.Artifact.ArtifactId.Value}",
+                    ArtifactId: result.Artifact.ArtifactId.Value,
+                    SessionId: result.Session.SessionId.Value
+                );
+            }
+            else
+            {
+                return new CollectCountersResult(
+                    Success: false,
+                    Message: result.Error ?? "Counter collection failed",
+                    ArtifactId: null,
+                    SessionId: result.Session.SessionId.Value
+                );
+            }
         }
-        else
+        catch (Exception ex)
         {
+            logger.LogError(ex, "Collect counters failed for PID {Pid}", pid);
             return new CollectCountersResult(
                 Success: false,
-                Message: result.Error ?? "Counter collection failed",
+                Message: $"Collect counters failed: {ex.Message}",
                 ArtifactId: null,
-                SessionId: result.Session.SessionId.Value
+                SessionId: null
             );
         }
     }

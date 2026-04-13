@@ -28,7 +28,7 @@ dotnet publish "$PROJECT" \
   -r linux-x64 \
   --self-contained true \
   -p:PublishSingleFile=true \
-  -p:PublishTrimmed=true \
+  -p:PublishTrimmed=false \
   -p:DebugSymbols=false \
   -p:DebugType=None \
   -o "$OUTPUT_DIR"
