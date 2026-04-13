@@ -13,7 +13,7 @@
 set -e
 
 VERSION=${1:-"0.1.0"}
-OUTPUT_DIR="./releases/$VERSION"
+OUTPUT_DIR="../releases/$VERSION"
 PROJECT="../src/ClrScope.Mcp/ClrScope.Mcp.csproj"
 
 echo "Building CLRScope MCP v$VERSION binaries (local development)..."
