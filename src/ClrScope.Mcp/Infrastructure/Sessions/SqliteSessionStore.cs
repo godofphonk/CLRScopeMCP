@@ -1,4 +1,4 @@
-using ClrScope.Mcp.Domain;
+using ClrScope.Mcp.Domain.Sessions;
 using Microsoft.Data.Sqlite;
 
 namespace ClrScope.Mcp.Infrastructure;

@@ -1,4 +1,4 @@
-namespace ClrScope.Mcp.Domain;
+namespace ClrScope.Mcp.Domain.Sessions;
 
 /// <summary>
 /// Phases of a collection operation

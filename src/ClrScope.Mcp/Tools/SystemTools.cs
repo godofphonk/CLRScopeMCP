@@ -1,3 +1,4 @@
+using ClrScope.Mcp.Infrastructure;
 using ClrScope.Mcp.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -9,7 +10,7 @@ namespace ClrScope.Mcp.Tools;
 [McpServerToolType]
 public sealed class SystemTools
 {
-    [McpServerTool(Name = "system_health", Title = "System Health Check", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Проверка здоровья сервера: artifact root, disk space, доступность инструментов")]
+    [McpServerTool(Name = "system_health", Title = "System Health Check", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Check server health: artifact root, disk space, tool availability")]
     public static async Task<HealthCheckResult> SystemHealth(
         McpServer server,
         CancellationToken cancellationToken = default)
@@ -44,51 +45,38 @@ public sealed class SystemTools
     }
 
     [McpServerTool(Name = "system_capabilities", Title = "System Capabilities", ReadOnly = true, Idempotent = true, UseStructuredContent = true), Description("Returns available capabilities and feature flags for the CLRScope MCP server")]
-    public static CapabilitiesResult GetCapabilities(McpServer server)
+    public static async Task<CapabilitiesResult> GetCapabilities(
+        McpServer server,
+        CancellationToken cancellationToken = default)
     {
         var logger = server.Services!.GetRequiredService<ILogger<SystemTools>>();
+        var toolChecker = server.Services!.GetRequiredService<ICliToolAvailabilityChecker>();
+        
         logger.LogInformation("Capabilities requested");
 
-        var dotnetCountersAvailable = CheckCliToolAvailable("dotnet-counters");
-        var dotnetGcDumpAvailable = CheckCliToolAvailable("dotnet-gcdump");
-        var dotnetStackAvailable = CheckCliToolAvailable("dotnet-stack");
+        // Check CLI tool availability for advanced features
+        var dotnetDumpTask = toolChecker.CheckAvailabilityAsync("dotnet-dump", cancellationToken);
+        var dotnetSymbolTask = toolChecker.CheckAvailabilityAsync("dotnet-symbol", cancellationToken);
+        
+        await Task.WhenAll(dotnetDumpTask, dotnetSymbolTask);
+        
+        var dotnetDump = await dotnetDumpTask;
+        var dotnetSymbol = await dotnetSymbolTask;
 
         return new CapabilitiesResult(
             NativeDumpAvailable: true,
             NativeTraceAvailable: true,
-            TraceStatus: "experimental",
-            DotnetCountersInstalled: dotnetCountersAvailable,
-            DotnetGcDumpInstalled: dotnetGcDumpAvailable,
-            DotnetStackInstalled: dotnetStackAvailable,
+            NativeCountersAvailable: true,
+            TraceStatus: "stable",
+            DotnetDumpAvailable: dotnetDump.IsAvailable,
+            DotnetDumpVersion: dotnetDump.Version,
+            DotnetDumpInstallHint: dotnetDump.InstallHint,
+            DotnetSymbolAvailable: dotnetSymbol.IsAvailable,
+            DotnetSymbolVersion: dotnetSymbol.Version,
+            DotnetSymbolInstallHint: dotnetSymbol.InstallHint,
             ResourcesEnabled: false,
             PromptsEnabled: false
         );
-    }
-
-    private static bool CheckCliToolAvailable(string toolName)
-    {
-        try
-        {
-            var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = toolName,
-                Arguments = "--version",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            });
-
-            if (process == null)
-                return false;
-
-            process.WaitForExit(1000);
-            return process.ExitCode == 0;
-        }
-        catch
-        {
-            return false;
-        }
     }
 }
 
@@ -103,10 +91,14 @@ public record HealthCheckResult(
 public record CapabilitiesResult(
     bool NativeDumpAvailable,
     bool NativeTraceAvailable,
+    bool NativeCountersAvailable,
     string TraceStatus,
-    bool DotnetCountersInstalled,
-    bool DotnetGcDumpInstalled,
-    bool DotnetStackInstalled,
+    bool DotnetDumpAvailable,
+    string? DotnetDumpVersion,
+    string? DotnetDumpInstallHint,
+    bool DotnetSymbolAvailable,
+    string? DotnetSymbolVersion,
+    string? DotnetSymbolInstallHint,
     bool ResourcesEnabled,
     bool PromptsEnabled
 );

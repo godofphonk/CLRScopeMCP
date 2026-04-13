@@ -1,12 +1,12 @@
 namespace ClrScope.Mcp.Infrastructure;
 
 /// <summary>
-/// Интерфейс для выполнения CLI команд (dotnet-counters, dotnet-gcdump, dotnet-stack).
+/// Interface for executing CLI commands (dotnet-counters, dotnet-gcdump, dotnet-stack).
 /// </summary>
 public interface ICliCommandRunner
 {
     /// <summary>
-    /// Выполняет CLI команду и возвращает stdout.
+    /// Executes a CLI command and returns stdout.
     /// </summary>
     Task<CommandLineResult> ExecuteAsync(
         string command,
@@ -15,7 +15,7 @@ public interface ICliCommandRunner
 }
 
 /// <summary>
-/// Результат выполнения CLI команды.
+/// Result of CLI command execution.
 /// </summary>
 public record CommandLineResult(
     int ExitCode,

@@ -1,3 +1,5 @@
+using ClrScope.Mcp.Domain.Sessions;
+
 namespace ClrScope.Mcp.Infrastructure;
 
 /// <summary>
@@ -11,7 +13,7 @@ public interface IActiveOperationRegistry
     /// <param name="sessionId">Session ID</param>
     /// <param name="cts">Cancellation token source for the operation</param>
     /// <returns>True if registration succeeded, false if session ID already registered</returns>
-    bool TryRegister(Domain.SessionId sessionId, CancellationTokenSource cts);
+    bool TryRegister(SessionId sessionId, CancellationTokenSource cts);
 
     /// <summary>
     /// Cancel an active operation by session ID
@@ -19,11 +21,11 @@ public interface IActiveOperationRegistry
     /// <param name="sessionId">Session ID to cancel</param>
     /// <param name="reason">Reason for cancellation</param>
     /// <returns>True if cancellation succeeded, false if session not found or already completed</returns>
-    bool TryCancel(Domain.SessionId sessionId, string reason);
+    bool TryCancel(SessionId sessionId, string reason);
 
     /// <summary>
     /// Mark an operation as completed and remove from registry
     /// </summary>
     /// <param name="sessionId">Session ID to complete</param>
-    void Complete(Domain.SessionId sessionId);
+    void Complete(SessionId sessionId);
 }

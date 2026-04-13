@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 namespace ClrScope.Mcp.Infrastructure;
 
 /// <summary>
-/// Реализация ICliCommandRunner через Process.Start.
+/// Implementation of ICliCommandRunner via Process.Start.
 /// </summary>
 public class CliCommandRunner : ICliCommandRunner
 {

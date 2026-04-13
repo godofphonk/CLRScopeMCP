@@ -1,4 +1,4 @@
-namespace ClrScope.Mcp.Domain;
+namespace ClrScope.Mcp.Domain.Artifacts;
 
 public enum ArtifactKind
 {

@@ -1,5 +1,6 @@
 using ClrScope.Mcp.Contracts;
-using ClrScope.Mcp.Domain;
+using ClrScope.Mcp.Domain.Artifacts;
+using ClrScope.Mcp.Domain.Sessions;
 using ClrScope.Mcp.Infrastructure;
 using ClrScope.Mcp.Options;
 using ClrScope.Mcp.Validation;

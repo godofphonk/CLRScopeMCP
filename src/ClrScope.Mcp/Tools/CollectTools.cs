@@ -9,7 +9,7 @@ namespace ClrScope.Mcp.Tools;
 [McpServerToolType]
 public sealed class CollectTools
 {
-    [McpServerTool(Name = "collect_dump", Title = "Collect Memory Dump", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false), Description("Сбор memory dump из .NET процесса через WriteDump(). Возвращает Session ID и Artifact ID.")]
+    [McpServerTool(Name = "collect_dump", Title = "Collect Memory Dump", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false), Description("Collect memory dump from .NET process via WriteDump(). Returns Session ID and Artifact ID.")]
     public static async Task<CollectDumpResult> CollectDump(
         [Description("Process ID to collect dump from")] int pid,
         McpServer server,
@@ -89,7 +89,7 @@ public sealed class CollectTools
         }
     }
 
-    [McpServerTool(Name = "collect_trace", Title = "Collect EventPipe Trace (Experimental)", ReadOnly = false, Idempotent = false), Description("Сбор EventPipe trace из .NET процесса через StartEventPipeSession(). Duration формат: hh:mm:ss")]
+    [McpServerTool(Name = "collect_trace", Title = "Collect EventPipe Trace (Experimental)", ReadOnly = false, Idempotent = false), Description("Collect EventPipe trace from .NET process via StartEventPipeSession(). Duration format: hh:mm:ss")]
     public static async Task<CollectTraceResult> CollectTrace(
         [Description("Process ID to collect trace from")] int pid,
         [Description("Duration in hh:mm:ss format (e.g., 00:01:30 for 1.5 minutes)")] string duration,

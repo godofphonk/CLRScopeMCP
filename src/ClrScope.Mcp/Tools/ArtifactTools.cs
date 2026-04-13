@@ -1,4 +1,5 @@
-using ClrScope.Mcp.Domain;
+using ClrScope.Mcp.Domain.Artifacts;
+using ClrScope.Mcp.Domain.Sessions;
 using ClrScope.Mcp.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -10,7 +11,7 @@ namespace ClrScope.Mcp.Tools;
 [McpServerToolType]
 public sealed class ArtifactTools
 {
-    [McpServerTool(Name = "artifact_get_metadata", Title = "Get Artifact Metadata", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Получение метаданных артефакта по ID")]
+    [McpServerTool(Name = "artifact_get_metadata", Title = "Get Artifact Metadata", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Get artifact metadata by ID")]
     public static async Task<ArtifactMetadataResult> GetArtifactMetadata(
         [Description("Artifact ID to get metadata for")] string artifactId,
         McpServer server,
@@ -95,7 +96,7 @@ public sealed class ArtifactTools
         }
     }
 
-    [McpServerTool(Name = "artifact_list", Title = "List Artifacts", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Список всех артефактов с опциональной фильтрацией")]
+    [McpServerTool(Name = "artifact_list", Title = "List Artifacts", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("List all artifacts with optional filtering")]
     public static async Task<ArtifactListResult> ListArtifacts(
         McpServer server,
         [Description("Filter by kind (optional)")] string? kind = null,
@@ -147,7 +148,7 @@ public sealed class ArtifactTools
         }
     }
 
-    [McpServerTool(Name = "artifact_delete", Title = "Delete Artifact", Destructive = true, Idempotent = false), Description("Удаление артефакта по ID")]
+    [McpServerTool(Name = "artifact_delete", Title = "Delete Artifact", Destructive = true, Idempotent = false), Description("Delete artifact by ID")]
     public static async Task<DeleteArtifactResult> DeleteArtifact(
         [Description("Artifact ID to delete")] string artifactId,
         McpServer server,
@@ -211,7 +212,7 @@ public sealed class ArtifactTools
         }
     }
 
-    [McpServerTool(Name = "artifact_read_text", Title = "Read Artifact Text", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Чтение текстового содержимого артефакта (если применимо)")]
+    [McpServerTool(Name = "artifact_read_text", Title = "Read Artifact Text", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Read text content of artifact (if applicable)")]
     public static async Task<ReadArtifactTextResult> ReadArtifactText(
         [Description("Artifact ID to read text from")] string artifactId,
         McpServer server,
@@ -294,11 +295,11 @@ public sealed class ArtifactTools
         }
     }
 
-    [McpServerTool(Name = "artifact_cleanup", Title = "Cleanup Old Artifacts", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false, UseStructuredContent = true), Description("Удаление старых артефактов старше указанного возраста и/или ограничение общего размера")]
+    [McpServerTool(Name = "artifact_cleanup", Title = "Cleanup Old Artifacts", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false, UseStructuredContent = true), Description("Delete old artifacts older than specified age and/or limit total size")]
     public static async Task<CleanupArtifactsResult> CleanupArtifacts(
-        [Description("Максимальный возраст артефактов для сохранения (например, 7d для 7 дней)")] string maxAge,
+        [Description("Maximum age of artifacts to keep (e.g., 7d for 7 days)")] string maxAge,
         McpServer server,
-        [Description("Максимальный общий размер для удаления в байтах (опционально, например, 10737418240 для 10GB)")] long? maxSizeBytes = null,
+        [Description("Maximum total size to delete in bytes (optional, e.g., 10737418240 for 10GB)")] long? maxSizeBytes = null,
         CancellationToken cancellationToken = default)
     {
         var retentionService = server.Services!.GetRequiredService<IArtifactRetentionService>();
@@ -360,7 +361,7 @@ public sealed class ArtifactTools
         };
     }
 
-    [McpServerTool(Name = "artifact_pin", Title = "Pin Artifact", ReadOnly = false, Idempotent = false, UseStructuredContent = true), Description("Закрепить артефакт для защиты от автоматического удаления")]
+    [McpServerTool(Name = "artifact_pin", Title = "Pin Artifact", ReadOnly = false, Idempotent = false, UseStructuredContent = true), Description("Pin artifact to protect from automatic deletion")]
     public static async Task<PinArtifactResult> PinArtifact(
         [Description("Artifact ID to pin")] string artifactId,
         McpServer server,
@@ -420,7 +421,7 @@ public sealed class ArtifactTools
         }
     }
 
-    [McpServerTool(Name = "artifact_unpin", Title = "Unpin Artifact", ReadOnly = false, Idempotent = false, UseStructuredContent = true), Description("Открепить артефакт для разрешения автоматического удаления")]
+    [McpServerTool(Name = "artifact_unpin", Title = "Unpin Artifact", ReadOnly = false, Idempotent = false, UseStructuredContent = true), Description("Unpin artifact to allow automatic deletion")]
     public static async Task<PinArtifactResult> UnpinArtifact(
         [Description("Artifact ID to unpin")] string artifactId,
         McpServer server,

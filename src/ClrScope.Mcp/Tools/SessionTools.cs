@@ -1,4 +1,5 @@
-using ClrScope.Mcp.Domain;
+using ClrScope.Mcp.Domain.Artifacts;
+using ClrScope.Mcp.Domain.Sessions;
 using ClrScope.Mcp.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -10,7 +11,7 @@ namespace ClrScope.Mcp.Tools;
 [McpServerToolType]
 public sealed class SessionTools
 {
-    [McpServerTool(Name = "session_get", Title = "Get Session Info", ReadOnly = true, Idempotent = true, UseStructuredContent = true), Description("Получить информацию о диагностической сессии")]
+    [McpServerTool(Name = "session_get", Title = "Get Session Info", ReadOnly = true, Idempotent = true, UseStructuredContent = true), Description("Get information about a diagnostic session")]
     public static async Task<SessionResult> GetSession(
         [Description("Session ID to get information for")] string sessionId,
         McpServer server,
@@ -109,7 +110,7 @@ public sealed class SessionTools
         }
     }
 
-    [McpServerTool(Name = "session_cancel", Title = "Cancel Session", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false, UseStructuredContent = true), Description("Отмена активной сессии")]
+    [McpServerTool(Name = "session_cancel", Title = "Cancel Session", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false, UseStructuredContent = true), Description("Cancel an active session")]
     public static async Task<CancelSessionResult> CancelSession(
         [Description("Session ID to cancel")] string sessionId,
         McpServer server,

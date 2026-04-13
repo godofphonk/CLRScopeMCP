@@ -28,7 +28,9 @@ dotnet publish "$PROJECT" \
   -r linux-x64 \
   --self-contained true \
   -p:PublishSingleFile=true \
-  -p:PublishTrimmed=false \
+  -p:PublishTrimmed=true \
+  -p:DebugSymbols=false \
+  -p:DebugType=None \
   -o "$OUTPUT_DIR"
 
 # Rename binary to standard naming

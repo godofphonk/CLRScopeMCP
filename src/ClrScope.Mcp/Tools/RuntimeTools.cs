@@ -9,7 +9,7 @@ namespace ClrScope.Mcp.Tools;
 [McpServerToolType]
 public sealed class RuntimeTools
 {
-    [McpServerTool(Name = "runtime_list_targets", Title = "List .NET Processes", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Список всех attachable .NET процессов через GetPublishedProcesses()")]
+    [McpServerTool(Name = "runtime_list_targets", Title = "List .NET Processes", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("List all attachable .NET processes via GetPublishedProcesses()")]
     public static ListTargetsResult ListTargets(
         McpServer server,
         CancellationToken cancellationToken = default)
@@ -38,7 +38,7 @@ public sealed class RuntimeTools
         }
     }
 
-    [McpServerTool(Name = "runtime_inspect_target", Title = "Inspect .NET Process", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Детальная информация о .NET процессе. Возвращает guaranteed fields (pid, processName, isAttachable) и best-effort fields (commandLine, OS, architecture).")]
+    [McpServerTool(Name = "runtime_inspect_target", Title = "Inspect .NET Process", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Get detailed information about a .NET process. Returns guaranteed fields (pid, processName, isAttachable) and best-effort fields (commandLine, OS, architecture).")]
     public static InspectTargetResult InspectTarget(
         [Description("Process ID to inspect")] int pid,
         McpServer server,

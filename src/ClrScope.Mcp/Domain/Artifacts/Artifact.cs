@@ -1,4 +1,6 @@
-namespace ClrScope.Mcp.Domain;
+using ClrScope.Mcp.Domain.Sessions;
+
+namespace ClrScope.Mcp.Domain.Artifacts;
 
 public record Artifact(
     ArtifactId ArtifactId,

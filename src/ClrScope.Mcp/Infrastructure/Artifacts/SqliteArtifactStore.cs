@@ -1,4 +1,5 @@
-using ClrScope.Mcp.Domain;
+using ClrScope.Mcp.Domain.Artifacts;
+using ClrScope.Mcp.Domain.Sessions;
 using Microsoft.Data.Sqlite;
 using System.Security.Cryptography;
 using System.Text;

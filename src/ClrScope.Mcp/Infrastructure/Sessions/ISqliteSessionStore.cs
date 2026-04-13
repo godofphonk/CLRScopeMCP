@@ -1,4 +1,4 @@
-using ClrScope.Mcp.Domain;
+using ClrScope.Mcp.Domain.Sessions;
 
 namespace ClrScope.Mcp.Infrastructure;
 
