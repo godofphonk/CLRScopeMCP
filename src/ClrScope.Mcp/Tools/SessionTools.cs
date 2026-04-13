@@ -10,15 +10,15 @@ namespace ClrScope.Mcp.Tools;
 [McpServerToolType]
 public sealed class SessionTools
 {
-    [McpServerTool(Name = "session.get", Title = "Get Session Info", ReadOnly = true, Idempotent = true, UseStructuredContent = true), Description("Получить информацию о диагностической сессии")]
+    [McpServerTool(Name = "session_get", Title = "Get Session Info", ReadOnly = true, Idempotent = true, UseStructuredContent = true), Description("Получить информацию о диагностической сессии")]
     public static async Task<SessionResult> GetSession(
         [Description("Session ID to get information for")] string sessionId,
         McpServer server,
         CancellationToken cancellationToken = default)
     {
-        var sessionStore = server.Services.GetRequiredService<ISqliteSessionStore>();
-        var artifactStore = server.Services.GetRequiredService<ISqliteArtifactStore>();
-        var logger = server.Services.GetRequiredService<ILogger<SessionTools>>();
+        var sessionStore = server.Services!.GetRequiredService<ISqliteSessionStore>();
+        var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
+        var logger = server.Services!.GetRequiredService<ILogger<SessionTools>>();
 
         try
         {
@@ -109,14 +109,14 @@ public sealed class SessionTools
         }
     }
 
-    [McpServerTool(Name = "session.cancel", Title = "Cancel Session", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false, UseStructuredContent = true), Description("Отмена активной сессии")]
+    [McpServerTool(Name = "session_cancel", Title = "Cancel Session", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false, UseStructuredContent = true), Description("Отмена активной сессии")]
     public static async Task<CancelSessionResult> CancelSession(
         [Description("Session ID to cancel")] string sessionId,
         McpServer server,
         CancellationToken cancellationToken = default)
     {
-        var sessionStore = server.Services.GetRequiredService<ISqliteSessionStore>();
-        var logger = server.Services.GetRequiredService<ILogger<SessionTools>>();
+        var sessionStore = server.Services!.GetRequiredService<ISqliteSessionStore>();
+        var logger = server.Services!.GetRequiredService<ILogger<SessionTools>>();
 
         try
         {
@@ -149,7 +149,7 @@ public sealed class SessionTools
             }
 
             // Cancel the active operation via registry
-            var activeOperationRegistry = server.Services.GetRequiredService<IActiveOperationRegistry>();
+            var activeOperationRegistry = server.Services!.GetRequiredService<IActiveOperationRegistry>();
             var cancelled = activeOperationRegistry.TryCancel(session.SessionId, "Session cancelled via session.cancel");
 
             // Update session status in database

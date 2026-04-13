@@ -23,7 +23,7 @@ public class PidLockManager : IPidLockManager, IDisposable
 
         lock (_syncRoot)
         {
-            if (!_locks.TryGetValue(pid, out entry))
+            if (!_locks.TryGetValue(pid, out entry!))
             {
                 entry = new LockEntry();
                 _locks[pid] = entry;

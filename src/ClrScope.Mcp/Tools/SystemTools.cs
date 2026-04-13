@@ -9,13 +9,13 @@ namespace ClrScope.Mcp.Tools;
 [McpServerToolType]
 public sealed class SystemTools
 {
-    [McpServerTool(Name = "system.health", Title = "System Health Check", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Проверка здоровья сервера: artifact root, disk space, доступность инструментов")]
+    [McpServerTool(Name = "system_health", Title = "System Health Check", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Проверка здоровья сервера: artifact root, disk space, доступность инструментов")]
     public static async Task<HealthCheckResult> SystemHealth(
         McpServer server,
         CancellationToken cancellationToken = default)
     {
-        var healthService = server.Services.GetRequiredService<HealthService>();
-        var logger = server.Services.GetRequiredService<ILogger<SystemTools>>();
+        var healthService = server.Services!.GetRequiredService<HealthService>();
+        var logger = server.Services!.GetRequiredService<ILogger<SystemTools>>();
 
         try
         {
@@ -43,10 +43,10 @@ public sealed class SystemTools
         }
     }
 
-    [McpServerTool(Name = "system.capabilities", Title = "System Capabilities", ReadOnly = true, Idempotent = true, UseStructuredContent = true), Description("Returns available capabilities and feature flags for the CLRScope MCP server")]
+    [McpServerTool(Name = "system_capabilities", Title = "System Capabilities", ReadOnly = true, Idempotent = true, UseStructuredContent = true), Description("Returns available capabilities and feature flags for the CLRScope MCP server")]
     public static CapabilitiesResult GetCapabilities(McpServer server)
     {
-        var logger = server.Services.GetRequiredService<ILogger<SystemTools>>();
+        var logger = server.Services!.GetRequiredService<ILogger<SystemTools>>();
         logger.LogInformation("Capabilities requested");
 
         var dotnetCountersAvailable = CheckCliToolAvailable("dotnet-counters");

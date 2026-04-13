@@ -1,22 +1,21 @@
 #!/bin/bash
-# Build self-contained binaries for all platforms (local development testing)
+# Build Linux x64 binary for local development testing
 #
 # Usage:
 #   ./deployments/build-local-binaries.sh [version]
 #
-# This script builds self-contained single-file binaries for CLRScope MCP
-# across all supported platforms. It's intended for local development testing
-# to verify that binaries can be built successfully before pushing to CI/CD.
+# This script builds a self-contained single-file binary for CLRScope MCP
+# on Linux x64 only. It's intended for local development testing.
 #
 # For actual publishing, use GitHub Actions workflow (.github/workflows/release.yml)
 
 set -e
 
 VERSION=${1:-"0.1.0"}
-OUTPUT_DIR="../releases/$VERSION"
+OUTPUT_DIR="../DEV/releases/$VERSION"
 PROJECT="../src/ClrScope.Mcp/ClrScope.Mcp.csproj"
 
-echo "Building CLRScope MCP v$VERSION binaries (local development)..."
+echo "Building CLRScope MCP v$VERSION (Linux x64 only)..."
 
 # Clean and create output directory
 rm -rf "$OUTPUT_DIR"
@@ -30,66 +29,15 @@ dotnet publish "$PROJECT" \
   --self-contained true \
   -p:PublishSingleFile=true \
   -p:PublishTrimmed=false \
-  -o "$OUTPUT_DIR/linux-x64"
+  -o "$OUTPUT_DIR"
 
-# Linux ARM64
-echo "Building linux-arm64..."
-dotnet publish "$PROJECT" \
-  -c Release \
-  -r linux-arm64 \
-  --self-contained true \
-  -p:PublishSingleFile=true \
-  -p:PublishTrimmed=false \
-  -o "$OUTPUT_DIR/linux-arm64"
+# Rename binary to standard naming
+mv "$OUTPUT_DIR/ClrScope.Mcp" "$OUTPUT_DIR/clrscope-mcp"
 
-# macOS x64
-echo "Building osx-x64..."
-dotnet publish "$PROJECT" \
-  -c Release \
-  -r osx-x64 \
-  --self-contained true \
-  -p:PublishSingleFile=true \
-  -p:PublishTrimmed=false \
-  -o "$OUTPUT_DIR/osx-x64"
-
-# macOS ARM64 (Apple Silicon)
-echo "Building osx-arm64..."
-dotnet publish "$PROJECT" \
-  -c Release \
-  -r osx-arm64 \
-  --self-contained true \
-  -p:PublishSingleFile=true \
-  -p:PublishTrimmed=false \
-  -o "$OUTPUT_DIR/osx-arm64"
-
-# Windows x64
-echo "Building win-x64..."
-dotnet publish "$PROJECT" \
-  -c Release \
-  -r win-x64 \
-  --self-contained true \
-  -p:PublishSingleFile=true \
-  -p:PublishTrimmed=false \
-  -o "$OUTPUT_DIR/win-x64"
-
-# Rename binaries to standard naming
-mv "$OUTPUT_DIR/linux-x64/ClrScope.Mcp" "$OUTPUT_DIR/linux-x64/clrscope-mcp"
-mv "$OUTPUT_DIR/linux-arm64/ClrScope.Mcp" "$OUTPUT_DIR/linux-arm64/clrscope-mcp"
-mv "$OUTPUT_DIR/osx-x64/ClrScope.Mcp" "$OUTPUT_DIR/osx-x64/clrscope-mcp"
-mv "$OUTPUT_DIR/osx-arm64/ClrScope.Mcp" "$OUTPUT_DIR/osx-arm64/clrscope-mcp"
-mv "$OUTPUT_DIR/win-x64/ClrScope.Mcp.exe" "$OUTPUT_DIR/win-x64/clrscope-mcp.exe"
-
-# Make binaries executable
-chmod +x "$OUTPUT_DIR/linux-x64/clrscope-mcp"
-chmod +x "$OUTPUT_DIR/linux-arm64/clrscope-mcp"
-chmod +x "$OUTPUT_DIR/osx-x64/clrscope-mcp"
-chmod +x "$OUTPUT_DIR/osx-arm64/clrscope-mcp"
+# Make binary executable
+chmod +x "$OUTPUT_DIR/clrscope-mcp"
 
 echo "✅ Built to $OUTPUT_DIR"
 echo ""
-echo "Binaries ready for local testing:"
-echo "  - $OUTPUT_DIR/linux-x64/clrscope-mcp"
-echo "  - $OUTPUT_DIR/linux-arm64/clrscope-mcp"
-echo "  - $OUTPUT_DIR/osx-x64/clrscope-mcp"
-echo "  - $OUTPUT_DIR/osx-arm64/clrscope-mcp"
-echo "  - $OUTPUT_DIR/win-x64/clrscope-mcp.exe"
+echo "Binary ready for local testing:"
+echo "  - $OUTPUT_DIR/clrscope-mcp"

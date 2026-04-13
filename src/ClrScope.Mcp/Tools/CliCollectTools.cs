@@ -8,7 +8,7 @@ namespace ClrScope.Mcp.Tools;
 
 public sealed class CollectCountersTools
 {
-    [McpServerTool(Name = "collect.counters", Title = "Collect Performance Counters", ReadOnly = false, Idempotent = false), Description("Сбор performance counters через native EventPipe (Stage 2)")]
+    [McpServerTool(Name = "collect_counters", Title = "Collect Performance Counters", ReadOnly = false, Idempotent = false), Description("Сбор performance counters через native EventPipe (Stage 2)")]
     public static async Task<CollectCountersResult> CollectCounters(
         [Description("Process ID to collect counters from")] int pid,
         CollectCountersService countersService,
@@ -46,7 +46,7 @@ public sealed class CollectCountersTools
         }
     }
 
-    [McpServerTool(Name = "collect.gcdump", Title = "Collect GC Heap Snapshot", ReadOnly = false, Idempotent = false), Description("Сбор GC heap snapshot через dotnet-gcdump CLI (NOT YET IMPLEMENTED - placeholder for Stage 0b)")]
+    [McpServerTool(Name = "collect_gcdump", Title = "Collect GC Heap Snapshot", ReadOnly = false, Idempotent = false), Description("Сбор GC heap snapshot через dotnet-gcdump CLI (NOT YET IMPLEMENTED - placeholder for Stage 0b)")]
     public static Task<CollectGcDumpResult> CollectGcDump(
         [Description("Process ID to collect GC heap snapshot from")] int pid,
         ILogger logger,
@@ -65,7 +65,7 @@ public sealed class CollectCountersTools
         ));
     }
 
-    [McpServerTool(Name = "collect.stacks", Title = "Collect Managed Stacks", ReadOnly = false, Idempotent = false), Description("Сбор managed stacks через dotnet-stack CLI (NOT YET IMPLEMENTED - placeholder for Stage 0b)")]
+    [McpServerTool(Name = "collect_stacks", Title = "Collect Managed Stacks", ReadOnly = false, Idempotent = false), Description("Сбор managed stacks через dotnet-stack CLI (NOT YET IMPLEMENTED - placeholder for Stage 0b)")]
     public static Task<CollectStacksResult> CollectStacks(
         [Description("Process ID to collect managed stacks from")] int pid,
         ILogger logger,

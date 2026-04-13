@@ -1,9 +1,8 @@
-docs/
-.github/
 bin/
 obj/
 .vs/
 .vscode/
+DEV/
 *.user
 *.suo
 *.userosscache

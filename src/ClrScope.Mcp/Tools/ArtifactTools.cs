@@ -10,14 +10,14 @@ namespace ClrScope.Mcp.Tools;
 [McpServerToolType]
 public sealed class ArtifactTools
 {
-    [McpServerTool(Name = "artifact.get_metadata", Title = "Get Artifact Metadata", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Получение метаданных артефакта по ID")]
+    [McpServerTool(Name = "artifact_get_metadata", Title = "Get Artifact Metadata", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Получение метаданных артефакта по ID")]
     public static async Task<ArtifactMetadataResult> GetArtifactMetadata(
         [Description("Artifact ID to get metadata for")] string artifactId,
         McpServer server,
         CancellationToken cancellationToken = default)
     {
-        var artifactStore = server.Services.GetRequiredService<ISqliteArtifactStore>();
-        var logger = server.Services.GetRequiredService<ILogger<ArtifactTools>>();
+        var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
+        var logger = server.Services!.GetRequiredService<ILogger<ArtifactTools>>();
 
         try
         {
@@ -95,15 +95,15 @@ public sealed class ArtifactTools
         }
     }
 
-    [McpServerTool(Name = "artifact.list", Title = "List Artifacts", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Список всех артефактов с опциональной фильтрацией")]
+    [McpServerTool(Name = "artifact_list", Title = "List Artifacts", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Список всех артефактов с опциональной фильтрацией")]
     public static async Task<ArtifactListResult> ListArtifacts(
         McpServer server,
         [Description("Filter by kind (optional)")] string? kind = null,
         [Description("Filter by status (optional)")] string? status = null,
         CancellationToken cancellationToken = default)
     {
-        var artifactStore = server.Services.GetRequiredService<ISqliteArtifactStore>();
-        var logger = server.Services.GetRequiredService<ILogger<ArtifactTools>>();
+        var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
+        var logger = server.Services!.GetRequiredService<ILogger<ArtifactTools>>();
 
         try
         {
@@ -147,14 +147,14 @@ public sealed class ArtifactTools
         }
     }
 
-    [McpServerTool(Name = "artifact.delete", Title = "Delete Artifact", Destructive = true, Idempotent = false), Description("Удаление артефакта по ID")]
+    [McpServerTool(Name = "artifact_delete", Title = "Delete Artifact", Destructive = true, Idempotent = false), Description("Удаление артефакта по ID")]
     public static async Task<DeleteArtifactResult> DeleteArtifact(
         [Description("Artifact ID to delete")] string artifactId,
         McpServer server,
         CancellationToken cancellationToken = default)
     {
-        var artifactStore = server.Services.GetRequiredService<ISqliteArtifactStore>();
-        var logger = server.Services.GetRequiredService<ILogger<ArtifactTools>>();
+        var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
+        var logger = server.Services!.GetRequiredService<ILogger<ArtifactTools>>();
 
         try
         {
@@ -211,14 +211,14 @@ public sealed class ArtifactTools
         }
     }
 
-    [McpServerTool(Name = "artifact.read_text", Title = "Read Artifact Text", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Чтение текстового содержимого артефакта (если применимо)")]
+    [McpServerTool(Name = "artifact_read_text", Title = "Read Artifact Text", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Чтение текстового содержимого артефакта (если применимо)")]
     public static async Task<ReadArtifactTextResult> ReadArtifactText(
         [Description("Artifact ID to read text from")] string artifactId,
         McpServer server,
         CancellationToken cancellationToken = default)
     {
-        var artifactStore = server.Services.GetRequiredService<ISqliteArtifactStore>();
-        var logger = server.Services.GetRequiredService<ILogger<ArtifactTools>>();
+        var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
+        var logger = server.Services!.GetRequiredService<ILogger<ArtifactTools>>();
 
         try
         {
@@ -294,15 +294,15 @@ public sealed class ArtifactTools
         }
     }
 
-    [McpServerTool(Name = "artifact.cleanup", Title = "Cleanup Old Artifacts", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false, UseStructuredContent = true), Description("Удаление старых артефактов старше указанного возраста и/или ограничение общего размера")]
+    [McpServerTool(Name = "artifact_cleanup", Title = "Cleanup Old Artifacts", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false, UseStructuredContent = true), Description("Удаление старых артефактов старше указанного возраста и/или ограничение общего размера")]
     public static async Task<CleanupArtifactsResult> CleanupArtifacts(
         [Description("Максимальный возраст артефактов для сохранения (например, 7d для 7 дней)")] string maxAge,
         McpServer server,
         [Description("Максимальный общий размер для удаления в байтах (опционально, например, 10737418240 для 10GB)")] long? maxSizeBytes = null,
         CancellationToken cancellationToken = default)
     {
-        var retentionService = server.Services.GetRequiredService<IArtifactRetentionService>();
-        var logger = server.Services.GetRequiredService<ILogger<ArtifactTools>>();
+        var retentionService = server.Services!.GetRequiredService<IArtifactRetentionService>();
+        var logger = server.Services!.GetRequiredService<ILogger<ArtifactTools>>();
 
         try
         {
@@ -360,14 +360,14 @@ public sealed class ArtifactTools
         };
     }
 
-    [McpServerTool(Name = "artifact.pin", Title = "Pin Artifact", ReadOnly = false, Idempotent = false, UseStructuredContent = true), Description("Закрепить артефакт для защиты от автоматического удаления")]
+    [McpServerTool(Name = "artifact_pin", Title = "Pin Artifact", ReadOnly = false, Idempotent = false, UseStructuredContent = true), Description("Закрепить артефакт для защиты от автоматического удаления")]
     public static async Task<PinArtifactResult> PinArtifact(
         [Description("Artifact ID to pin")] string artifactId,
         McpServer server,
         CancellationToken cancellationToken = default)
     {
-        var artifactStore = server.Services.GetRequiredService<ISqliteArtifactStore>();
-        var logger = server.Services.GetRequiredService<ILogger<ArtifactTools>>();
+        var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
+        var logger = server.Services!.GetRequiredService<ILogger<ArtifactTools>>();
 
         try
         {
@@ -420,14 +420,14 @@ public sealed class ArtifactTools
         }
     }
 
-    [McpServerTool(Name = "artifact.unpin", Title = "Unpin Artifact", ReadOnly = false, Idempotent = false, UseStructuredContent = true), Description("Открепить артефакт для разрешения автоматического удаления")]
+    [McpServerTool(Name = "artifact_unpin", Title = "Unpin Artifact", ReadOnly = false, Idempotent = false, UseStructuredContent = true), Description("Открепить артефакт для разрешения автоматического удаления")]
     public static async Task<PinArtifactResult> UnpinArtifact(
         [Description("Artifact ID to unpin")] string artifactId,
         McpServer server,
         CancellationToken cancellationToken = default)
     {
-        var artifactStore = server.Services.GetRequiredService<ISqliteArtifactStore>();
-        var logger = server.Services.GetRequiredService<ILogger<ArtifactTools>>();
+        var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
+        var logger = server.Services!.GetRequiredService<ILogger<ArtifactTools>>();
 
         try
         {
