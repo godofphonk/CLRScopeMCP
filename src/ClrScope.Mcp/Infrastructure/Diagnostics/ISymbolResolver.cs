@@ -8,11 +8,11 @@ public interface ISymbolResolver
     /// <summary>
     /// Resolve symbols for an artifact
     /// </summary>
-    /// <param name="artifactId">Artifact ID</param>
+    /// <param name="filePath">Artifact file path</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Result of symbol resolution</returns>
     Task<SymbolResolutionResult> ResolveAsync(
-        string artifactId,
+        string filePath,
         CancellationToken cancellationToken = default);
 
     /// <summary>

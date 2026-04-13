@@ -1,7 +1,5 @@
 using ClrScope.Mcp.Contracts;
-using ClrScope.Mcp.Options;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace ClrScope.Mcp.Infrastructure;
 
@@ -13,20 +11,17 @@ public class SymbolResolver : ISymbolResolver
     private readonly ILogger<SymbolResolver> _logger;
     private readonly ICliCommandRunner _cliRunner;
     private readonly CorrelationIdProvider _correlationIdProvider;
-    private readonly IOptions<ClrScopeOptions> _options;
     private readonly ICliToolAvailabilityChecker _availabilityChecker;
 
     public SymbolResolver(
         ILogger<SymbolResolver> logger,
         ICliCommandRunner cliRunner,
         CorrelationIdProvider correlationIdProvider,
-        IOptions<ClrScopeOptions> options,
         ICliToolAvailabilityChecker availabilityChecker)
     {
         _logger = logger;
         _cliRunner = cliRunner;
         _correlationIdProvider = correlationIdProvider;
-        _options = options;
         _availabilityChecker = availabilityChecker;
     }
 
@@ -62,11 +57,11 @@ public class SymbolResolver : ISymbolResolver
     }
 
     public async Task<SymbolResolutionResult> ResolveAsync(
-        string artifactId,
+        string filePath,
         CancellationToken cancellationToken = default)
     {
         var correlationId = _correlationIdProvider.GetCorrelationId();
-        _logger.LogInformation("[{CorrelationId}] Resolving symbols for artifact {ArtifactId}", correlationId, artifactId);
+        _logger.LogInformation("[{CorrelationId}] Resolving symbols for artifact {FilePath}", correlationId, filePath);
 
         try
         {
@@ -83,7 +78,7 @@ public class SymbolResolver : ISymbolResolver
             {
                 "--symbols",
                 "--output", symbolCache,
-                artifactId
+                filePath
             };
 
             var result = await _cliRunner.ExecuteAsync("dotnet-symbol", args, cancellationToken);
