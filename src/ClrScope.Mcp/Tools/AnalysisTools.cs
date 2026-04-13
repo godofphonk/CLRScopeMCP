@@ -115,6 +115,7 @@ Restart MCP server / client after installation.
         McpServer server,
         CancellationToken cancellationToken = default)
     {
+        var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
         var symbolResolver = server.Services!.GetRequiredService<ISymbolResolver>();
         var logger = server.Services!.GetRequiredService<ILogger<AnalysisTools>>();
 
@@ -125,6 +126,27 @@ Restart MCP server / client after installation.
 
         try
         {
+            // Get artifact from store
+            var artifact = await artifactStore.GetAsync(new ArtifactId(artifactId), cancellationToken);
+            if (artifact == null)
+            {
+                return new SymbolsResolveResult(
+                    Success: false,
+                    SymbolPath: string.Empty,
+                    Error: $"Artifact not found: {artifactId}"
+                );
+            }
+
+            // Check if artifact is a dump
+            if (artifact.Kind != ArtifactKind.Dump)
+            {
+                return new SymbolsResolveResult(
+                    Success: false,
+                    SymbolPath: string.Empty,
+                    Error: $"Symbol resolution is only supported for dump artifacts, got: {artifact.Kind}"
+                );
+            }
+
             // Check if dotnet-symbol is available
             if (!await symbolResolver.IsAvailableAsync(cancellationToken))
             {
@@ -149,8 +171,8 @@ Restart MCP server / client after installation.
                 );
             }
 
-            // Resolve symbols
-            var result = await symbolResolver.ResolveAsync(artifactId, cancellationToken);
+            // Resolve symbols using file path
+            var result = await symbolResolver.ResolveAsync(artifact.FilePath, cancellationToken);
 
             return new SymbolsResolveResult(
                 Success: result.Success,

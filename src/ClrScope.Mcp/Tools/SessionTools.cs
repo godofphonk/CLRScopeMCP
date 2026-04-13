@@ -153,9 +153,19 @@ public sealed class SessionTools
             var activeOperationRegistry = server.Services!.GetRequiredService<IActiveOperationRegistry>();
             var cancelled = activeOperationRegistry.TryCancel(session.SessionId, "Session cancelled via session.cancel");
 
+            if (!cancelled)
+            {
+                logger.LogWarning("Failed to cancel session {SessionId} - operation not found or already completed", sessionId);
+                return new CancelSessionResult(
+                    Success: false,
+                    SessionId: sessionId,
+                    Message: "Session operation not found or already completed"
+                );
+            }
+
             // Update session status in database
             await sessionStore.UpdateAsync(session with { Status = SessionStatus.Cancelled, CompletedAtUtc = DateTime.UtcNow }, cancellationToken);
-            logger.LogInformation("Cancelled session {SessionId}, operation cancellation: {Cancelled}", sessionId, cancelled);
+            logger.LogInformation("Cancelled session {SessionId}", sessionId);
 
             return new CancelSessionResult(
                 Success: true,

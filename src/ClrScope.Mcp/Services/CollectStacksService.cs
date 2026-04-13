@@ -114,7 +114,7 @@ public class CollectStacksService
             if (result.ExitCode != 0)
             {
                 var error = !string.IsNullOrEmpty(result.StandardError) ? result.StandardError : result.StandardOutput;
-                await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = error, Phase = SessionPhase.Failed }, operationCts.Token);
+                await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = error, Phase = SessionPhase.Failed }, CancellationToken.None);
                 return CollectStacksResult.Failure(session, error ?? "Stacks collection failed");
             }
 
@@ -124,14 +124,14 @@ public class CollectStacksService
             // Check if file was created
             if (!File.Exists(filePath))
             {
-                await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = "Stacks file not created", Phase = SessionPhase.Failed }, operationCts.Token);
+                await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = "Stacks file not created", Phase = SessionPhase.Failed }, CancellationToken.None);
                 return CollectStacksResult.Failure(session, "Stacks file was not created");
             }
 
             var fileInfo = new FileInfo(filePath);
             if (fileInfo.Length == 0)
             {
-                await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = "Stacks file is empty", Phase = SessionPhase.Failed }, operationCts.Token);
+                await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = "Stacks file is empty", Phase = SessionPhase.Failed }, CancellationToken.None);
                 return CollectStacksResult.Failure(session, "Stacks file is empty");
             }
 
@@ -152,9 +152,9 @@ public class CollectStacksService
             var diagUri = $"clrscope://artifact/{artifact.ArtifactId.Value}";
             var fileUri = $"file://{filePath}";
             artifact = artifact with { DiagUri = diagUri, FileUri = fileUri };
-            await _artifactStore.UpdateAsync(artifact with { Status = ArtifactStatus.Completed }, operationCts.Token);
+            await _artifactStore.UpdateAsync(artifact with { Status = ArtifactStatus.Completed }, CancellationToken.None);
 
-            await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Completed, CompletedAtUtc = DateTime.UtcNow, Phase = SessionPhase.Completed }, operationCts.Token);
+            await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Completed, CompletedAtUtc = DateTime.UtcNow, Phase = SessionPhase.Completed }, CancellationToken.None);
 
             progress?.Report(100);
             return CollectStacksResult.Success(session, artifact);

@@ -100,14 +100,14 @@ public class CollectDumpService
         }
         catch (Exception ex)
         {
-            await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = ex.Message, Phase = SessionPhase.Failed }, operationCts.Token);
+            await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = ex.Message, Phase = SessionPhase.Failed }, CancellationToken.None);
             return CollectDumpResult.Failure(session, $"Failed to write dump: {ex.Message}");
         }
 
         // Check if file was created
         if (!File.Exists(filePath))
         {
-            await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = "Dump file not created", Phase = SessionPhase.Failed }, operationCts.Token);
+            await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = "Dump file not created", Phase = SessionPhase.Failed }, CancellationToken.None);
             return CollectDumpResult.Failure(session, "Dump file was not created");
         }
 
@@ -131,8 +131,8 @@ public class CollectDumpService
 
         // Update artifact with URIs
         artifact = artifact with { DiagUri = diagUri, FileUri = fileUri };
-        await _artifactStore.UpdateAsync(artifact with { Status = ArtifactStatus.Completed }, operationCts.Token);
-        await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Completed, CompletedAtUtc = DateTime.UtcNow, Phase = SessionPhase.Completed }, operationCts.Token);
+        await _artifactStore.UpdateAsync(artifact with { Status = ArtifactStatus.Completed }, CancellationToken.None);
+        await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Completed, CompletedAtUtc = DateTime.UtcNow, Phase = SessionPhase.Completed }, CancellationToken.None);
 
         progress?.Report(100);
         return CollectDumpResult.Success(session, artifact);

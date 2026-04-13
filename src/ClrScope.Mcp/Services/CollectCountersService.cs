@@ -115,21 +115,21 @@ public class CollectCountersService
 
             if (!countersResult.Success)
             {
-                await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = countersResult.Error, Phase = SessionPhase.Failed }, operationCts.Token);
+                await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = countersResult.Error, Phase = SessionPhase.Failed }, CancellationToken.None);
                 return CollectCountersResult.Failure(session, countersResult.Error ?? "Counter collection failed");
             }
 
             // Check if file was created
             if (!File.Exists(filePath))
             {
-                await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = "Counter file not created", Phase = SessionPhase.Failed }, operationCts.Token);
+                await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = "Counter file not created", Phase = SessionPhase.Failed }, CancellationToken.None);
                 return CollectCountersResult.Failure(session, "Counter file was not created");
             }
 
             var fileInfo = new FileInfo(filePath);
             if (fileInfo.Length == 0)
             {
-                await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = "Counter file is empty", Phase = SessionPhase.Failed }, operationCts.Token);
+                await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Failed, Error = "Counter file is empty", Phase = SessionPhase.Failed }, CancellationToken.None);
                 return CollectCountersResult.Failure(session, "Counter file is empty");
             }
 
@@ -150,9 +150,9 @@ public class CollectCountersService
             var diagUri = $"clrscope://artifact/{artifact.ArtifactId.Value}";
             var fileUri = $"file://{filePath}";
             artifact = artifact with { DiagUri = diagUri, FileUri = fileUri };
-            await _artifactStore.UpdateAsync(artifact with { Status = ArtifactStatus.Completed }, operationCts.Token);
+            await _artifactStore.UpdateAsync(artifact with { Status = ArtifactStatus.Completed }, CancellationToken.None);
 
-            await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Completed, CompletedAtUtc = DateTime.UtcNow, Phase = SessionPhase.Completed }, operationCts.Token);
+            await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Completed, CompletedAtUtc = DateTime.UtcNow, Phase = SessionPhase.Completed }, CancellationToken.None);
 
             progress?.Report(100);
             return CollectCountersResult.Success(session, artifact);

@@ -16,18 +16,33 @@ public sealed class SystemTools
         CancellationToken cancellationToken = default)
     {
         var healthService = server.Services!.GetRequiredService<HealthService>();
+        var runtimeService = server.Services!.GetRequiredService<RuntimeService>();
         var logger = server.Services!.GetRequiredService<ILogger<SystemTools>>();
 
         try
         {
             var health = await healthService.GetHealthAsync(cancellationToken);
-            logger.LogInformation("Health check completed: IsHealthy={IsHealthy}", health.IsHealthy);
+            
+            // Check DiagnosticsClient availability by trying to list .NET processes
+            var diagnosticsClientAvailable = false;
+            try
+            {
+                var targets = runtimeService.ListTargets();
+                diagnosticsClientAvailable = targets.Count > 0;
+            }
+            catch
+            {
+                diagnosticsClientAvailable = false;
+            }
+            
+            logger.LogInformation("Health check completed: IsHealthy={IsHealthy}, DiagnosticsClientAvailable={DiagnosticsClientAvailable}", 
+                health.IsHealthy, diagnosticsClientAvailable);
 
             return new HealthCheckResult(
                 IsHealthy: health.IsHealthy,
                 ArtifactRoot: health.ArtifactRoot.Path,
                 FreeDiskSpaceBytes: health.ArtifactRoot.FreeSpaceBytes,
-                DiagnosticsClientAvailable: true,
+                DiagnosticsClientAvailable: diagnosticsClientAvailable,
                 Error: string.Empty
             );
         }
@@ -51,22 +66,48 @@ public sealed class SystemTools
     {
         var logger = server.Services!.GetRequiredService<ILogger<SystemTools>>();
         var toolChecker = server.Services!.GetRequiredService<ICliToolAvailabilityChecker>();
+        var runtimeService = server.Services!.GetRequiredService<RuntimeService>();
         
         logger.LogInformation("Capabilities requested");
 
         // Check CLI tool availability for advanced features
         var dotnetDumpTask = toolChecker.CheckAvailabilityAsync("dotnet-dump", cancellationToken);
         var dotnetSymbolTask = toolChecker.CheckAvailabilityAsync("dotnet-symbol", cancellationToken);
+        var dotnetGcdumpTask = toolChecker.CheckAvailabilityAsync("dotnet-gcdump", cancellationToken);
+        var dotnetStackTask = toolChecker.CheckAvailabilityAsync("dotnet-stack", cancellationToken);
+        var dotnetCountersTask = toolChecker.CheckAvailabilityAsync("dotnet-counters", cancellationToken);
         
-        await Task.WhenAll(dotnetDumpTask, dotnetSymbolTask);
+        await Task.WhenAll(dotnetDumpTask, dotnetSymbolTask, dotnetGcdumpTask, dotnetStackTask, dotnetCountersTask);
         
         var dotnetDump = await dotnetDumpTask;
         var dotnetSymbol = await dotnetSymbolTask;
+        var dotnetGcdump = await dotnetGcdumpTask;
+        var dotnetStack = await dotnetStackTask;
+        var dotnetCounters = await dotnetCountersTask;
+
+        // Check native capabilities by trying to list .NET processes
+        var nativeDumpAvailable = false;
+        var nativeTraceAvailable = false;
+        var nativeCountersAvailable = false;
+        
+        try
+        {
+            var targets = runtimeService.ListTargets();
+            nativeDumpAvailable = targets.Count > 0;
+            nativeTraceAvailable = targets.Count > 0;
+            nativeCountersAvailable = dotnetCounters.IsAvailable;
+        }
+        catch
+        {
+            nativeDumpAvailable = false;
+            nativeTraceAvailable = false;
+            nativeCountersAvailable = false;
+        }
 
         return new CapabilitiesResult(
-            NativeDumpAvailable: true,
-            NativeTraceAvailable: true,
-            NativeCountersAvailable: true,
+            NativeDumpAvailable: nativeDumpAvailable,
+            NativeTraceAvailable: nativeTraceAvailable,
+            NativeCountersAvailable: nativeCountersAvailable,
             TraceStatus: "stable",
             DotnetDumpAvailable: dotnetDump.IsAvailable,
             DotnetDumpVersion: dotnetDump.Version,
@@ -74,6 +115,15 @@ public sealed class SystemTools
             DotnetSymbolAvailable: dotnetSymbol.IsAvailable,
             DotnetSymbolVersion: dotnetSymbol.Version,
             DotnetSymbolInstallHint: dotnetSymbol.InstallHint,
+            DotnetGcdumpAvailable: dotnetGcdump.IsAvailable,
+            DotnetGcdumpVersion: dotnetGcdump.Version,
+            DotnetGcdumpInstallHint: dotnetGcdump.InstallHint,
+            DotnetStackAvailable: dotnetStack.IsAvailable,
+            DotnetStackVersion: dotnetStack.Version,
+            DotnetStackInstallHint: dotnetStack.InstallHint,
+            DotnetCountersAvailable: dotnetCounters.IsAvailable,
+            DotnetCountersVersion: dotnetCounters.Version,
+            DotnetCountersInstallHint: dotnetCounters.InstallHint,
             ResourcesEnabled: false,
             PromptsEnabled: false
         );
@@ -99,6 +149,15 @@ public record CapabilitiesResult(
     bool DotnetSymbolAvailable,
     string? DotnetSymbolVersion,
     string? DotnetSymbolInstallHint,
+    bool DotnetGcdumpAvailable,
+    string? DotnetGcdumpVersion,
+    string? DotnetGcdumpInstallHint,
+    bool DotnetStackAvailable,
+    string? DotnetStackVersion,
+    string? DotnetStackInstallHint,
+    bool DotnetCountersAvailable,
+    string? DotnetCountersVersion,
+    string? DotnetCountersInstallHint,
     bool ResourcesEnabled,
     bool PromptsEnabled
 );
