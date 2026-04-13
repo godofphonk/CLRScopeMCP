@@ -1,6 +1,8 @@
 using ClrScope.Mcp.Domain.Artifacts;
 using ClrScope.Mcp.Domain.Sessions;
 using ClrScope.Mcp.Infrastructure;
+using ClrScope.Mcp.Infrastructure.Utils;
+using ClrScope.Mcp.Options;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
@@ -21,6 +23,7 @@ public sealed class AnalysisTools
         var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
         var sosAnalyzer = server.Services!.GetRequiredService<ISosAnalyzer>();
         var logger = server.Services!.GetRequiredService<ILogger<AnalysisTools>>();
+        var options = server.Services!.GetRequiredService<ClrScopeOptions>();
 
         if (string.IsNullOrEmpty(artifactId))
         {
@@ -64,6 +67,10 @@ public sealed class AnalysisTools
                     Error: $"Artifact is not a dump file: {artifact.Kind}"
                 );
             }
+
+            // Validate artifact path is within artifact root (security: treat DB as untrusted)
+            var artifactRoot = options.GetArtifactRoot();
+            PathSecurity.EnsurePathWithinDirectory(artifact.FilePath, artifactRoot);
 
             // Check if dotnet-sos is available
             if (!await sosAnalyzer.IsAvailableAsync(cancellationToken))
@@ -118,6 +125,7 @@ Restart MCP server / client after installation.
         var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
         var symbolResolver = server.Services!.GetRequiredService<ISymbolResolver>();
         var logger = server.Services!.GetRequiredService<ILogger<AnalysisTools>>();
+        var options = server.Services!.GetRequiredService<ClrScopeOptions>();
 
         if (string.IsNullOrEmpty(artifactId))
         {
@@ -146,6 +154,10 @@ Restart MCP server / client after installation.
                     Error: $"Symbol resolution is only supported for dump artifacts, got: {artifact.Kind}"
                 );
             }
+
+            // Validate artifact path is within artifact root (security: treat DB as untrusted)
+            var artifactRoot = options.GetArtifactRoot();
+            PathSecurity.EnsurePathWithinDirectory(artifact.FilePath, artifactRoot);
 
             // Check if dotnet-symbol is available
             if (!await symbolResolver.IsAvailableAsync(cancellationToken))
