@@ -94,7 +94,6 @@ public sealed class CollectTools
         [Description("Process ID to collect trace from")] int pid,
         [Description("Duration in hh:mm:ss format (e.g., 00:01:30 for 1.5 minutes)")] string duration,
         McpServer server,
-        [Description("Trace profile (optional)")] string? profile = null,
         IProgress<double>? progress = null,
         CancellationToken cancellationToken = default)
     {
@@ -118,9 +117,9 @@ public sealed class CollectTools
                 throw new ArgumentException("Duration must be in hh:mm:ss format (e.g., 00:01:30)", nameof(duration));
             }
 
-            logger.LogInformation("Starting trace collection for PID {Pid}, Duration={Duration}, Profile={Profile}", pid, duration, profile);
+            logger.LogInformation("Starting trace collection for PID {Pid}, Duration={Duration}", pid, duration);
 
-            var request = new CollectTraceRequest(pid, duration, profile);
+            var request = new CollectTraceRequest(pid, duration);
             var result = await traceService.CollectTraceAsync(request, progress, cancellationToken);
             
             if (result.Artifact != null)

@@ -12,7 +12,7 @@ using System.Diagnostics.Tracing;
 
 namespace ClrScope.Mcp.Services;
 
-public record CollectTraceRequest(int Pid, string Duration, string? Profile = null);
+public record CollectTraceRequest(int Pid, string Duration);
 
 public record CollectTraceResult(
     Session Session,
@@ -72,7 +72,7 @@ public class CollectTraceService
         if (!preflightResult.IsValid)
         {
             _logger.LogError("[{Phase}] Preflight validation failed for PID {Pid}: {Error}", CollectionPhase.Preflight, request.Pid, preflightResult.Message);
-            var failedSession = await _sessionStore.CreateAsync(SessionKind.Trace, request.Pid, request.Profile, cancellationToken);
+            var failedSession = await _sessionStore.CreateAsync(SessionKind.Trace, request.Pid, cancellationToken: cancellationToken);
             await _sessionStore.UpdateAsync(failedSession with { Status = SessionStatus.Failed, Error = preflightResult.Message, Phase = SessionPhase.Failed }, cancellationToken);
             return CollectTraceResult.Failure(failedSession, preflightResult.Message ?? "Preflight validation failed");
         }
@@ -88,7 +88,7 @@ public class CollectTraceService
         catch (FormatException ex)
         {
             _logger.LogError("[{Phase}] Invalid duration format: {Error}", CollectionPhase.Preflight, ex.Message);
-            var failedSession = await _sessionStore.CreateAsync(SessionKind.Trace, request.Pid, request.Profile, cancellationToken);
+            var failedSession = await _sessionStore.CreateAsync(SessionKind.Trace, request.Pid, cancellationToken: cancellationToken);
             await _sessionStore.UpdateAsync(failedSession with { Status = SessionStatus.Failed, Error = ex.Message, Phase = SessionPhase.Failed }, cancellationToken);
             return CollectTraceResult.Failure(failedSession, $"Invalid duration format: {ex.Message}");
         }

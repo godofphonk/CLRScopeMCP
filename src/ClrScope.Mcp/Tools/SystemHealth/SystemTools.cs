@@ -88,26 +88,23 @@ public sealed class SystemTools
         // Check native capabilities by trying to list .NET processes
         var nativeDumpAvailable = false;
         var nativeTraceAvailable = false;
-        var nativeCountersAvailable = false;
-        
+
         try
         {
             var targets = runtimeService.ListTargets();
             nativeDumpAvailable = targets.Count > 0;
             nativeTraceAvailable = targets.Count > 0;
-            nativeCountersAvailable = dotnetCounters.IsAvailable;
         }
         catch
         {
             nativeDumpAvailable = false;
             nativeTraceAvailable = false;
-            nativeCountersAvailable = false;
         }
 
         return new CapabilitiesResult(
             NativeDumpAvailable: nativeDumpAvailable,
             NativeTraceAvailable: nativeTraceAvailable,
-            NativeCountersAvailable: nativeCountersAvailable,
+            NativeCountersAvailable: false, // Native counters not implemented
             TraceStatus: "stable",
             DotnetDumpAvailable: dotnetDump.IsAvailable,
             DotnetDumpVersion: dotnetDump.Version,
@@ -124,8 +121,8 @@ public sealed class SystemTools
             DotnetCountersAvailable: dotnetCounters.IsAvailable,
             DotnetCountersVersion: dotnetCounters.Version,
             DotnetCountersInstallHint: dotnetCounters.InstallHint,
-            ResourcesEnabled: false,
-            PromptsEnabled: false
+            ResourcesEnabled: true,
+            PromptsEnabled: true
         );
     }
 }

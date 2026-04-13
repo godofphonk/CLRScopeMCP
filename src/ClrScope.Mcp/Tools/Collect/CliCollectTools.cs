@@ -11,7 +11,7 @@ namespace ClrScope.Mcp.Tools.Collect;
 [McpServerToolType]
 public sealed class CollectCountersTools
 {
-    [McpServerTool(Name = "collect_counters", Title = "Collect Performance Counters", ReadOnly = false, Idempotent = false), Description("Collect performance counters via native EventPipe (Stage 2)")]
+    [McpServerTool(Name = "collect_counters", Title = "Collect Performance Counters", ReadOnly = false, Idempotent = false), Description("Collect performance counters via dotnet-counters CLI (Stage 2)")]
     public static async Task<CollectCountersResult> CollectCounters(
         [Description("Process ID to collect counters from")] int pid,
         McpServer server,
