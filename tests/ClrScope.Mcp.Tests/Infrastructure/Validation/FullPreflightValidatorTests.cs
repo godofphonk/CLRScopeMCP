@@ -140,4 +140,27 @@ public class FullPreflightValidatorTests
         Assert.False(result.IsValid);
         Assert.Equal(ClrScopeError.PREFLIGHT_ARTIFACT_ROOT_NOT_WRITABLE, result.Error.Value);
     }
+
+    [Fact]
+    public async Task ValidateCollectAsync_ReturnsFailure_WhenProcessIsNotDotNet()
+    {
+        // Arrange
+        var artifactRoot = Path.Combine(Path.GetTempPath(), $"clrscope_test_{Guid.NewGuid()}");
+        var options = new ClrScopeOptions
+        {
+            ArtifactRoot = artifactRoot
+        };
+        var optionsMock = new Mock<IOptions<ClrScopeOptions>>();
+        optionsMock.Setup(x => x.Value).Returns(options);
+        var loggerMock = new Mock<ILogger<FullPreflightValidator>>();
+        var validator = new FullPreflightValidator(optionsMock.Object, loggerMock.Object);
+
+        // Use PID 1 (init process) which is not a .NET process
+        // Act
+        var result = await validator.ValidateCollectAsync(1, CancellationToken.None);
+
+        // Assert - should fail because PID 1 is not a .NET process
+        Assert.False(result.IsValid);
+        Assert.Equal(ClrScopeError.PREFLIGHT_NOT_DOTNET, result.Error.Value);
+    }
 }
