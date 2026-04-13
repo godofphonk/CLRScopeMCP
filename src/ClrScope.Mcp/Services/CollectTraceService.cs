@@ -74,7 +74,7 @@ public class CollectTraceService
         {
             _logger.LogError("[{Phase}] Preflight validation failed for PID {Pid}: {Error}", SessionPhase.Preflight, request.Pid, preflightResult.Message);
             var failedSession = await _sessionStore.CreateAsync(SessionKind.Trace, request.Pid, cancellationToken: cancellationToken);
-            failedSession = failedSession with { Status = SessionStatus.Failed, Error = preflightResult.Message, Phase = SessionPhase.Failed };
+            failedSession = failedSession.AsFailed(preflightResult.Message);
             await _sessionStore.UpdateAsync(failedSession, cancellationToken);
             return CollectTraceResult.Failure(failedSession, preflightResult.Message ?? "Preflight validation failed");
         }
@@ -91,7 +91,7 @@ public class CollectTraceService
         {
             _logger.LogError("[{Phase}] Invalid duration format: {Error}", SessionPhase.Preflight, ex.Message);
             var failedSession = await _sessionStore.CreateAsync(SessionKind.Trace, request.Pid, cancellationToken: cancellationToken);
-            failedSession = failedSession with { Status = SessionStatus.Failed, Error = ex.Message, Phase = SessionPhase.Failed };
+            failedSession = failedSession.AsFailed(ex.Message);
             await _sessionStore.UpdateAsync(failedSession, cancellationToken);
             return CollectTraceResult.Failure(failedSession, $"Invalid duration format: {ex.Message}");
         }
@@ -142,7 +142,7 @@ public class CollectTraceService
         catch (OperationCanceledException) when (!operationCts.Token.IsCancellationRequested)
         {
             _logger.LogError("[{Phase}] Attach timeout for PID {Pid}", SessionPhase.Attaching, request.Pid);
-            session = session with { Status = SessionStatus.Failed, Error = "StartEventPipeSession timed out", Phase = SessionPhase.Failed };
+            session = session.AsFailed("StartEventPipeSession timed out");
             await _sessionStore.UpdateAsync(session, CancellationToken.None);
             return CollectTraceResult.Failure(session, "StartEventPipeSession timed out");
         }
@@ -205,7 +205,7 @@ public class CollectTraceService
         {
             _logger.LogWarning("[{Phase}] Collection cancelled for PID {Pid}", SessionPhase.Cancelled, request.Pid);
             eventPipeSession?.Dispose();
-            session = session with { Status = SessionStatus.Cancelled, Phase = SessionPhase.Cancelled };
+            session = session.AsCancelled();
             await _sessionStore.UpdateAsync(session, CancellationToken.None);
             return CollectTraceResult.Failure(session, "Collection cancelled", TraceCompletionMode.Cancelled);
         }
@@ -213,7 +213,7 @@ public class CollectTraceService
         {
             _logger.LogError(ex, "[{Phase}] Collection failed for PID {Pid}", SessionPhase.Failed, request.Pid);
             eventPipeSession?.Dispose();
-            session = session with { Status = SessionStatus.Failed, Error = ex.Message, Phase = SessionPhase.Failed };
+            session = session.AsFailed(ex.Message);
             await _sessionStore.UpdateAsync(session, CancellationToken.None);
             return CollectTraceResult.Failure(session, $"Failed to collect trace: {ex.Message}", TraceCompletionMode.Failed);
         }
@@ -225,7 +225,7 @@ public class CollectTraceService
         // Check if file was created
         if (!File.Exists(filePath))
         {
-            session = session with { Status = SessionStatus.Failed, Error = "Trace file not created", Phase = SessionPhase.Failed };
+            session = session.AsFailed("Trace file not created");
             await _sessionStore.UpdateAsync(session, CancellationToken.None);
             return CollectTraceResult.Failure(session, "Trace file was not created", TraceCompletionMode.Failed);
         }
@@ -233,7 +233,7 @@ public class CollectTraceService
         var fileInfo = new FileInfo(filePath);
         if (fileInfo.Length == 0)
         {
-            session = session with { Status = SessionStatus.Failed, Error = "Trace file is empty", Phase = SessionPhase.Failed };
+            session = session.AsFailed("Trace file is empty");
             await _sessionStore.UpdateAsync(session, CancellationToken.None);
             return CollectTraceResult.Failure(session, "Trace file is empty", TraceCompletionMode.Failed);
         }
@@ -259,7 +259,7 @@ public class CollectTraceService
         artifact = artifact with { DiagUri = diagUri, FileUri = fileUri };
         var artifactStatus = forced ? ArtifactStatus.Partial : ArtifactStatus.Completed;
         await _artifactStore.UpdateAsync(artifact with { Status = artifactStatus }, CancellationToken.None);
-        await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Completed, CompletedAtUtc = DateTime.UtcNow, Phase = SessionPhase.Completed }, CancellationToken.None);
+        await _sessionStore.UpdateAsync(session.AsCompleted(), CancellationToken.None);
 
         // Re-read to get updated state
         var updatedSession = await _sessionStore.GetAsync(session.SessionId, CancellationToken.None);
@@ -276,7 +276,7 @@ public class CollectTraceService
             // Best-effort: mark session as failed
             try
             {
-                session = session with { Status = SessionStatus.Failed, CompletedAtUtc = DateTime.UtcNow, Phase = SessionPhase.Failed, Error = ex.Message };
+                session = session.AsFailed(ex.Message);
                 await _sessionStore.UpdateAsync(session, CancellationToken.None);
                 _logger.LogInformation("Marked session {SessionId} as failed due to exception: {Error}", session.SessionId, ex.Message);
             }

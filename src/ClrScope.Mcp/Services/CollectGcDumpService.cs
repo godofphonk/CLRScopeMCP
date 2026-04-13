@@ -70,7 +70,7 @@ public class CollectGcDumpService
         if (!availability.IsAvailable)
         {
             var failedSession = await _sessionStore.CreateAsync(SessionKind.GcDump, request.Pid, cancellationToken: cancellationToken);
-            failedSession = failedSession with { Status = SessionStatus.Failed, Error = availability.InstallHint, Phase = SessionPhase.Failed };
+            failedSession = failedSession.AsFailed(availability.InstallHint);
             await _sessionStore.UpdateAsync(failedSession, cancellationToken);
             return CollectGcDumpResult.Failure(failedSession, availability.InstallHint ?? "dotnet-gcdump CLI not found");
         }
@@ -83,7 +83,7 @@ public class CollectGcDumpService
         if (!preflightResult.IsValid)
         {
             var failedSession = await _sessionStore.CreateAsync(SessionKind.GcDump, request.Pid, cancellationToken: cancellationToken);
-            failedSession = failedSession with { Status = SessionStatus.Failed, Error = preflightResult.Message, Phase = SessionPhase.Failed };
+            failedSession = failedSession.AsFailed(preflightResult.Message);
             await _sessionStore.UpdateAsync(failedSession, cancellationToken);
             return CollectGcDumpResult.Failure(failedSession, preflightResult.Message ?? "Preflight validation failed");
         }
@@ -117,7 +117,7 @@ public class CollectGcDumpService
             if (result.ExitCode != 0)
             {
                 var error = !string.IsNullOrEmpty(result.StandardError) ? result.StandardError : result.StandardOutput;
-                session = session with { Status = SessionStatus.Failed, Error = error, Phase = SessionPhase.Failed };
+                session = session.AsFailed(error);
                 await _sessionStore.UpdateAsync(session, CancellationToken.None);
                 return CollectGcDumpResult.Failure(session, error ?? "GC dump collection failed");
             }
@@ -125,7 +125,7 @@ public class CollectGcDumpService
             // Check if file was created
             if (!File.Exists(filePath))
             {
-                session = session with { Status = SessionStatus.Failed, Error = "GC dump file not created", Phase = SessionPhase.Failed };
+                session = session.AsFailed("GC dump file not created");
                 await _sessionStore.UpdateAsync(session, CancellationToken.None);
                 return CollectGcDumpResult.Failure(session, "GC dump file was not created");
             }
@@ -133,7 +133,7 @@ public class CollectGcDumpService
             var fileInfo = new FileInfo(filePath);
             if (fileInfo.Length == 0)
             {
-                session = session with { Status = SessionStatus.Failed, Error = "GC dump file is empty", Phase = SessionPhase.Failed };
+                session = session.AsFailed("GC dump file is empty");
                 await _sessionStore.UpdateAsync(session, CancellationToken.None);
                 return CollectGcDumpResult.Failure(session, "GC dump file is empty");
             }
@@ -158,7 +158,7 @@ public class CollectGcDumpService
             artifact = artifact with { DiagUri = diagUri, FileUri = fileUri };
             await _artifactStore.UpdateAsync(artifact with { Status = ArtifactStatus.Completed }, CancellationToken.None);
 
-            await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Completed, CompletedAtUtc = DateTime.UtcNow, Phase = SessionPhase.Completed }, CancellationToken.None);
+            await _sessionStore.UpdateAsync(session.AsCompleted(), CancellationToken.None);
 
             // Re-read to get updated state
             var updatedSession = await _sessionStore.GetAsync(session.SessionId, CancellationToken.None);
@@ -170,7 +170,7 @@ public class CollectGcDumpService
         catch (OperationCanceledException)
         {
             _logger.LogInformation("GC dump collection cancelled for session {SessionId}", session.SessionId);
-            session = session with { Status = SessionStatus.Cancelled, CompletedAtUtc = DateTime.UtcNow, Phase = SessionPhase.Cancelled };
+            session = session.AsCancelled();
             await _sessionStore.UpdateAsync(session, CancellationToken.None);
             return CollectGcDumpResult.Failure(session, "GC dump collection cancelled");
         }
@@ -179,7 +179,7 @@ public class CollectGcDumpService
             // Best-effort: mark session as failed
             try
             {
-                session = session with { Status = SessionStatus.Failed, CompletedAtUtc = DateTime.UtcNow, Phase = SessionPhase.Failed, Error = ex.Message };
+                session = session.AsFailed(ex.Message);
                 await _sessionStore.UpdateAsync(session, CancellationToken.None);
                 _logger.LogInformation("Marked session {SessionId} as failed due to exception: {Error}", session.SessionId, ex.Message);
             }

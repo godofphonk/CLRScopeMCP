@@ -72,7 +72,7 @@ public class CollectCountersService
         if (!preflightResult.IsValid)
         {
             var failedSession = await _sessionStore.CreateAsync(SessionKind.Counters, request.Pid, cancellationToken: cancellationToken);
-            failedSession = failedSession with { Status = SessionStatus.Failed, Error = preflightResult.Message, Phase = SessionPhase.Failed };
+            failedSession = failedSession.AsFailed(preflightResult.Message);
             await _sessionStore.UpdateAsync(failedSession, cancellationToken);
             return CollectCountersResult.Failure(failedSession, preflightResult.Message ?? "Preflight validation failed");
         }
@@ -86,7 +86,7 @@ public class CollectCountersService
         catch (FormatException ex)
         {
             var failedSession = await _sessionStore.CreateAsync(SessionKind.Counters, request.Pid, cancellationToken: cancellationToken);
-            failedSession = failedSession with { Status = SessionStatus.Failed, Error = ex.Message, Phase = SessionPhase.Failed };
+            failedSession = failedSession.AsFailed(ex.Message);
             await _sessionStore.UpdateAsync(failedSession, cancellationToken);
             return CollectCountersResult.Failure(failedSession, $"Invalid duration format: {ex.Message}");
         }
@@ -123,7 +123,7 @@ public class CollectCountersService
 
             if (!countersResult.Success)
             {
-                session = session with { Status = SessionStatus.Failed, Error = countersResult.Error, Phase = SessionPhase.Failed };
+                session = session.AsFailed(countersResult.Error);
                 await _sessionStore.UpdateAsync(session, CancellationToken.None);
                 return CollectCountersResult.Failure(session, countersResult.Error ?? "Counter collection failed");
             }
@@ -131,7 +131,7 @@ public class CollectCountersService
             // Check if file was created
             if (!File.Exists(filePath))
             {
-                session = session with { Status = SessionStatus.Failed, Error = "Counter file not created", Phase = SessionPhase.Failed };
+                session = session.AsFailed("Counter file not created");
                 await _sessionStore.UpdateAsync(session, CancellationToken.None);
                 return CollectCountersResult.Failure(session, "Counter file was not created");
             }
@@ -139,7 +139,7 @@ public class CollectCountersService
             var fileInfo = new FileInfo(filePath);
             if (fileInfo.Length == 0)
             {
-                session = session with { Status = SessionStatus.Failed, Error = "Counter file is empty", Phase = SessionPhase.Failed };
+                session = session.AsFailed("Counter file is empty");
                 await _sessionStore.UpdateAsync(session, CancellationToken.None);
                 return CollectCountersResult.Failure(session, "Counter file is empty");
             }
@@ -164,7 +164,7 @@ public class CollectCountersService
             artifact = artifact with { DiagUri = diagUri, FileUri = fileUri };
             await _artifactStore.UpdateAsync(artifact with { Status = ArtifactStatus.Completed }, CancellationToken.None);
 
-            await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Completed, CompletedAtUtc = DateTime.UtcNow, Phase = SessionPhase.Completed }, CancellationToken.None);
+            await _sessionStore.UpdateAsync(session.AsCompleted(), CancellationToken.None);
 
             // Re-read to get updated state
             var updatedSession = await _sessionStore.GetAsync(session.SessionId, CancellationToken.None);
@@ -175,8 +175,7 @@ public class CollectCountersService
         }
         catch (OperationCanceledException)
         {
-            _logger.LogInformation("Counters collection cancelled for session {SessionId}", session.SessionId);
-            session = session with { Status = SessionStatus.Cancelled, CompletedAtUtc = DateTime.UtcNow, Phase = SessionPhase.Cancelled };
+            session = session.AsCancelled();
             await _sessionStore.UpdateAsync(session, CancellationToken.None);
             return CollectCountersResult.Failure(session, "Counters collection cancelled");
         }
@@ -185,7 +184,7 @@ public class CollectCountersService
             // Best-effort: mark session as failed
             try
             {
-                session = session with { Status = SessionStatus.Failed, CompletedAtUtc = DateTime.UtcNow, Phase = SessionPhase.Failed, Error = ex.Message };
+                session = session.AsFailed(ex.Message);
                 await _sessionStore.UpdateAsync(session, CancellationToken.None);
                 _logger.LogInformation("Marked session {SessionId} as failed due to exception: {Error}", session.SessionId, ex.Message);
             }

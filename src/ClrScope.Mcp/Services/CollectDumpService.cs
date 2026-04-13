@@ -69,7 +69,7 @@ public class CollectDumpService
         if (!preflightResult.IsValid)
         {
             var failedSession = await _sessionStore.CreateAsync(SessionKind.Dump, request.Pid, cancellationToken: cancellationToken);
-            failedSession = failedSession with { Status = SessionStatus.Failed, Error = preflightResult.Message, Phase = SessionPhase.Failed };
+            failedSession = failedSession.AsFailed(preflightResult.Message);
             await _sessionStore.UpdateAsync(failedSession, cancellationToken);
             return CollectDumpResult.Failure(failedSession, preflightResult.Message ?? "Preflight validation failed");
         }
@@ -112,69 +112,69 @@ public class CollectDumpService
             catch (OperationCanceledException)
             {
                 _logger.LogWarning("Dump collection cancellation requested for session {SessionId}, but WriteDump is synchronous and may still complete. Cancellation is best-effort only.", session.SessionId);
-                session = session with { Status = SessionStatus.Cancelled, CompletedAtUtc = DateTime.UtcNow, Phase = SessionPhase.Cancelled };
+                session = session.AsCancelled();
                 await _sessionStore.UpdateAsync(session, CancellationToken.None);
                 return CollectDumpResult.Failure(session, "Dump collection cancellation requested (best-effort only - operation may still complete)");
             }
             catch (Exception ex)
             {
-                session = session with { Status = SessionStatus.Failed, Error = ex.Message, Phase = SessionPhase.Failed };
+                session = session.AsFailed(ex.Message);
                 await _sessionStore.UpdateAsync(session, CancellationToken.None);
                 return CollectDumpResult.Failure(session, $"Failed to write dump: {ex.Message}");
             }
 
         // Check if file was created and has valid size
         if (!File.Exists(filePath))
-        {
-            session = session with { Status = SessionStatus.Failed, Error = "Dump file not created", Phase = SessionPhase.Failed };
-            await _sessionStore.UpdateAsync(session, CancellationToken.None);
-            return CollectDumpResult.Failure(session, "Dump file was not created");
-        }
+            {
+                session = session.AsFailed("Dump file not created");
+                await _sessionStore.UpdateAsync(session, CancellationToken.None);
+                return CollectDumpResult.Failure(session, "Dump file was not created");
+            }
 
-        var fileInfo = new FileInfo(filePath);
-        if (fileInfo.Length == 0)
-        {
-            session = session with { Status = SessionStatus.Failed, Error = "Dump file is empty", Phase = SessionPhase.Failed };
-            await _sessionStore.UpdateAsync(session, CancellationToken.None);
-            return CollectDumpResult.Failure(session, "Dump file is empty");
-        }
+            var fileInfo = new FileInfo(filePath);
+            if (fileInfo.Length == 0)
+            {
+                session = session.AsFailed("Dump file is empty");
+                await _sessionStore.UpdateAsync(session, CancellationToken.None);
+                return CollectDumpResult.Failure(session, "Dump file is empty");
+            }
 
-        // Create artifact record
-        progress?.Report(70);
-        await _sessionStore.UpdateAsync(session with { Phase = SessionPhase.Persisting }, operationCts.Token);
-        var fileSize = new FileInfo(filePath).Length;
+            // Create artifact record
+            progress?.Report(70);
+            await _sessionStore.UpdateAsync(session with { Phase = SessionPhase.Persisting }, operationCts.Token);
+            var fileSize = new FileInfo(filePath).Length;
 
-        var artifact = await _artifactStore.CreateAsync(
-            ArtifactKind.Dump,
-            filePath,
-            fileSize,
-            request.Pid,
-            session.SessionId,
-            operationCts.Token
-        );
+            var artifact = await _artifactStore.CreateAsync(
+                ArtifactKind.Dump,
+                filePath,
+                fileSize,
+                request.Pid,
+                session.SessionId,
+                operationCts.Token
+            );
 
-        // Use the ArtifactId from store for URIs (fix double generation)
-        var diagUri = $"clrscope://artifact/{artifact.ArtifactId.Value}";
-        var fileUri = new Uri(filePath).AbsoluteUri;
+            // Use the ArtifactId from store for URIs (fix double generation)
+            var diagUri = $"clrscope://artifact/{artifact.ArtifactId.Value}";
+            var fileUri = new Uri(filePath).AbsoluteUri;
 
-        // Update artifact with URIs
-        artifact = artifact with { DiagUri = diagUri, FileUri = fileUri };
-        await _artifactStore.UpdateAsync(artifact with { Status = ArtifactStatus.Completed }, CancellationToken.None);
-        await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Completed, CompletedAtUtc = DateTime.UtcNow, Phase = SessionPhase.Completed }, CancellationToken.None);
+            // Update artifact with URIs
+            artifact = artifact with { DiagUri = diagUri, FileUri = fileUri };
+            await _artifactStore.UpdateAsync(artifact with { Status = ArtifactStatus.Completed }, CancellationToken.None);
+            await _sessionStore.UpdateAsync(session.AsCompleted(), CancellationToken.None);
 
-        // Re-read to get updated state
-        var updatedSession = await _sessionStore.GetAsync(session.SessionId, CancellationToken.None);
-        var updatedArtifact = await _artifactStore.GetAsync(artifact.ArtifactId, CancellationToken.None);
+            // Re-read to get updated state
+            var updatedSession = await _sessionStore.GetAsync(session.SessionId, CancellationToken.None);
+            var updatedArtifact = await _artifactStore.GetAsync(artifact.ArtifactId, CancellationToken.None);
 
-        progress?.Report(100);
-        return CollectDumpResult.Success(updatedSession ?? session, updatedArtifact ?? artifact);
+            progress?.Report(100);
+            return CollectDumpResult.Success(updatedSession ?? session, updatedArtifact ?? artifact);
         }
         catch (Exception ex) when (!operationCts.Token.IsCancellationRequested)
         {
             // Best-effort: mark session as failed
             try
             {
-                session = session with { Status = SessionStatus.Failed, CompletedAtUtc = DateTime.UtcNow, Phase = SessionPhase.Failed, Error = ex.Message };
+                session = session.AsFailed(ex.Message);
                 await _sessionStore.UpdateAsync(session, CancellationToken.None);
                 _logger.LogInformation("Marked session {SessionId} as failed due to exception: {Error}", session.SessionId, ex.Message);
             }
