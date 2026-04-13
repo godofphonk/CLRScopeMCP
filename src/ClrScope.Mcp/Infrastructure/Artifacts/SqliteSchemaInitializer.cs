@@ -16,6 +16,9 @@ public class SqliteSchemaInitializer
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync(cancellationToken);
 
+        // Enable foreign key constraints
+        await EnableForeignKeysAsync(connection, cancellationToken);
+
         // Enable WAL mode for better concurrency
         await EnableWalModeAsync(connection, cancellationToken);
         
@@ -195,5 +198,24 @@ public class SqliteSchemaInitializer
             INSERT INTO schema_info (version, applied_at_utc) VALUES (3, datetime('now'));
             """;
         await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static async Task EnableForeignKeysAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    {
+        var command = connection.CreateCommand();
+        command.CommandText = "PRAGMA foreign_keys=ON";
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Opens a SQLite connection and enables foreign key constraints
+    /// Foreign keys are disabled by default in SQLite and must be enabled per-connection
+    /// </summary>
+    public static async Task<SqliteConnection> OpenConnectionWithForeignKeysAsync(string connectionString, CancellationToken cancellationToken = default)
+    {
+        var connection = new SqliteConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await EnableForeignKeysAsync(connection, cancellationToken);
+        return connection;
     }
 }

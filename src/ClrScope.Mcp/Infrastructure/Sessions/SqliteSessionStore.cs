@@ -16,8 +16,7 @@ public class SqliteSessionStore : ISqliteSessionStore
     {
         return await RetryAsync(async () =>
         {
-            await using var connection = new SqliteConnection(_connectionString);
-            await connection.OpenAsync(cancellationToken);
+            await using var connection = await SqliteSchemaInitializer.OpenConnectionWithForeignKeysAsync(_connectionString, cancellationToken);
 
             var command = connection.CreateCommand();
             command.CommandText = """
@@ -83,8 +82,7 @@ public class SqliteSessionStore : ISqliteSessionStore
             var sessionId = SessionId.New();
             var now = DateTime.UtcNow;
 
-            await using var connection = new SqliteConnection(_connectionString);
-            await connection.OpenAsync(cancellationToken);
+            await using var connection = await SqliteSchemaInitializer.OpenConnectionWithForeignKeysAsync(_connectionString, cancellationToken);
 
             var command = connection.CreateCommand();
             command.CommandText = """
@@ -121,8 +119,7 @@ public class SqliteSessionStore : ISqliteSessionStore
     {
         await RetryAsync(async () =>
         {
-            await using var connection = new SqliteConnection(_connectionString);
-            await connection.OpenAsync(cancellationToken);
+            await using var connection = await SqliteSchemaInitializer.OpenConnectionWithForeignKeysAsync(_connectionString, cancellationToken);
 
             var command = connection.CreateCommand();
             command.CommandText = """

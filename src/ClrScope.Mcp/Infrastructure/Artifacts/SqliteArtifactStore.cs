@@ -19,8 +19,7 @@ public class SqliteArtifactStore : ISqliteArtifactStore
     {
         return await RetryAsync(async () =>
         {
-            await using var connection = new SqliteConnection(_connectionString);
-            await connection.OpenAsync(cancellationToken);
+            await using var connection = await SqliteSchemaInitializer.OpenConnectionWithForeignKeysAsync(_connectionString, cancellationToken);
 
             var command = connection.CreateCommand();
             command.CommandText = """
@@ -83,8 +82,7 @@ public class SqliteArtifactStore : ISqliteArtifactStore
     {
         return await RetryAsync(async () =>
         {
-            await using var connection = new SqliteConnection(_connectionString);
-            await connection.OpenAsync(cancellationToken);
+            await using var connection = await SqliteSchemaInitializer.OpenConnectionWithForeignKeysAsync(_connectionString, cancellationToken);
 
             var command = connection.CreateCommand();
             command.CommandText = """
@@ -119,8 +117,7 @@ public class SqliteArtifactStore : ISqliteArtifactStore
             var sha256 = await ComputeSha256Async(filePath, cancellationToken);
             var now = DateTime.UtcNow;
 
-            await using var connection = new SqliteConnection(_connectionString);
-            await connection.OpenAsync(cancellationToken);
+            await using var connection = await SqliteSchemaInitializer.OpenConnectionWithForeignKeysAsync(_connectionString, cancellationToken);
 
             var command = connection.CreateCommand();
             command.CommandText = """
@@ -163,8 +160,7 @@ public class SqliteArtifactStore : ISqliteArtifactStore
     {
         return await RetryAsync(async () =>
         {
-            await using var connection = new SqliteConnection(_connectionString);
-            await connection.OpenAsync(cancellationToken);
+            await using var connection = await SqliteSchemaInitializer.OpenConnectionWithForeignKeysAsync(_connectionString, cancellationToken);
 
             var command = connection.CreateCommand();
             command.CommandText = """
@@ -189,8 +185,7 @@ public class SqliteArtifactStore : ISqliteArtifactStore
     {
         await RetryAsync(async () =>
         {
-            await using var connection = new SqliteConnection(_connectionString);
-            await connection.OpenAsync(cancellationToken);
+            await using var connection = await SqliteSchemaInitializer.OpenConnectionWithForeignKeysAsync(_connectionString, cancellationToken);
 
             var command = connection.CreateCommand();
             command.CommandText = """
@@ -206,8 +201,7 @@ public class SqliteArtifactStore : ISqliteArtifactStore
     {
         await RetryAsync(async () =>
         {
-            await using var connection = new SqliteConnection(_connectionString);
-            await connection.OpenAsync(cancellationToken);
+            await using var connection = await SqliteSchemaInitializer.OpenConnectionWithForeignKeysAsync(_connectionString, cancellationToken);
 
             var command = connection.CreateCommand();
             command.CommandText = """
