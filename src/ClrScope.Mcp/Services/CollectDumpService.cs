@@ -61,6 +61,7 @@ public class CollectDumpService
         CancellationToken cancellationToken = default)
     {
         progress?.Report(0);
+        _logger.LogInformation("[0%] Starting dump collection for PID {Pid}, IncludeHeap={IncludeHeap}, Compress={Compress}", request.Pid, request.IncludeHeap, request.Compress);
 
         // Acquire PID lock to serialize operations on the same process
         using var pidLock = await _pidLockManager.AcquireLockAsync(request.Pid, cancellationToken);
@@ -96,6 +97,7 @@ public class CollectDumpService
 
             // Write dump
             progress?.Report(20);
+            _logger.LogInformation("[20%] Starting WriteDump for PID {Pid} to {FilePath}", request.Pid, filePath);
             await _sessionStore.UpdateAsync(session with { Phase = SessionPhase.Collecting }, operationCts.Token);
             try
             {
@@ -112,12 +114,13 @@ public class CollectDumpService
                 {
                     client.WriteDump(dumpType, tempFilePath, false);
                 }, operationCts.Token);
+                _logger.LogInformation("[50%] WriteDump completed for PID {Pid}", request.Pid);
 
                 // Compress the dump file if requested
                 if (request.Compress)
                 {
                     progress?.Report(50);
-                    _logger.LogInformation("Compressing dump file for session {SessionId}", session.SessionId);
+                    _logger.LogInformation("[50%] Compressing dump file for session {SessionId}", session.SessionId);
                     await Task.Run(() =>
                     {
                         using var originalFileStream = File.OpenRead(tempFilePath);
@@ -134,7 +137,7 @@ public class CollectDumpService
                     // Delete the temporary uncompressed file
                     File.Delete(tempFilePath);
 
-                    _logger.LogInformation("Dump compressed: {OriginalSize} -> {CompressedSize} ({CompressionRatio:F1}% reduction)",
+                    _logger.LogInformation("[60%] Dump compressed: {OriginalSize} -> {CompressedSize} ({CompressionRatio:F1}% reduction)",
                         FormatBytes(originalSize), FormatBytes(compressedSize), compressionRatio);
                 }
             }
@@ -170,6 +173,7 @@ public class CollectDumpService
 
             // Create artifact record
             progress?.Report(70);
+            _logger.LogInformation("[70%] Persisting artifact for session {SessionId}", session.SessionId);
             await _sessionStore.UpdateAsync(session with { Phase = SessionPhase.Persisting }, operationCts.Token);
             var fileSize = new FileInfo(filePath).Length;
 
@@ -196,6 +200,7 @@ public class CollectDumpService
             var updatedArtifact = await _artifactStore.GetAsync(artifact.ArtifactId, CancellationToken.None);
 
             progress?.Report(100);
+            _logger.LogInformation("[100%] Dump collection completed for PID {Pid}, SessionId {SessionId}, Size {Size}", request.Pid, session.SessionId.Value, FormatBytes(fileSize));
             return CollectDumpResult.Success(updatedSession ?? session, updatedArtifact ?? artifact);
         }
         catch (Exception ex) when (!operationCts.Token.IsCancellationRequested)

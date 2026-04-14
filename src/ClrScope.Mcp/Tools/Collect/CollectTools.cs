@@ -9,7 +9,7 @@ namespace ClrScope.Mcp.Tools.Collect;
 [McpServerToolType]
 public sealed class CollectTools
 {
-    [McpServerTool(Name = "collect_dump", Title = "Collect Memory Dump", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false), Description("Collect memory dump from .NET process via WriteDump(). Returns Session ID and Artifact ID. NOTE: Cancellation is best-effort only - once dump collection starts, it cannot be reliably cancelled due to DiagnosticsClient API limitations.")]
+    [McpServerTool(Name = "collect_dump", Title = "Collect Memory Dump", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false), Description("Collect memory dump from .NET process via WriteDump(). Returns Session ID and Artifact ID. For long-running dumps (can take minutes), use session_get with the Session ID to track progress via Phase and Status. NOTE: Cancellation is best-effort only - once dump collection starts, it cannot be reliably cancelled due to DiagnosticsClient API limitations.")]
     public static async Task<CollectDumpResult> CollectDump(
         [Description("Process ID to collect dump from")] int pid,
         McpServer server,
@@ -98,7 +98,7 @@ public sealed class CollectTools
         }
     }
 
-    [McpServerTool(Name = "collect_trace", Title = "Collect EventPipe Trace (Experimental)", ReadOnly = false, Idempotent = false), Description("Collect EventPipe trace from .NET process via StartEventPipeSession(). Duration format: hh:mm:ss. Profile: cpu-sampling, gc-heap, or default. Custom providers format: 'ProviderName:Level:Keywords' (e.g., 'Microsoft-Windows-DotNETRuntime:Informational:0x00000001').")]
+    [McpServerTool(Name = "collect_trace", Title = "Collect EventPipe Trace (Experimental)", ReadOnly = false, Idempotent = false), Description("Collect EventPipe trace from .NET process via StartEventPipeSession(). Duration format: hh:mm:ss. Profile: cpu-sampling, gc-heap, or default. Custom providers format: 'ProviderName:Level:Keywords' (e.g., 'Microsoft-Windows-DotNETRuntime:Informational:0x00000001'). For long-running traces, use session_get with the Session ID to track progress via Phase and Status.")]
     public static async Task<CollectTraceResult> CollectTrace(
         [Description("Process ID to collect trace from")] int pid,
         [Description("Duration in hh:mm:ss format (e.g., 00:01:30 for 1.5 minutes)")] string duration,
