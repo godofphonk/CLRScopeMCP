@@ -35,6 +35,7 @@ public sealed class ArtifactTools
     [McpServerTool(Name = "artifact_get_metadata", Title = "Get Artifact Metadata", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Get artifact metadata by ID")]
     public static async Task<ArtifactMetadataResult> GetArtifactMetadata(
         [Description("Artifact ID to get metadata for")] string artifactId,
+        [Description("Include file path in response (default: false)")] bool includeFilePath = false,
         McpServer server,
         CancellationToken cancellationToken = default)
     {
@@ -86,11 +87,11 @@ public sealed class ArtifactTools
                 ArtifactId: artifact.ArtifactId.Value,
                 Kind: artifact.Kind.ToString(),
                 Status: artifact.Status.ToString(),
-                FilePath: artifact.FilePath,
                 SizeBytes: artifact.SizeBytes,
                 Sha256: artifact.Sha256,
                 Pid: artifact.Pid,
                 CreatedAtUtc: artifact.CreatedAtUtc,
+                FilePath: includeFilePath ? artifact.FilePath : null,
                 Error: string.Empty
             );
         }
@@ -138,6 +139,7 @@ public sealed class ArtifactTools
         [Description("Filter by date to (ISO format, e.g., 2024-12-31)")] string? dateTo = null,
         [Description("Offset for pagination (default: 0)")] int offset = 0,
         [Description("Limit for pagination (default: 50, max: 500)")] int limit = 50,
+        [Description("Include file path in response (default: false)")] bool includeFilePath = false,
         CancellationToken cancellationToken = default)
     {
         var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
@@ -220,9 +222,9 @@ public sealed class ArtifactTools
                     a.ArtifactId.Value,
                     a.Kind.ToString(),
                     a.Status.ToString(),
-                    a.FilePath,
                     a.SizeBytes,
-                    a.CreatedAtUtc
+                    a.CreatedAtUtc,
+                    includeFilePath ? a.FilePath : null
                 )).ToArray()
             );
         }
@@ -646,11 +648,11 @@ public record ArtifactMetadataResult(
     string ArtifactId,
     string? Kind,
     string? Status,
-    string? FilePath,
     long SizeBytes,
     string? Sha256,
     int Pid,
     DateTime? CreatedAtUtc,
+    string? FilePath,
     string? Error
 );
 
@@ -668,9 +670,9 @@ public record ArtifactSummary(
     string ArtifactId,
     string Kind,
     string Status,
-    string FilePath,
     long SizeBytes,
-    DateTime CreatedAtUtc
+    DateTime CreatedAtUtc,
+    string? FilePath = null
 );
 
 public record DeleteArtifactResult(
