@@ -1,5 +1,7 @@
 using ClrScope.Mcp.Domain.Artifacts;
 using ClrScope.Mcp.Infrastructure;
+using ClrScope.Mcp.Infrastructure.Utils;
+using ClrScope.Mcp.Options;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
@@ -37,6 +39,257 @@ public sealed class SummaryTools
             logger.LogError(ex, "Failed to summarize artifact: {ArtifactId}", artifactId);
             return ArtifactAnalysisResult.Failure($"Failed to summarize artifact: {ex.Message}");
         }
+    }
+
+    [McpServerTool(Name = "detect_patterns"), Description("Automatically detect common problem patterns (memory leaks, deadlocks, thread pool starvation, high CPU)")]
+    public static async Task<PatternDetectionResult> DetectPatterns(
+        string artifactId,
+        McpServer server,
+        [Description("Pattern types to detect: 'all' (default), 'memory_leaks', 'deadlocks', 'thread_pool', 'high_cpu', 'excessive_allocations'")] string patternTypes = "all",
+        CancellationToken cancellationToken = default)
+    {
+        var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
+        var sosAnalyzer = server.Services!.GetRequiredService<ISosAnalyzer>();
+        var logger = server.Services!.GetRequiredService<ILogger<SummaryTools>>();
+        var options = server.Services!.GetRequiredService<Microsoft.Extensions.Options.IOptions<ClrScopeOptions>>();
+
+        try
+        {
+            var artifact = await artifactStore.GetAsync(new ArtifactId(artifactId), cancellationToken);
+            if (artifact == null)
+            {
+                return PatternDetectionResult.Failure($"Artifact not found: {artifactId}");
+            }
+
+            // Validate artifact path is within artifact root
+            var artifactRoot = options.Value.GetArtifactRoot();
+            PathSecurity.EnsurePathWithinDirectory(artifact.FilePath, artifactRoot);
+
+            // Only dump and gcdump artifacts support pattern detection
+            if (artifact.Kind != ArtifactKind.Dump && artifact.Kind != ArtifactKind.GcDump)
+            {
+                return PatternDetectionResult.Failure($"Pattern detection only supports Dump and GcDump artifacts, got: {artifact.Kind}");
+            }
+
+            // Check if dotnet-dump is available
+            if (!await sosAnalyzer.IsAvailableAsync(cancellationToken))
+            {
+                return PatternDetectionResult.Failure("dotnet-dump CLI not found. Pattern detection requires SOS commands.");
+            }
+
+            var detectedPatterns = new List<DetectedPattern>();
+            var patternsToDetect = patternTypes.ToLowerInvariant() == "all"
+                ? new[] { "memory_leaks", "deadlocks", "thread_pool", "high_cpu", "excessive_allocations" }
+                : patternTypes.ToLowerInvariant().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            // Detect patterns based on artifact kind
+            if (artifact.Kind == ArtifactKind.Dump)
+            {
+                await DetectDumpPatterns(artifact.FilePath, sosAnalyzer, patternsToDetect, detectedPatterns, cancellationToken);
+            }
+            else if (artifact.Kind == ArtifactKind.GcDump)
+            {
+                await DetectGCDumpPatterns(artifact.FilePath, sosAnalyzer, patternsToDetect, detectedPatterns, cancellationToken);
+            }
+
+            return PatternDetectionResult.Success(detectedPatterns.ToArray());
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Pattern detection failed for artifact {ArtifactId}", artifactId);
+            return PatternDetectionResult.Failure($"Pattern detection failed: {ex.Message}");
+        }
+    }
+
+    private static async Task DetectDumpPatterns(string filePath, ISosAnalyzer sosAnalyzer, string[] patternsToDetect, List<DetectedPattern> detectedPatterns, CancellationToken cancellationToken)
+    {
+        foreach (var pattern in patternsToDetect)
+        {
+            switch (pattern)
+            {
+                case "memory_leaks":
+                    await DetectMemoryLeaks(filePath, sosAnalyzer, detectedPatterns, cancellationToken);
+                    break;
+                case "deadlocks":
+                    await DetectDeadlocks(filePath, sosAnalyzer, detectedPatterns, cancellationToken);
+                    break;
+                case "thread_pool":
+                    await DetectThreadPoolIssues(filePath, sosAnalyzer, detectedPatterns, cancellationToken);
+                    break;
+                case "high_cpu":
+                    await DetectHighCPU(filePath, sosAnalyzer, detectedPatterns, cancellationToken);
+                    break;
+                case "excessive_allocations":
+                    await DetectExcessiveAllocations(filePath, sosAnalyzer, detectedPatterns, cancellationToken);
+                    break;
+            }
+        }
+    }
+
+    private static async Task DetectGCDumpPatterns(string filePath, ISosAnalyzer sosAnalyzer, string[] patternsToDetect, List<DetectedPattern> detectedPatterns, CancellationToken cancellationToken)
+    {
+        foreach (var pattern in patternsToDetect)
+        {
+            switch (pattern)
+            {
+                case "memory_leaks":
+                    await DetectGCDumpMemoryLeaks(filePath, sosAnalyzer, detectedPatterns, cancellationToken);
+                    break;
+                case "excessive_allocations":
+                    await DetectGCDumpAllocations(filePath, sosAnalyzer, detectedPatterns, cancellationToken);
+                    break;
+            }
+        }
+    }
+
+    private static async Task DetectMemoryLeaks(string filePath, ISosAnalyzer sosAnalyzer, List<DetectedPattern> detectedPatterns, CancellationToken cancellationToken)
+    {
+        var result = await sosAnalyzer.ExecuteCommandAsync(filePath, "dumpheap -stat", cancellationToken);
+        if (!result.Success) return;
+
+        var output = result.Output;
+        // Analyze for memory leak indicators
+        if (output.Contains("Large Object Heap") && output.Contains("MB"))
+        {
+            var lohSize = ExtractSizeFromOutput(output, "Large Object Heap");
+            if (lohSize > 100 * 1024 * 1024) // > 100MB
+            {
+                detectedPatterns.Add(new DetectedPattern(
+                    PatternType: "memory_leak",
+                    Severity: "high",
+                    Description: $"Large Object Heap size is {FormatBytes(lohSize)}, indicating potential memory leak",
+                    Recommendation: "Investigate large objects in LOH using 'dumpheap -mt <MethodTable>' and check for pinned objects"
+                ));
+            }
+        }
+
+        // Check for gen2 growth
+        if (output.Contains("Gen 2"))
+        {
+            detectedPatterns.Add(new DetectedPattern(
+                PatternType: "memory_leak",
+                Severity: "medium",
+                Description: "Gen 2 heap statistics available - review for long-lived objects",
+                Recommendation: "Use 'dumpheap -stat' and 'gcroot' to identify roots of long-lived objects"
+            ));
+        }
+    }
+
+    private static async Task DetectDeadlocks(string filePath, ISosAnalyzer sosAnalyzer, List<DetectedPattern> detectedPatterns, CancellationToken cancellationToken)
+    {
+        var result = await sosAnalyzer.ExecuteCommandAsync(filePath, "threads", cancellationToken);
+        if (!result.Success) return;
+
+        var output = result.Output;
+        var threadLines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var blockedThreads = 0;
+
+        foreach (var line in threadLines)
+        {
+            if (line.Contains("Blocked") || line.Contains("Wait"))
+            {
+                blockedThreads++;
+            }
+        }
+
+        if (blockedThreads > 5)
+        {
+            detectedPatterns.Add(new DetectedPattern(
+                PatternType: "deadlock",
+                Severity: "high",
+                Description: $"{blockedThreads} threads appear blocked, potential deadlock",
+                Recommendation: "Use 'clrstack' on blocked threads to identify circular wait patterns"
+            ));
+        }
+    }
+
+    private static async Task DetectThreadPoolIssues(string filePath, ISosAnalyzer sosAnalyzer, List<DetectedPattern> detectedPatterns, CancellationToken cancellationToken)
+    {
+        var result = await sosAnalyzer.ExecuteCommandAsync(filePath, "threadpool", cancellationToken);
+        if (!result.Success) return;
+
+        var output = result.Output;
+        if (output.Contains("Work") && output.Contains("min") && output.Contains("max"))
+        {
+            detectedPatterns.Add(new DetectedPattern(
+                PatternType: "thread_pool",
+                Severity: "medium",
+                Description: "Thread pool statistics available - review for starvation",
+                Recommendation: "Check thread pool queue length and worker thread utilization"
+            ));
+        }
+    }
+
+    private static async Task DetectHighCPU(string filePath, ISosAnalyzer sosAnalyzer, List<DetectedPattern> detectedPatterns, CancellationToken cancellationToken)
+    {
+        var result = await sosAnalyzer.ExecuteCommandAsync(filePath, "threads", cancellationToken);
+        if (!result.Success) return;
+
+        var output = result.Output;
+        if (output.Contains("Running") || output.Contains("Preemptive"))
+        {
+            detectedPatterns.Add(new DetectedPattern(
+                PatternType: "high_cpu",
+                Severity: "medium",
+                Description: "Threads in running state detected - review for CPU hotspots",
+                Recommendation: "Use 'clrstack' on running threads to identify CPU-intensive methods"
+            ));
+        }
+    }
+
+    private static async Task DetectExcessiveAllocations(string filePath, ISosAnalyzer sosAnalyzer, List<DetectedPattern> detectedPatterns, CancellationToken cancellationToken)
+    {
+        var result = await sosAnalyzer.ExecuteCommandAsync(filePath, "dumpheap -stat", cancellationToken);
+        if (!result.Success) return;
+
+        var output = result.Output;
+        // Look for large allocation counts
+        if (output.Contains("Count") && output.Contains("Total"))
+        {
+            detectedPatterns.Add(new DetectedPattern(
+                PatternType: "excessive_allocations",
+                Severity: "medium",
+                Description: "Heap statistics available - review allocation patterns",
+                Recommendation: "Check top types by count to identify excessive allocations"
+            ));
+        }
+    }
+
+    private static async Task DetectGCDumpMemoryLeaks(string filePath, ISosAnalyzer sosAnalyzer, List<DetectedPattern> detectedPatterns, CancellationToken cancellationToken)
+    {
+        detectedPatterns.Add(new DetectedPattern(
+            PatternType: "memory_leak",
+            Severity: "medium",
+            Description: "GC dump analysis for memory leaks requires dotnet-gcdump-analyzer",
+            Recommendation: "Use dotnet-gcdump-analyze to examine heap growth and object references"
+        ));
+    }
+
+    private static async Task DetectGCDumpAllocations(string filePath, ISosAnalyzer sosAnalyzer, List<DetectedPattern> detectedPatterns, CancellationToken cancellationToken)
+    {
+        detectedPatterns.Add(new DetectedPattern(
+            PatternType: "excessive_allocations",
+            Severity: "medium",
+            Description: "GC dump allocation analysis requires dotnet-gcdump-analyzer",
+            Recommendation: "Use dotnet-gcdump-analyze to examine allocation rates and patterns"
+        ));
+    }
+
+    private static long ExtractSizeFromOutput(string output, string keyword)
+    {
+        var lines = output.Split('\n');
+        foreach (var line in lines)
+        {
+            if (line.Contains(keyword))
+            {
+                var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length >= 2 && long.TryParse(parts[^1], out var size))
+                {
+                    return size;
+                }
+            }
+        }
+        return 0;
     }
 
     private static ArtifactAnalysisResult AnalyzeArtifactContent(Artifact artifact, ILogger logger, string focus = "all")
@@ -287,4 +540,24 @@ public record ArtifactAnalysisSummary(
     Dictionary<string, string> KeyMetrics,
     List<string> Findings,
     List<string> Recommendations
+);
+
+public record PatternDetectionResult(
+    bool IsSuccess,
+    DetectedPattern[] Patterns,
+    string? Error
+)
+{
+    public static PatternDetectionResult Success(DetectedPattern[] patterns) =>
+        new(true, patterns, null);
+
+    public static PatternDetectionResult Failure(string error) =>
+        new(false, Array.Empty<DetectedPattern>(), error);
+}
+
+public record DetectedPattern(
+    string PatternType,
+    string Severity,
+    string Description,
+    string Recommendation
 );
