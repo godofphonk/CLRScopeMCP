@@ -123,6 +123,7 @@ public sealed class ResourceTools
         var sessionStore = server.Services!.GetRequiredService<ISqliteSessionStore>();
         var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
         var logger = server.Services!.GetRequiredService<ILogger<ResourceTools>>();
+        var options = server.Services!.GetRequiredService<IOptions<ClrScopeOptions>>();
 
         try
         {
@@ -134,6 +135,14 @@ public sealed class ResourceTools
             }
 
             var artifacts = await artifactStore.GetBySessionAsync(sessionId, cancellationToken);
+            
+            // Validate artifact paths for security
+            var artifactRoot = options.Value.GetArtifactRoot();
+            foreach (var artifact in artifacts)
+            {
+                ValidateArtifactPath(artifact.FilePath, artifactRoot, logger);
+            }
+            
             var resource = GetSessionResource(session, artifacts);
             return resource;
         }
