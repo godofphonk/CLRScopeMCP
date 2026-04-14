@@ -9,7 +9,7 @@ namespace ClrScope.Mcp.Tools.Collect;
 [McpServerToolType]
 public sealed class CollectTools
 {
-    [McpServerTool(Name = "collect_dump", Title = "Collect Memory Dump", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false), Description("Collect memory dump from .NET process via WriteDump(). Returns Session ID and Artifact ID. For long-running dumps (can take minutes), use session_get with the Session ID to track progress via Phase and Status. NOTE: Cancellation is best-effort only - once dump collection starts, it cannot be reliably cancelled due to DiagnosticsClient API limitations.")]
+    [McpServerTool(Name = "collect_dump", Title = "Collect Memory Dump", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false), Description("Collect memory dump from .NET process via WriteDump(). Returns Session ID and Artifact ID. For long-running dumps (can take minutes), use session_get with the Session ID to track progress via Phase and Status. CANCELLATION SEMANTICS: best-effort only - session.cancel updates session state but does NOT guarantee termination of native dump generation. Once WriteDump starts, it runs to completion regardless of cancellation due to DiagnosticsClient API limitations.")]
     public static async Task<CollectDumpResult> CollectDump(
         [Description("Process ID to collect dump from")] int pid,
         McpServer server,
@@ -32,7 +32,8 @@ public sealed class CollectTools
                     FilePath: null,
                     SizeBytes: 0,
                     Sha256: null,
-                    Error: "Process ID must be greater than 0"
+                    Error: "Process ID must be greater than 0",
+                    CancellationSemantics: "best_effort"
                 );
             }
 
@@ -53,7 +54,8 @@ public sealed class CollectTools
                     FilePath: result.Artifact.FilePath,
                     SizeBytes: result.Artifact.SizeBytes,
                     Sha256: result.Artifact.Sha256,
-                    Error: null
+                    Error: null,
+                    CancellationSemantics: "best_effort"
                 );
             }
             else
@@ -66,7 +68,8 @@ public sealed class CollectTools
                     FilePath: null,
                     SizeBytes: 0,
                     Sha256: null,
-                    Error: result.Error
+                    Error: result.Error,
+                    CancellationSemantics: "best_effort"
                 );
             }
         }
@@ -80,7 +83,8 @@ public sealed class CollectTools
                 FilePath: null,
                 SizeBytes: 0,
                 Sha256: null,
-                Error: $"Invalid input: {ex.Message}"
+                Error: $"Invalid input: {ex.Message}",
+                CancellationSemantics: "best_effort"
             );
         }
         catch (Exception ex)
@@ -93,7 +97,8 @@ public sealed class CollectTools
                 FilePath: null,
                 SizeBytes: 0,
                 Sha256: null,
-                Error: $"Collect dump failed: {ex.Message}"
+                Error: $"Collect dump failed: {ex.Message}",
+                CancellationSemantics: "best_effort"
             );
         }
     }
@@ -229,7 +234,8 @@ public record CollectDumpResult(
     string? FilePath,
     long SizeBytes,
     string? Sha256,
-    string? Error
+    string? Error,
+    string CancellationSemantics = "best_effort"
 );
 
 public record CollectTraceResult(
