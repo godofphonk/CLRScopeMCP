@@ -1,7 +1,6 @@
 # CLRScope MCP
 
 ![Badge](https://img.shields.io/badge/version-v1.0.0-blue)
-![Badge](https://img.shields.io/badge/.NET%206+-purple)
 ![Badge](https://img.shields.io/badge/license-MIT-green)
 
 > MCP server for comprehensive .NET application diagnostics
