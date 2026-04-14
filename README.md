@@ -17,11 +17,11 @@ CLRScope MCP provides AI-powered diagnostic capabilities for .NET applications t
 | 🎯 **Runtime Detection** | OS/Architecture detection for attachable .NET processes |
 | 📊 **Performance Counters** | Real-time CPU, memory, GC, and thread pool metrics |
 | 🔥 **Flame Graph Visualization** | Interactive stack trace visualization |
-- **Memory Dump Analysis** | Compressed dump support with automatic decompression
-- **SOS Commands** | Sequential SOS command execution for deep analysis
-- **Pattern Detection** | Automatic detection of memory leaks, deadlocks, high CPU
-- **Artifact Management** | Pagination, filtering, and cleanup strategies
-- **Baseline Comparison** | Compare diagnostic sessions with baseline
+| **Memory Dump Analysis** | Compressed dump support with automatic decompression |
+| **SOS Commands** | Sequential SOS command execution for deep analysis |
+| **Pattern Detection** | Automatic detection of memory leaks, deadlocks, high CPU |
+| **Artifact Management** | Pagination, filtering, and cleanup strategies |
+| **Baseline Comparison** | Compare diagnostic sessions with baseline
 
 ## Installation
 

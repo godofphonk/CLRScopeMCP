@@ -84,7 +84,7 @@ jobs:
       - name: Generate checksums
         run: |
           cd artifacts
-          sha256sum *.zip *.tar.gz > SHA256SUMS
+          find . -name "*.zip" -o -name "*.tar.gz" | xargs sha256sum > SHA256SUMS
 
       - name: Create Release
         uses: softprops/action-gh-release@4dd30955cca228da305ffee6fbc3fc1f95d447c2
@@ -109,6 +109,4 @@ jobs:
           path: ./artifacts
 
       - name: Publish to NuGet
-        run: dotnet nuget push artifacts/*.nupkg --source https://api.nuget.org/v3/index.json --skip-duplicate
-        env:
-          NUGET_AUTH_TOKEN: ${{ secrets.NUGET_API_KEY }}
+        run: dotnet nuget push artifacts/*.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }} --skip-duplicate
