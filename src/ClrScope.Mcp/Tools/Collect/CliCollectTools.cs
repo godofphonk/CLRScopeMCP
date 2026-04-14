@@ -11,12 +11,12 @@ namespace ClrScope.Mcp.Tools.Collect;
 [McpServerToolType]
 public sealed class CollectCountersTools
 {
-    [McpServerTool(Name = "collect_counters", Title = "Collect Performance Counters", ReadOnly = false, Idempotent = false), Description("Collect performance counters via dotnet-counters CLI")]
+    [McpServerTool(Name = "collect_counters", Title = "Collect Performance Counters", ReadOnly = false, Idempotent = false), Description("Collect performance counters via dotnet-counters CLI. Available providers: System.Runtime, Microsoft.AspNetCore.Hosting, System.Net.Http, System.Net.NameResolution, System.Net.Security, System.Net.Sockets, Microsoft.AspNetCore.Kestrel, Microsoft.AspNetCore.Routing, Microsoft.AspNetCore.RateLimiting")]
     public static async Task<CollectCountersResult> CollectCounters(
         [Description("Process ID to collect counters from")] int pid,
         McpServer server,
         [Description("Duration in hh:mm:ss format (e.g., 00:01:00 for 1 minute)")] string duration = "00:01:00",
-        [Description("Counter providers (e.g., System.Runtime, Microsoft.AspNetCore.Hosting)")] string[]? providers = null,
+        [Description("Counter providers (e.g., System.Runtime, Microsoft.AspNetCore.Hosting). Defaults to System.Runtime if not specified.")] string[]? providers = null,
         CancellationToken cancellationToken = default)
     {
         var countersService = server.Services!.GetRequiredService<CollectCountersService>();
@@ -34,7 +34,31 @@ public sealed class CollectCountersTools
                 );
             }
 
+            // Validate and set default provider
             var providerList = providers != null && providers.Length > 0 ? providers : new[] { "System.Runtime" };
+
+            // Validate provider names (basic validation)
+            var knownProviders = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "System.Runtime",
+                "Microsoft.AspNetCore.Hosting",
+                "System.Net.Http",
+                "System.Net.NameResolution",
+                "System.Net.Security",
+                "System.Net.Sockets",
+                "Microsoft.AspNetCore.Kestrel",
+                "Microsoft.AspNetCore.Routing",
+                "Microsoft.AspNetCore.RateLimiting",
+                "Microsoft.AspNetCore.Http.Connections",
+                "Microsoft.AspNetCore.Server.Kestrel"
+            };
+
+            var invalidProviders = providerList.Where(p => !knownProviders.Contains(p)).ToList();
+            if (invalidProviders.Any())
+            {
+                logger.LogWarning("Unknown providers: {Providers}", string.Join(", ", invalidProviders));
+            }
+
             var request = new CollectCountersRequest(pid, duration, providerList);
             var result = await countersService.CollectCountersAsync(request, cancellationToken: cancellationToken);
 

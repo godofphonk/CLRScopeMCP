@@ -13,7 +13,7 @@ using System.Diagnostics.Tracing;
 
 namespace ClrScope.Mcp.Services;
 
-public record CollectTraceRequest(int Pid, string Duration, string? Profile = null);
+public record CollectTraceRequest(int Pid, string Duration, string? Profile = null, string[]? CustomProviders = null);
 
 public record CollectTraceResult(
     Session Session,
@@ -129,8 +129,9 @@ public class CollectTraceService
             startCts.CancelAfter(TimeSpan.FromSeconds(30)); // Bounded timeout for start
 
             var client = new DiagnosticsClient(request.Pid);
-            var providers = GetProvidersForProfile(request.Profile);
-            _logger.LogInformation("[{Phase}] Using profile {Profile} with {ProviderCount} providers", SessionPhase.Attaching, request.Profile ?? "default", providers.Count);
+            var providers = GetProvidersForProfile(request.Profile, request.CustomProviders);
+            var providerType = request.CustomProviders != null && request.CustomProviders.Length > 0 ? "custom" : (request.Profile ?? "default");
+            _logger.LogInformation("[{Phase}] Using {ProviderType} profile with {ProviderCount} providers", SessionPhase.Attaching, providerType, providers.Count);
 
             eventPipeSession = await client.StartEventPipeSessionAsync(
                 providers,
@@ -306,8 +307,18 @@ public class CollectTraceService
         }
     }
 
-    private static List<EventPipeProvider> GetProvidersForProfile(string? profile)
+    private static List<EventPipeProvider> GetProvidersForProfile(string? profile, string[]? customProviders = null)
     {
+        // If custom providers are specified, use them
+        if (customProviders != null && customProviders.Length > 0)
+        {
+            return customProviders
+                .Select(p => ParseCustomProvider(p))
+                .Where(p => p != null)
+                .Cast<EventPipeProvider>()
+                .ToList();
+        }
+
         // Map profile names to EventPipeProvider configurations
         // Based on dotnet-trace profiles: https://learn.microsoft.com/en-us/dotnet/core/diagnostics/dotnet-trace
         return profile?.ToLowerInvariant() switch
@@ -325,5 +336,45 @@ public class CollectTraceService
                 new("Microsoft-Windows-DotNETRuntime", EventLevel.Informational) // Default: basic runtime events
             }
         };
+    }
+
+    private static EventPipeProvider? ParseCustomProvider(string providerString)
+    {
+        // Parse custom provider string in format: "ProviderName:Level:Keywords"
+        // Example: "Microsoft-Windows-DotNETRuntime:Informational:0x00000001"
+        var parts = providerString.Split(':');
+        if (parts.Length == 0 || string.IsNullOrWhiteSpace(parts[0]))
+        {
+            return null;
+        }
+
+        var providerName = parts[0];
+        var level = parts.Length > 1 ? ParseEventLevel(parts[1]) : EventLevel.Informational;
+        var keywords = parts.Length > 2 ? ParseKeywords(parts[2]) : 0;
+
+        return new EventPipeProvider(providerName, level, keywords);
+    }
+
+    private static EventLevel ParseEventLevel(string levelString)
+    {
+        return levelString.ToLowerInvariant() switch
+        {
+            "critical" => EventLevel.Critical,
+            "error" => EventLevel.Error,
+            "warning" => EventLevel.Warning,
+            "informational" => EventLevel.Informational,
+            "verbose" => EventLevel.Verbose,
+            "logalways" => EventLevel.LogAlways,
+            _ => EventLevel.Informational
+        };
+    }
+
+    private static long ParseKeywords(string keywordString)
+    {
+        if (keywordString.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+        {
+            return Convert.ToInt64(keywordString, 16);
+        }
+        return long.TryParse(keywordString, out var result) ? result : 0;
     }
 }
