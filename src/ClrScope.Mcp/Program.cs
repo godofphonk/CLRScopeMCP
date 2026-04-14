@@ -24,6 +24,20 @@ class Program
 {
     static async Task Main(string[] args)
     {
+        // Handle --help
+        if (args.Contains("--help") || args.Contains("-h"))
+        {
+            PrintHelp();
+            return;
+        }
+
+        // Handle --version
+        if (args.Contains("--version") || args.Contains("-v"))
+        {
+            PrintVersion();
+            return;
+        }
+
         var host = Host.CreateDefaultBuilder(args)
             .ConfigureAppConfiguration((context, config) =>
             {
@@ -251,5 +265,25 @@ class Program
         Console.WriteLine();
 
         Console.WriteLine("=== Demo Complete ===");
+    }
+
+    static void PrintVersion()
+    {
+        Console.WriteLine("CLRScope MCP v0.1.0");
+    }
+
+    static void PrintHelp()
+    {
+        Console.WriteLine("CLRScope MCP - .NET diagnostics MCP server");
+        Console.WriteLine();
+        Console.WriteLine("Usage: clrscope-mcp [options]");
+        Console.WriteLine();
+        Console.WriteLine("Options:");
+        Console.WriteLine("  --version, -v    Show version information");
+        Console.WriteLine("  --help, -h      Show help information");
+        Console.WriteLine("  --demo          Run demo mode");
+        Console.WriteLine();
+        Console.WriteLine("CLRScope MCP provides AI-powered diagnostic capabilities for .NET");
+        Console.WriteLine("applications through the Model Context Protocol.");
     }
 }

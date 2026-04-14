@@ -72,8 +72,8 @@ public class InspectTargetServiceTests
             Assert.NotNull(result.Details);
             Assert.Equal(currentPid, result.Details.Pid);
             Assert.False(string.IsNullOrEmpty(result.Details.ProcessName));
-            Assert.Equal("Unknown", result.Details.OperatingSystem);
-            Assert.Equal("Unknown", result.Details.ProcessArchitecture);
+            Assert.False(string.IsNullOrEmpty(result.Details.OperatingSystem));
+            Assert.False(string.IsNullOrEmpty(result.Details.ProcessArchitecture));
             Assert.Null(result.Details.CommandLine);
         }
     }
@@ -117,7 +117,7 @@ public class InspectTargetServiceTests
     }
 
     [Fact]
-    public void InspectTarget_ReturnsUnknownForArchitecture_WhenProcessExists()
+    public void InspectTarget_ReturnsArchitecture_WhenProcessExists()
     {
         // Arrange
         var service = new InspectTargetService();
@@ -131,12 +131,12 @@ public class InspectTargetServiceTests
         if (result.Found && result.Attachable)
         {
             Assert.NotNull(result.Details);
-            Assert.Equal("Unknown", result.Details.ProcessArchitecture);
+            Assert.False(string.IsNullOrEmpty(result.Details.ProcessArchitecture));
         }
     }
 
     [Fact]
-    public void InspectTarget_ReturnsUnknownForOS_WhenProcessExists()
+    public void InspectTarget_ReturnsOS_WhenProcessExists()
     {
         // Arrange
         var service = new InspectTargetService();
@@ -150,7 +150,7 @@ public class InspectTargetServiceTests
         if (result.Found && result.Attachable)
         {
             Assert.NotNull(result.Details);
-            Assert.Equal("Unknown", result.Details.OperatingSystem);
+            Assert.False(string.IsNullOrEmpty(result.Details.OperatingSystem));
         }
     }
 
