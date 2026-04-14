@@ -14,6 +14,7 @@ public sealed class CollectTools
         [Description("Process ID to collect dump from")] int pid,
         McpServer server,
         [Description("Include heap in dump (default: true)")] bool includeHeap = true,
+        [Description("Compress dump file with gzip to save disk space (default: false)")] bool compress = false,
         IProgress<double>? progress = null,
         CancellationToken cancellationToken = default)
     {
@@ -35,9 +36,9 @@ public sealed class CollectTools
                 );
             }
 
-            logger.LogInformation("Starting dump collection for PID {Pid}, IncludeHeap={IncludeHeap}", pid, includeHeap);
+            logger.LogInformation("Starting dump collection for PID {Pid}, IncludeHeap={IncludeHeap}, Compress={Compress}", pid, includeHeap, compress);
 
-            var request = new CollectDumpRequest(pid, includeHeap);
+            var request = new CollectDumpRequest(pid, includeHeap, compress);
             var result = await dumpService.CollectDumpAsync(request, progress, cancellationToken);
             
             if (result.Artifact != null)

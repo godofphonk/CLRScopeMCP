@@ -8,10 +8,11 @@ using Microsoft.Diagnostics.NETCore.Client;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Server;
+using System.IO.Compression;
 
 namespace ClrScope.Mcp.Services;
 
-public record CollectDumpRequest(int Pid, bool IncludeHeap = true);
+public record CollectDumpRequest(int Pid, bool IncludeHeap = true, bool Compress = false);
 
 public record CollectDumpResult(
     Session Session,
@@ -90,7 +91,7 @@ public class CollectDumpService
             var dumpsDir = Path.Combine(artifactRoot, "dumps");
             Directory.CreateDirectory(dumpsDir);
 
-            var fileName = $"dump_{session.SessionId.Value}.dmp";
+            var fileName = request.Compress ? $"dump_{session.SessionId.Value}.dmp.gz" : $"dump_{session.SessionId.Value}.dmp";
             filePath = Path.Combine(dumpsDir, fileName);
 
             // Write dump
@@ -101,13 +102,41 @@ public class CollectDumpService
                 var client = new DiagnosticsClient(request.Pid);
                 var dumpType = request.IncludeHeap ? DumpType.WithHeap : DumpType.Normal;
 
+                // If compression is requested, write to temporary file first, then compress
+                var tempFilePath = request.Compress ? Path.Combine(dumpsDir, $"temp_{session.SessionId.Value}.dmp") : filePath;
+
                 // WriteDump is synchronous and doesn't support cancellation from DiagnosticsClient API
                 // Task.Run with cancellation token only prevents the task from starting if cancelled before execution
                 // Once WriteDump starts, it cannot be cancelled - it will complete regardless of session.cancel
                 await Task.Run(() =>
                 {
-                    client.WriteDump(dumpType, filePath, false);
+                    client.WriteDump(dumpType, tempFilePath, false);
                 }, operationCts.Token);
+
+                // Compress the dump file if requested
+                if (request.Compress)
+                {
+                    progress?.Report(50);
+                    _logger.LogInformation("Compressing dump file for session {SessionId}", session.SessionId);
+                    await Task.Run(() =>
+                    {
+                        using var originalFileStream = File.OpenRead(tempFilePath);
+                        using var compressedFileStream = File.Create(filePath);
+                        using var compressionStream = new GZipStream(compressedFileStream, CompressionLevel.Optimal);
+                        originalFileStream.CopyTo(compressionStream);
+                    }, operationCts.Token);
+
+                    // Get sizes before deleting temp file
+                    var originalSize = new FileInfo(tempFilePath).Length;
+                    var compressedSize = new FileInfo(filePath).Length;
+                    var compressionRatio = (1.0 - (double)compressedSize / originalSize) * 100;
+
+                    // Delete the temporary uncompressed file
+                    File.Delete(tempFilePath);
+
+                    _logger.LogInformation("Dump compressed: {OriginalSize} -> {CompressedSize} ({CompressionRatio:F1}% reduction)",
+                        FormatBytes(originalSize), FormatBytes(compressedSize), compressionRatio);
+                }
             }
             catch (OperationCanceledException)
             {
@@ -202,5 +231,18 @@ public class CollectDumpService
         {
             _activeOperationRegistry.Complete(session.SessionId);
         }
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB", "TB" };
+        int order = 0;
+        double size = bytes;
+        while (size >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            size /= 1024;
+        }
+        return $"{size:0.##} {sizes[order]}";
     }
 }
