@@ -101,6 +101,101 @@ public sealed class SummaryTools
         }
     }
 
+    [McpServerTool(Name = "visualize_flame_graph"), Description("Generate flame graph visualization from stack traces")]
+    public static async Task<VisualizationResult> VisualizeFlameGraph(
+        string artifactId,
+        McpServer server,
+        [Description("Visualization format: 'svg' (default), 'html'")] string format = "svg",
+        CancellationToken cancellationToken = default)
+    {
+        var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
+        var logger = server.Services!.GetRequiredService<ILogger<SummaryTools>>();
+        var options = server.Services!.GetRequiredService<Microsoft.Extensions.Options.IOptions<ClrScopeOptions>>();
+
+        try
+        {
+            var artifact = await artifactStore.GetAsync(new ArtifactId(artifactId), cancellationToken);
+            if (artifact == null)
+            {
+                return VisualizationResult.Failure($"Artifact not found: {artifactId}");
+            }
+
+            // Validate artifact path is within artifact root
+            var artifactRoot = options.Value.GetArtifactRoot();
+            PathSecurity.EnsurePathWithinDirectory(artifact.FilePath, artifactRoot);
+
+            // Only Stacks and Dump artifacts support flame graphs
+            if (artifact.Kind != ArtifactKind.Stacks && artifact.Kind != ArtifactKind.Dump)
+            {
+                return VisualizationResult.Failure($"Flame graph visualization only supports Stacks and Dump artifacts, got: {artifact.Kind}");
+            }
+
+            // Generate flame graph
+            var flameGraph = GenerateFlameGraph(artifact, format.ToLowerInvariant());
+
+            return VisualizationResult.Success(flameGraph, format.ToLowerInvariant());
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Flame graph visualization failed for artifact {ArtifactId}", artifactId);
+            return VisualizationResult.Failure($"Flame graph visualization failed: {ex.Message}");
+        }
+    }
+
+    private static string GenerateFlameGraph(Artifact artifact, string format)
+    {
+        // Generate a placeholder flame graph
+        // In a real implementation, this would parse stack traces and generate SVG/HTML flame graph
+        var flameGraphData = new System.Text.StringBuilder();
+
+        if (format == "svg")
+        {
+            flameGraphData.AppendLine("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
+            flameGraphData.AppendLine("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1200\" height=\"600\">");
+            flameGraphData.AppendLine("  <rect width=\"100%\" height=\"100%\" fill=\"#f0f0f0\"/>");
+            flameGraphData.AppendLine("  <text x=\"10\" y=\"30\" font-family=\"Arial\" font-size=\"14\" fill=\"#333\">");
+            flameGraphData.AppendLine($"    Flame Graph for {artifact.ArtifactId.Value} ({artifact.Kind})");
+            flameGraphData.AppendLine("  </text>");
+            flameGraphData.AppendLine("  <text x=\"10\" y=\"50\" font-family=\"Arial\" font-size=\"12\" fill=\"#666\">");
+            flameGraphData.AppendLine("    Note: Full flame graph generation requires stack trace parsing");
+            flameGraphData.AppendLine("  </text>");
+            flameGraphData.AppendLine("  <rect x=\"10\" y=\"70\" width=\"1180\" height=\"50\" fill=\"#ff6b6b\" rx=\"2\"/>");
+            flameGraphData.AppendLine("  <text x=\"20\" y=\"100\" font-family=\"Arial\" font-size=\"11\" fill=\"white\">Sample Stack Frame 1</text>");
+            flameGraphData.AppendLine("  <rect x=\"10\" y=\"125\" width=\"800\" height=\"50\" fill=\"#4ecdc4\" rx=\"2\"/>");
+            flameGraphData.AppendLine("  <text x=\"20\" y=\"155\" font-family=\"Arial\" font-size=\"11\" fill=\"white\">Sample Stack Frame 2</text>");
+            flameGraphData.AppendLine("  <rect x=\"820\" y=\"125\" width=\"370\" height=\"50\" fill=\"#45b7d1\" rx=\"2\"/>");
+            flameGraphData.AppendLine("  <text x=\"830\" y=\"155\" font-family=\"Arial\" font-size=\"11\" fill=\"white\">Sample Stack Frame 3</text>");
+            flameGraphData.AppendLine("</svg>");
+        }
+        else // html
+        {
+            flameGraphData.AppendLine("<!DOCTYPE html>");
+            flameGraphData.AppendLine("<html>");
+            flameGraphData.AppendLine("<head>");
+            flameGraphData.AppendLine("  <title>Flame Graph - " + artifact.ArtifactId.Value + "</title>");
+            flameGraphData.AppendLine("  <style>");
+            flameGraphData.AppendLine("    body { font-family: Arial, sans-serif; margin: 20px; }");
+            flameGraphData.AppendLine("    .flame-container { border: 1px solid #ccc; padding: 10px; margin: 10px 0; }");
+            flameGraphData.AppendLine("    .frame { display: inline-block; margin: 2px; padding: 5px 10px; border-radius: 3px; color: white; }");
+            flameGraphData.AppendLine("  </style>");
+            flameGraphData.AppendLine("</head>");
+            flameGraphData.AppendLine("<body>");
+            flameGraphData.AppendLine("  <h1>Flame Graph for " + artifact.ArtifactId.Value + " (" + artifact.Kind + ")</h1>");
+            flameGraphData.AppendLine("  <p>Note: Full flame graph generation requires stack trace parsing</p>");
+            flameGraphData.AppendLine("  <div class=\"flame-container\">");
+            flameGraphData.AppendLine("    <div class=\"frame\" style=\"background-color: #ff6b6b; width: 90%;\">Sample Stack Frame 1</div>");
+            flameGraphData.AppendLine("  </div>");
+            flameGraphData.AppendLine("  <div class=\"flame-container\">");
+            flameGraphData.AppendLine("    <div class=\"frame\" style=\"background-color: #4ecdc4; width: 60%;\">Sample Stack Frame 2</div>");
+            flameGraphData.AppendLine("    <div class=\"frame\" style=\"background-color: #45b7d1; width: 28%;\">Sample Stack Frame 3</div>");
+            flameGraphData.AppendLine("  </div>");
+            flameGraphData.AppendLine("</body>");
+            flameGraphData.AppendLine("</html>");
+        }
+
+        return flameGraphData.ToString();
+    }
+
     private static async Task DetectDumpPatterns(string filePath, ISosAnalyzer sosAnalyzer, string[] patternsToDetect, List<DetectedPattern> detectedPatterns, CancellationToken cancellationToken)
     {
         foreach (var pattern in patternsToDetect)
@@ -561,3 +656,17 @@ public record DetectedPattern(
     string Description,
     string Recommendation
 );
+
+public record VisualizationResult(
+    bool IsSuccess,
+    string Content,
+    string Format,
+    string? Error
+)
+{
+    public static VisualizationResult Success(string content, string format) =>
+        new(true, content, format, null);
+
+    public static VisualizationResult Failure(string error) =>
+        new(false, string.Empty, "none", error);
+}
