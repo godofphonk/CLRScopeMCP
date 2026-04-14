@@ -91,7 +91,10 @@ jobs:
         with:
           draft: true
           files: |
-            artifacts/*.*
+            artifacts/**/*.zip
+            artifacts/**/*.tar.gz
+            artifacts/SHA256SUMS
+            artifacts/**/*.nupkg
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
