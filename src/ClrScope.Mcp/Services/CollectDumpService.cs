@@ -67,7 +67,7 @@ public class CollectDumpService
         using var pidLock = await _pidLockManager.AcquireLockAsync(request.Pid, cancellationToken);
 
         // Preflight validation
-        var preflightResult = await _preflightValidator.ValidateCollectAsync(request.Pid, cancellationToken);
+        var preflightResult = await _preflightValidator.ValidateCollectAsync(request.Pid, CollectionOperationType.Dump, cancellationToken);
         if (!preflightResult.IsValid)
         {
             var failedSession = await _sessionStore.CreateAsync(SessionKind.Dump, request.Pid, cancellationToken: cancellationToken);

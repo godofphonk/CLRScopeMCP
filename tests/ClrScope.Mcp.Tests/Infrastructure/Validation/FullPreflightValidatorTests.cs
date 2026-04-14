@@ -40,7 +40,7 @@ public class FullPreflightValidatorTests
         var validator = new FullPreflightValidator(optionsMock.Object, loggerMock.Object);
 
         // Act
-        var result = await validator.ValidateCollectAsync(0, CancellationToken.None);
+        var result = await validator.ValidateCollectAsync(0, CollectionOperationType.Dump, CancellationToken.None);
 
         // Assert
         Assert.False(result.IsValid);
@@ -61,7 +61,7 @@ public class FullPreflightValidatorTests
         var validator = new FullPreflightValidator(optionsMock.Object, loggerMock.Object);
 
         // Act
-        var result = await validator.ValidateCollectAsync(-1, CancellationToken.None);
+        var result = await validator.ValidateCollectAsync(-1, CollectionOperationType.Dump, CancellationToken.None);
 
         // Assert
         Assert.False(result.IsValid);
@@ -83,7 +83,7 @@ public class FullPreflightValidatorTests
 
         // Use a non-existent PID (99999 is unlikely to exist)
         // Act
-        var result = await validator.ValidateCollectAsync(99999, CancellationToken.None);
+        var result = await validator.ValidateCollectAsync(99999, CollectionOperationType.Dump, CancellationToken.None);
 
         // Assert
         Assert.False(result.IsValid);
@@ -94,25 +94,33 @@ public class FullPreflightValidatorTests
     public async Task ValidateCollectAsync_ReturnsSuccess_WhenValidPidProvided()
     {
         // Arrange
-        var artifactRoot = Path.Combine(Path.GetTempPath(), $"clrscope_test_{Guid.NewGuid()}");
-        var options = new ClrScopeOptions
+        var tempDir = Path.Combine(Path.GetTempPath(), $"clrscope_test_{Guid.NewGuid()}");
+        Directory.CreateDirectory(tempDir);
+
+        try
         {
-            ArtifactRoot = artifactRoot
-        };
-        var optionsMock = new Mock<IOptions<ClrScopeOptions>>();
-        optionsMock.Setup(x => x.Value).Returns(options);
-        var loggerMock = new Mock<ILogger<FullPreflightValidator>>();
-        var validator = new FullPreflightValidator(optionsMock.Object, loggerMock.Object);
+            var options = new ClrScopeOptions
+            {
+                ArtifactRoot = tempDir,
+                DatabasePath = Path.Combine(tempDir, "test.db")
+            };
+            var optionsMock = new Mock<IOptions<ClrScopeOptions>>();
+            optionsMock.Setup(x => x.Value).Returns(options);
+            var loggerMock = new Mock<ILogger<FullPreflightValidator>>();
+            var validator = new FullPreflightValidator(optionsMock.Object, loggerMock.Object);
+            var currentPid = Environment.ProcessId;
 
-        // Use current process PID
-        var currentPid = Environment.ProcessId;
+            // Act
+            var result = await validator.ValidateCollectAsync(currentPid, CollectionOperationType.Dump, CancellationToken.None);
 
-        // Act
-        var result = await validator.ValidateCollectAsync(currentPid, CancellationToken.None);
-
-        // Assert
-        Assert.True(result.IsValid);
-        Assert.Null(result.Error);
+            // Assert
+            Assert.True(result.IsValid);
+            Assert.Null(result.Error);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
     }
 
     [Fact]
@@ -134,7 +142,7 @@ public class FullPreflightValidatorTests
         var currentPid = Environment.ProcessId;
 
         // Act
-        var result = await validator.ValidateCollectAsync(currentPid, CancellationToken.None);
+        var result = await validator.ValidateCollectAsync(currentPid, CollectionOperationType.Dump, CancellationToken.None);
 
         // Assert
         Assert.False(result.IsValid);
@@ -157,7 +165,7 @@ public class FullPreflightValidatorTests
 
         // Use PID 1 (init process) which is not a .NET process
         // Act
-        var result = await validator.ValidateCollectAsync(1, CancellationToken.None);
+        var result = await validator.ValidateCollectAsync(1, CollectionOperationType.Dump, CancellationToken.None);
 
         // Assert - should fail because PID 1 is not a .NET process
         Assert.False(result.IsValid);
@@ -184,7 +192,7 @@ public class FullPreflightValidatorTests
         var currentPid = Environment.ProcessId;
 
         // Act
-        var result = await validator.ValidateCollectAsync(currentPid, CancellationToken.None);
+        var result = await validator.ValidateCollectAsync(currentPid, CollectionOperationType.Dump, CancellationToken.None);
 
         // Assert
         // This should succeed if there's enough disk space (>100MB)

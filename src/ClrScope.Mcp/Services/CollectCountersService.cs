@@ -68,7 +68,7 @@ public class CollectCountersService
         using var pidLock = await _pidLockManager.AcquireLockAsync(request.Pid, cancellationToken);
 
         // Preflight validation
-        var preflightResult = await _preflightValidator.ValidateCollectAsync(request.Pid, cancellationToken);
+        var preflightResult = await _preflightValidator.ValidateCollectAsync(request.Pid, CollectionOperationType.Counters, cancellationToken);
         if (!preflightResult.IsValid)
         {
             var failedSession = await _sessionStore.CreateAsync(SessionKind.Counters, request.Pid, cancellationToken: cancellationToken);

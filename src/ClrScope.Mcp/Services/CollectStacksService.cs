@@ -86,7 +86,7 @@ public class CollectStacksService
         using var pidLock = await _pidLockManager.AcquireLockAsync(request.Pid, cancellationToken);
 
         // Preflight validation
-        var preflightResult = await _preflightValidator.ValidateCollectAsync(request.Pid, cancellationToken);
+        var preflightResult = await _preflightValidator.ValidateCollectAsync(request.Pid, CollectionOperationType.Stacks, cancellationToken);
         if (!preflightResult.IsValid)
         {
             var failedSession = await _sessionStore.CreateAsync(SessionKind.Stacks, request.Pid, cancellationToken: cancellationToken);

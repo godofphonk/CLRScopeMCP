@@ -17,7 +17,7 @@ public class FullPreflightValidator : IPreflightValidator
         _logger = logger;
     }
 
-    public async Task<PreflightResult> ValidateCollectAsync(int pid, CancellationToken cancellationToken = default)
+    public async Task<PreflightResult> ValidateCollectAsync(int pid, CollectionOperationType operationType, CancellationToken cancellationToken = default)
     {
         // Validation 1: PID > 0
         if (pid <= 0)
@@ -78,15 +78,17 @@ public class FullPreflightValidator : IPreflightValidator
                 $"Artifact root is not writable: {ex.Message}");
         }
 
-        // Validation 5: Disk space check (basic)
+        // Validation 5: Disk space check (operation-specific)
         try
         {
             var driveInfo = new DriveInfo(artifactRoot);
-            if (driveInfo.AvailableFreeSpace < 100 * 1024 * 1024) // 100 MB minimum
+            var requiredSpace = EstimateRequiredSpace(pid, operationType);
+
+            if (driveInfo.AvailableFreeSpace < requiredSpace)
             {
                 return PreflightResult.Failure(
                     ClrScopeError.PREFLIGHT_DISK_SPACE_LOW,
-                    $"Insufficient disk space: {driveInfo.AvailableFreeSpace / (1024 * 1024)} MB available, minimum 100 MB required");
+                    $"Insufficient disk space: {driveInfo.AvailableFreeSpace / (1024 * 1024)} MB available, minimum {requiredSpace / (1024 * 1024)} MB required for {operationType}");
             }
         }
         catch (Exception ex)
@@ -105,6 +107,57 @@ public class FullPreflightValidator : IPreflightValidator
         }
 
         return PreflightResult.Success();
+    }
+
+    private long EstimateRequiredSpace(int pid, CollectionOperationType operationType)
+    {
+        // Base minimum for any operation
+        const long BaseMinimum = 50 * 1024 * 1024; // 50 MB
+
+        try
+        {
+            var process = System.Diagnostics.Process.GetProcessById(pid);
+
+            switch (operationType)
+            {
+                case CollectionOperationType.Dump:
+                    // Conservative estimate: WorkingSet × 1.5 for dump + compression overhead
+                    var workingSet = process.WorkingSet64;
+                    var dumpRequired = (long)(workingSet * 1.5);
+                    return Math.Max(BaseMinimum, dumpRequired);
+
+                case CollectionOperationType.GcDump:
+                    // GC heap dump is typically smaller than full dump: managed heap × 1.2
+                    var managedMemory = process.PrivateMemorySize64;
+                    var gcDumpRequired = (long)(managedMemory * 1.2);
+                    return Math.Max(BaseMinimum, gcDumpRequired);
+
+                case CollectionOperationType.Trace:
+                    // Trace: duration × expected throughput (conservative 10 MB/s for 60s = 600 MB)
+                    const long TraceDurationSeconds = 60;
+                    const long TraceThroughputMBps = 10;
+                    var traceRequired = TraceDurationSeconds * TraceThroughputMBps * 1024 * 1024;
+                    return Math.Max(BaseMinimum, traceRequired);
+
+                case CollectionOperationType.Stacks:
+                    // Stacks are typically small: 10 MB
+                    const long StacksRequired = 10 * 1024 * 1024;
+                    return Math.Max(BaseMinimum, StacksRequired);
+
+                case CollectionOperationType.Counters:
+                    // Counters are very small: 5 MB
+                    const long CountersRequired = 5 * 1024 * 1024;
+                    return Math.Max(BaseMinimum, CountersRequired);
+
+                default:
+                    return BaseMinimum;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not estimate required space for PID {Pid}, using base minimum", pid);
+            return BaseMinimum;
+        }
     }
 
     private string? GetProcessEnvironmentVariable(int pid, string variableName)

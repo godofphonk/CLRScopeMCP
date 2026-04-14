@@ -69,7 +69,7 @@ public class CollectTraceService
         using var pidLock = await _pidLockManager.AcquireLockAsync(request.Pid, cancellationToken);
 
         // Preflight validation
-        var preflightResult = await _preflightValidator.ValidateCollectAsync(request.Pid, cancellationToken);
+        var preflightResult = await _preflightValidator.ValidateCollectAsync(request.Pid, CollectionOperationType.Trace, cancellationToken);
         if (!preflightResult.IsValid)
         {
             _logger.LogError("[{Phase}] Preflight validation failed for PID {Pid}: {Error}", SessionPhase.Preflight, request.Pid, preflightResult.Message);
