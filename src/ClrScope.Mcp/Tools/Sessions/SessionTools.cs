@@ -123,6 +123,77 @@ public sealed class SessionTools
         }
     }
 
+    [McpServerTool(Name = "session_group_by_incident", Title = "Group Sessions by Incident", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Group sessions by incident/issue ID for tracking related diagnostic sessions")]
+    public static async Task<SessionGroupResult> GroupSessionsByIncident(
+        McpServer server,
+        [Description("Optional incident ID to filter (returns all incidents if not provided)")] string? incidentId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var sessionStore = server.Services!.GetRequiredService<ISqliteSessionStore>();
+        var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
+        var logger = server.Services!.GetRequiredService<ILogger<SessionTools>>();
+
+        try
+        {
+            var allSessions = await sessionStore.GetAllAsync(cancellationToken);
+
+            // Group sessions by incident ID
+            var grouped = allSessions
+                .GroupBy(s => s.IncidentId ?? "no-incident")
+                .Where(g => string.IsNullOrEmpty(incidentId) || g.Key == incidentId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            var incidentGroups = new List<IncidentGroup>();
+
+            foreach (var group in grouped)
+            {
+                var sessions = group.Value;
+                var artifactCounts = new Dictionary<string, int>();
+
+                foreach (var session in sessions)
+                {
+                    var artifacts = await artifactStore.GetBySessionAsync(session.SessionId, cancellationToken);
+                    foreach (var artifact in artifacts)
+                    {
+                        var kind = artifact.Kind.ToString();
+                        artifactCounts[kind] = artifactCounts.GetValueOrDefault(kind, 0) + 1;
+                    }
+                }
+
+                incidentGroups.Add(new IncidentGroup(
+                    IncidentId: group.Key,
+                    SessionCount: sessions.Count,
+                    SessionIds: sessions.Select(s => s.SessionId.Value).ToArray(),
+                    Kinds: sessions.Select(s => s.Kind.ToString()).Distinct().ToArray(),
+                    Statuses: sessions.Select(s => s.Status.ToString()).Distinct().ToArray(),
+                    Pids: sessions.Select(s => s.Pid).Distinct().ToArray(),
+                    ArtifactCounts: artifactCounts,
+                    FirstSessionAt: sessions.Min(s => s.CreatedAtUtc),
+                    LastSessionAt: sessions.Max(s => s.CreatedAtUtc)
+                ));
+            }
+
+            logger.LogInformation("Grouped {IncidentCount} incidents with {TotalSessionCount} sessions", incidentGroups.Count, allSessions.Count);
+
+            return new SessionGroupResult(
+                Success: true,
+                IncidentCount: incidentGroups.Count,
+                Incidents: incidentGroups.ToArray(),
+                Error: null
+            );
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Group sessions by incident failed");
+            return new SessionGroupResult(
+                Success: false,
+                IncidentCount: 0,
+                Incidents: Array.Empty<IncidentGroup>(),
+                Error: $"Group sessions by incident failed: {ex.Message}"
+            );
+        }
+    }
+
     [McpServerTool(Name = "session_cancel", Title = "Cancel Session", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false, UseStructuredContent = true), Description("Cancel an active session")]
     public static async Task<CancelSessionResult> CancelSession(
         [Description("Session ID to cancel")] string sessionId,
@@ -238,4 +309,23 @@ public record SessionArtifactSummary(
     string Status,
     string FilePath,
     long SizeBytes
+);
+
+public record SessionGroupResult(
+    bool Success,
+    int IncidentCount,
+    IncidentGroup[] Incidents,
+    string? Error
+);
+
+public record IncidentGroup(
+    string IncidentId,
+    int SessionCount,
+    string[] SessionIds,
+    string[] Kinds,
+    string[] Statuses,
+    int[] Pids,
+    Dictionary<string, int> ArtifactCounts,
+    DateTime FirstSessionAt,
+    DateTime LastSessionAt
 );

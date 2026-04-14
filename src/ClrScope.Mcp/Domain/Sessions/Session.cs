@@ -20,7 +20,8 @@ public record Session(
     DateTime? CompletedAtUtc,
     string? Error,
     string? Profile,
-    SessionPhase Phase = SessionPhase.Preflight)
+    SessionPhase Phase = SessionPhase.Preflight,
+    string? IncidentId = null)
 {
     /// <summary>
     /// Transitions session to Failed state with CompletedAtUtc set.

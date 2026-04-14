@@ -20,7 +20,7 @@ public class SqliteSessionStore : ISqliteSessionStore
 
             var command = connection.CreateCommand();
             command.CommandText = """
-                SELECT session_id, kind, pid, status, created_at_utc, completed_at_utc, error, profile, phase
+                SELECT session_id, kind, pid, status, created_at_utc, completed_at_utc, error, profile, phase, incident_id
                 FROM sessions
                 WHERE session_id = $sessionId
                 """;
@@ -77,6 +77,11 @@ public class SqliteSessionStore : ISqliteSessionStore
 
     public async Task<Session> CreateAsync(SessionKind kind, int pid, string? profile = null, CancellationToken cancellationToken = default)
     {
+        return await CreateAsync(kind, pid, profile, null, cancellationToken);
+    }
+
+    public async Task<Session> CreateAsync(SessionKind kind, int pid, string? profile, string? incidentId, CancellationToken cancellationToken = default)
+    {
         return await RetryAsync(async () =>
         {
             var sessionId = SessionId.New();
@@ -86,8 +91,8 @@ public class SqliteSessionStore : ISqliteSessionStore
 
             var command = connection.CreateCommand();
             command.CommandText = """
-                INSERT INTO sessions (session_id, kind, pid, status, created_at_utc, completed_at_utc, error, profile, phase)
-                VALUES ($sessionId, $kind, $pid, $status, $createdAtUtc, $completedAtUtc, $error, $profile, $phase)
+                INSERT INTO sessions (session_id, kind, pid, status, created_at_utc, completed_at_utc, error, profile, phase, incident_id)
+                VALUES ($sessionId, $kind, $pid, $status, $createdAtUtc, $completedAtUtc, $error, $profile, $phase, $incidentId)
                 """;
             command.Parameters.AddWithValue("$sessionId", sessionId.Value);
             command.Parameters.AddWithValue("$kind", kind.ToString());
@@ -98,6 +103,7 @@ public class SqliteSessionStore : ISqliteSessionStore
             command.Parameters.AddWithValue("$error", DBNull.Value);
             command.Parameters.AddWithValue("$profile", profile ?? (object)DBNull.Value);
             command.Parameters.AddWithValue("$phase", SessionPhase.Preflight.ToString());
+            command.Parameters.AddWithValue("$incidentId", incidentId ?? (object)DBNull.Value);
 
             await command.ExecuteNonQueryAsync(cancellationToken);
 
@@ -110,7 +116,8 @@ public class SqliteSessionStore : ISqliteSessionStore
                 null,
                 null,
                 profile,
-                SessionPhase.Preflight
+                SessionPhase.Preflight,
+                incidentId
             );
         }, cancellationToken);
     }
@@ -140,6 +147,31 @@ public class SqliteSessionStore : ISqliteSessionStore
         }, cancellationToken);
     }
 
+    public async Task<IReadOnlyList<Session>> GetAllAsync(CancellationToken cancellationToken = default)
+    {
+        return await RetryAsync(async () =>
+        {
+            await using var connection = await SqliteSchemaInitializer.OpenConnectionWithForeignKeysAsync(_connectionString, cancellationToken);
+
+            var command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT session_id, kind, pid, status, created_at_utc, completed_at_utc, error, profile, phase, incident_id
+                FROM sessions
+                ORDER BY created_at_utc DESC
+                """;
+
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            var sessions = new List<Session>();
+
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                sessions.Add(MapFromReader(reader));
+            }
+
+            return sessions.AsReadOnly();
+        }, cancellationToken);
+    }
+
     private static Session MapFromReader(SqliteDataReader reader)
     {
         return new Session(
@@ -151,7 +183,8 @@ public class SqliteSessionStore : ISqliteSessionStore
             reader.IsDBNull(5) ? null : DateTime.Parse(reader.GetString(5), null, System.Globalization.DateTimeStyles.RoundtripKind),
             reader.IsDBNull(6) ? null : reader.GetString(6),
             reader.IsDBNull(7) ? null : reader.GetString(7),
-            reader.IsDBNull(8) ? SessionPhase.Preflight : Enum.Parse<SessionPhase>(reader.GetString(8))
+            reader.IsDBNull(8) ? SessionPhase.Preflight : Enum.Parse<SessionPhase>(reader.GetString(8)),
+            reader.FieldCount > 9 && !reader.IsDBNull(9) ? reader.GetString(9) : null
         );
     }
 }
