@@ -1,3 +1,4 @@
+using ClrScope.Mcp.Infrastructure;
 using ClrScope.Mcp.Options;
 using ClrScope.Mcp.Services;
 using Microsoft.Extensions.Logging;
@@ -15,11 +16,13 @@ public class HealthServiceTests
         // Arrange
         var optionsMock = new Mock<IOptions<ClrScopeOptions>>();
         var loggerMock = new Mock<ILogger<HealthService>>();
+        var toolCheckerMock = new Mock<ICliToolAvailabilityChecker>();
 
         // Act & Assert
         var exception = Record.Exception(() => new HealthService(
             optionsMock.Object,
-            loggerMock.Object
+            loggerMock.Object,
+            toolCheckerMock.Object
         ));
 
         Assert.Null(exception);
@@ -42,7 +45,10 @@ public class HealthServiceTests
             var optionsMock = new Mock<IOptions<ClrScopeOptions>>();
             optionsMock.Setup(x => x.Value).Returns(options);
             var loggerMock = new Mock<ILogger<HealthService>>();
-            var service = new HealthService(optionsMock.Object, loggerMock.Object);
+            var toolCheckerMock = new Mock<ICliToolAvailabilityChecker>();
+            toolCheckerMock.Setup(x => x.CheckAvailabilitySync(It.IsAny<string>()))
+                .Returns(new CliToolAvailability("test", true));
+            var service = new HealthService(optionsMock.Object, loggerMock.Object, toolCheckerMock.Object);
 
             // Act
             var result = await service.GetHealthAsync();
@@ -55,6 +61,8 @@ public class HealthServiceTests
             Assert.True(result.ArtifactRoot.IsWritable);
             Assert.Equal(tempDir, result.ArtifactRoot.Path);
             Assert.True(result.Database.IsAccessible);
+            Assert.NotNull(result.Capabilities);
+            Assert.NotNull(result.Readiness);
             Assert.Empty(result.Warnings);
         }
         finally
@@ -79,7 +87,10 @@ public class HealthServiceTests
         var optionsMock = new Mock<IOptions<ClrScopeOptions>>();
         optionsMock.Setup(x => x.Value).Returns(options);
         var loggerMock = new Mock<ILogger<HealthService>>();
-        var service = new HealthService(optionsMock.Object, loggerMock.Object);
+        var toolCheckerMock = new Mock<ICliToolAvailabilityChecker>();
+        toolCheckerMock.Setup(x => x.CheckAvailabilitySync(It.IsAny<string>()))
+            .Returns(new CliToolAvailability("test", true));
+        var service = new HealthService(optionsMock.Object, loggerMock.Object, toolCheckerMock.Object);
 
         // Act
         var result = await service.GetHealthAsync();
@@ -109,7 +120,10 @@ public class HealthServiceTests
             var optionsMock = new Mock<IOptions<ClrScopeOptions>>();
             optionsMock.Setup(x => x.Value).Returns(options);
             var loggerMock = new Mock<ILogger<HealthService>>();
-            var service = new HealthService(optionsMock.Object, loggerMock.Object);
+            var toolCheckerMock = new Mock<ICliToolAvailabilityChecker>();
+            toolCheckerMock.Setup(x => x.CheckAvailabilitySync(It.IsAny<string>()))
+                .Returns(new CliToolAvailability("test", true));
+            var service = new HealthService(optionsMock.Object, loggerMock.Object, toolCheckerMock.Object);
 
             // Act
             var result = await service.GetHealthAsync();
@@ -145,7 +159,10 @@ public class HealthServiceTests
             var optionsMock = new Mock<IOptions<ClrScopeOptions>>();
             optionsMock.Setup(x => x.Value).Returns(options);
             var loggerMock = new Mock<ILogger<HealthService>>();
-            var service = new HealthService(optionsMock.Object, loggerMock.Object);
+            var toolCheckerMock = new Mock<ICliToolAvailabilityChecker>();
+            toolCheckerMock.Setup(x => x.CheckAvailabilitySync(It.IsAny<string>()))
+                .Returns(new CliToolAvailability("test", true));
+            var service = new HealthService(optionsMock.Object, loggerMock.Object, toolCheckerMock.Object);
 
             // Act
             var result = await service.GetHealthAsync();
@@ -189,7 +206,10 @@ public class HealthServiceTests
             var optionsMock = new Mock<IOptions<ClrScopeOptions>>();
             optionsMock.Setup(x => x.Value).Returns(options);
             var loggerMock = new Mock<ILogger<HealthService>>();
-            var service = new HealthService(optionsMock.Object, loggerMock.Object);
+            var toolCheckerMock = new Mock<ICliToolAvailabilityChecker>();
+            toolCheckerMock.Setup(x => x.CheckAvailabilitySync(It.IsAny<string>()))
+                .Returns(new CliToolAvailability("test", true));
+            var service = new HealthService(optionsMock.Object, loggerMock.Object, toolCheckerMock.Object);
 
             // Act
             var result = await service.GetHealthAsync();
@@ -221,7 +241,10 @@ public class HealthServiceTests
         var optionsMock = new Mock<IOptions<ClrScopeOptions>>();
         optionsMock.Setup(x => x.Value).Returns(options);
         var loggerMock = new Mock<ILogger<HealthService>>();
-        var service = new HealthService(optionsMock.Object, loggerMock.Object);
+        var toolCheckerMock = new Mock<ICliToolAvailabilityChecker>();
+        toolCheckerMock.Setup(x => x.CheckAvailabilitySync(It.IsAny<string>()))
+            .Returns(new CliToolAvailability("test", true));
+        var service = new HealthService(optionsMock.Object, loggerMock.Object, toolCheckerMock.Object);
 
         // Act
         var result = await service.GetHealthAsync();
@@ -251,7 +274,10 @@ public class HealthServiceTests
             var optionsMock = new Mock<IOptions<ClrScopeOptions>>();
             optionsMock.Setup(x => x.Value).Returns(options);
             var loggerMock = new Mock<ILogger<HealthService>>();
-            var service = new HealthService(optionsMock.Object, loggerMock.Object);
+            var toolCheckerMock = new Mock<ICliToolAvailabilityChecker>();
+            toolCheckerMock.Setup(x => x.CheckAvailabilitySync(It.IsAny<string>()))
+                .Returns(new CliToolAvailability("test", true));
+            var service = new HealthService(optionsMock.Object, loggerMock.Object, toolCheckerMock.Object);
 
             // Act
             var result = await service.GetHealthAsync();
