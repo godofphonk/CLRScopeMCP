@@ -3,13 +3,14 @@ using ClrScope.Mcp.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
+using System.ComponentModel;
 
 namespace ClrScope.Mcp.Tools.Analysis;
 
 [McpServerToolType]
 public sealed class SummaryTools
 {
-    [McpServerTool(Name = "artifact_summarize")]
+    [McpServerTool(Name = "artifact_summarize"), Description("Analyze and summarize an artifact with findings and recommendations")]
     public static async Task<ArtifactAnalysisResult> SummarizeArtifact(
         string artifactId,
         McpServer server,

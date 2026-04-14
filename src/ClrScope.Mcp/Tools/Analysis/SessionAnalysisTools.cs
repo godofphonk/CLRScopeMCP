@@ -4,13 +4,14 @@ using ClrScope.Mcp.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
+using System.ComponentModel;
 
 namespace ClrScope.Mcp.Tools.Analysis;
 
 [McpServerToolType]
 public sealed class SessionAnalysisTools
 {
-    [McpServerTool(Name = "session_analyze")]
+    [McpServerTool(Name = "session_analyze"), Description("Analyze a diagnostic session with all its artifacts")]
     public static async Task<SessionAnalysisResult> AnalyzeSession(
         string sessionId,
         McpServer server,

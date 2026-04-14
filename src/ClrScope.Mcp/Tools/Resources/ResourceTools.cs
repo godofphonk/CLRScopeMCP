@@ -32,7 +32,7 @@ public sealed class ResourceTools
         }
     }
 
-    [McpServerTool(Name = "resource_artifact")]
+    [McpServerTool(Name = "resource_artifact"), Description("Get artifact resource content")]
     public static async Task<string> GetArtifactResource(
         string id,
         McpServer server,
@@ -61,7 +61,7 @@ public sealed class ResourceTools
         }
     }
 
-    [McpServerTool(Name = "resource_artifact_metadata")]
+    [McpServerTool(Name = "resource_artifact_metadata"), Description("Get artifact resource metadata")]
     public static async Task<string> GetArtifactMetadataResource(
         string id,
         McpServer server,
@@ -88,7 +88,7 @@ public sealed class ResourceTools
         }
     }
 
-    [McpServerTool(Name = "resource_artifact_summary")]
+    [McpServerTool(Name = "resource_artifact_summary"), Description("Get artifact resource summary")]
     public static async Task<string> GetArtifactSummaryResource(
         string id,
         McpServer server,
