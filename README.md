@@ -24,33 +24,15 @@ CLRScope MCP provides AI-powered diagnostic capabilities for .NET applications t
 
 ## Installation
 
-### NuGet Global Tool
-```bash
-dotnet tool install --global ClrScope.Mcp
-```
+Choose one of the following installation methods:
 
-### Binary Downloads
-
-Download pre-built binaries from the [GitHub Releases](https://github.com/godofphonk/CLRScopeMCP/releases/latest) page:
-
-- **Linux x64:** `clrscope-mcp-linux-x64.tar.gz`
-- **Linux ARM64:** `clrscope-mcp-linux-arm64.tar.gz`
-- **macOS ARM64:** `clrscope-mcp-osx-arm64.tar.gz`
-- **Windows x64:** `clrscope-mcp-win-x64.zip`
-
-Extract and run:
-```bash
-# Linux/macOS
-tar xzf clrscope-mcp-linux-x64.tar.gz
-chmod +x ClrScope.Mcp
-./ClrScope.Mcp --version
-
-# Windows
-unzip clrscope-mcp-win-x64.zip
-.\ClrScope.Mcp.exe --version
-```
+- [NuGet Global Tool](docs/installation/nuget-global-tool.md) - System-wide installation via NuGet
+- [Binary Downloads](docs/installation/binary-downloads.md) - Pre-built binaries for your platform
+- [Local .NET Tool](docs/installation/dotnet-local-tool.md) - Project-specific installation
 
 ### IDE Configuration (VS Code, Visual Studio, etc.)
+
+After installation, configure your IDE's MCP settings (e.g., VS Code `settings.json`):
 
 ```json
 {
