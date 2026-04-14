@@ -155,8 +155,12 @@ public sealed class SummaryTools
                 var fileContent = File.ReadAllText(artifact.FilePath);
                 if (artifact.FilePath.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
                 {
-                    // Parse JSON format
-                    stackFrames = System.Text.Json.JsonSerializer.Deserialize<List<StackFrameData>>(fileContent);
+                    // Parse JSON format using the real StacksOutput structure
+                    var stacksOutput = System.Text.Json.JsonSerializer.Deserialize<StacksOutput>(fileContent);
+                    if (stacksOutput != null && stacksOutput.Threads != null)
+                    {
+                        stackFrames = ConvertToStackFrameData(stacksOutput);
+                    }
                 }
                 else
                 {
@@ -185,6 +189,27 @@ public sealed class SummaryTools
         {
             return GenerateHtmlFlameGraph(stackFrames, artifact);
         }
+    }
+
+    private static List<StackFrameData> ConvertToStackFrameData(StacksOutput stacksOutput)
+    {
+        var frames = new List<StackFrameData>();
+        int frameIndex = 0;
+
+        foreach (var thread in stacksOutput.Threads)
+        {
+            foreach (var frame in thread.Frames)
+            {
+                frames.Add(new StackFrameData
+                {
+                    ThreadId = thread.ThreadId,
+                    FrameIndex = frameIndex++,
+                    CallSite = frame.CallSite
+                });
+            }
+        }
+
+        return frames;
     }
 
     private static string GeneratePlaceholderFlameGraph(Artifact artifact, string format)
@@ -843,3 +868,9 @@ public record StackFrameData
     public int FrameIndex { get; init; }
     public string CallSite { get; init; } = string.Empty;
 }
+
+public record StackFrame(string ChildSP, string IP, string CallSite);
+
+public record ThreadStack(int ThreadId, string? ThreadName, StackFrame[] Frames);
+
+public record StacksOutput(int Pid, DateTime Timestamp, ThreadStack[] Threads);
