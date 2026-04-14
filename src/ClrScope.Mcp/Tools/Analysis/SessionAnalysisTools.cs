@@ -11,10 +11,11 @@ namespace ClrScope.Mcp.Tools.Analysis;
 [McpServerToolType]
 public sealed class SessionAnalysisTools
 {
-    [McpServerTool(Name = "session_analyze"), Description("Analyze a diagnostic session with all its artifacts")]
+    [McpServerTool(Name = "session_analyze"), Description("Analyze a diagnostic session with all its artifacts. Optionally compare with baseline session.")]
     public static async Task<SessionAnalysisResult> AnalyzeSession(
         string sessionId,
         McpServer server,
+        [Description("Baseline session ID to compare against (optional)")] string? baselineSessionId = null,
         CancellationToken cancellationToken = default)
     {
         var sessionStore = server.Services!.GetRequiredService<ISqliteSessionStore>();
@@ -30,7 +31,20 @@ public sealed class SessionAnalysisTools
             }
 
             var artifacts = await artifactStore.GetBySessionAsync(new SessionId(sessionId), cancellationToken);
-            var analysis = AnalyzeSession(session, artifacts, logger);
+
+            // Get baseline session if provided
+            Session? baselineSession = null;
+            IReadOnlyList<Artifact> baselineArtifacts = new List<Artifact>();
+            if (!string.IsNullOrEmpty(baselineSessionId))
+            {
+                baselineSession = await sessionStore.GetAsync(new SessionId(baselineSessionId), cancellationToken);
+                if (baselineSession != null)
+                {
+                    baselineArtifacts = await artifactStore.GetBySessionAsync(new SessionId(baselineSessionId), cancellationToken);
+                }
+            }
+
+            var analysis = AnalyzeSession(session, artifacts, baselineSession, baselineArtifacts, logger);
             return analysis;
         }
         catch (Exception ex)
@@ -40,7 +54,7 @@ public sealed class SessionAnalysisTools
         }
     }
 
-    private static SessionAnalysisResult AnalyzeSession(Session session, IReadOnlyList<Artifact> artifacts, ILogger logger)
+    private static SessionAnalysisResult AnalyzeSession(Session session, IReadOnlyList<Artifact> artifacts, Session? baselineSession, IReadOnlyList<Artifact> baselineArtifacts, ILogger logger)
     {
         try
         {
@@ -62,11 +76,14 @@ public sealed class SessionAnalysisTools
                 )).ToList(),
                 KeyMetrics: new Dictionary<string, string>(),
                 Issues: new List<string>(),
-                Recommendations: new List<string>()
+                Recommendations: new List<string>(),
+                BaselineSessionId: baselineSession?.SessionId.Value,
+                Comparisons: new Dictionary<string, string>()
             );
 
             // Add basic metrics
-            summary.KeyMetrics["Total Size"] = FormatBytes(artifacts.Sum(a => a.SizeBytes));
+            var totalSize = artifacts.Sum(a => a.SizeBytes);
+            summary.KeyMetrics["Total Size"] = FormatBytes(totalSize);
             summary.KeyMetrics["Artifact Count"] = artifacts.Count.ToString();
             summary.KeyMetrics["Status"] = session.Status.ToString();
             summary.KeyMetrics["Phase"] = session.Phase.ToString();
@@ -75,6 +92,65 @@ public sealed class SessionAnalysisTools
             {
                 var duration = session.CompletedAtUtc.Value - session.CreatedAtUtc;
                 summary.KeyMetrics["Duration"] = duration.TotalSeconds.ToString("F2") + "s";
+            }
+
+            // Compare with baseline if provided
+            if (baselineSession != null)
+            {
+                summary.Comparisons["Baseline Session"] = baselineSession.SessionId.Value;
+
+                // Compare artifact count
+                var baselineArtifactCount = baselineArtifacts.Count;
+                var artifactCountDiff = artifacts.Count - baselineArtifactCount;
+                summary.Comparisons["Artifact Count"] = $"{artifacts.Count} vs {baselineArtifactCount} ({artifactCountDiff:+0;-0})";
+
+                // Compare total size
+                var baselineTotalSize = baselineArtifacts.Sum(a => a.SizeBytes);
+                var sizeDiff = totalSize - baselineTotalSize;
+                var sizeDiffPercent = baselineTotalSize > 0 ? ((double)sizeDiff / baselineTotalSize * 100) : 0;
+                summary.Comparisons["Total Size"] = $"{FormatBytes(totalSize)} vs {FormatBytes(baselineTotalSize)} ({sizeDiffPercent:+0.0;-0.0}%)";
+
+                // Compare duration if both completed
+                if (session.CompletedAtUtc.HasValue && baselineSession.CompletedAtUtc.HasValue)
+                {
+                    var duration = session.CompletedAtUtc.Value - session.CreatedAtUtc;
+                    var baselineDuration = baselineSession.CompletedAtUtc.Value - baselineSession.CreatedAtUtc;
+                    var durationDiff = duration - baselineDuration;
+                    summary.Comparisons["Duration"] = $"{duration.TotalSeconds:F2}s vs {baselineDuration.TotalSeconds:F2}s ({durationDiff.TotalSeconds:+0.0;-0.0}s)";
+                }
+
+                // Compare status
+                if (session.Status != baselineSession.Status)
+                {
+                    summary.Issues.Add($"Status differs from baseline: {session.Status} vs {baselineSession.Status}");
+                }
+
+                // Compare artifact kinds
+                var currentKinds = artifacts.Select(a => a.Kind).Distinct().ToHashSet();
+                var baselineKinds = baselineArtifacts.Select(a => a.Kind).Distinct().ToHashSet();
+                var missingKinds = baselineKinds.Except(currentKinds);
+                var newKinds = currentKinds.Except(baselineKinds);
+
+                if (missingKinds.Any())
+                {
+                    summary.Issues.Add($"Missing artifact kinds compared to baseline: {string.Join(", ", missingKinds)}");
+                }
+
+                if (newKinds.Any())
+                {
+                    summary.Recommendations.Add($"New artifact kinds not in baseline: {string.Join(", ", newKinds)}");
+                }
+
+                // Compare PIDs
+                if (session.Pid != baselineSession.Pid)
+                {
+                    summary.Comparisons["Process ID"] = $"{session.Pid} vs {baselineSession.Pid} (different process)";
+                    summary.Issues.Add("Comparing sessions from different processes");
+                }
+                else
+                {
+                    summary.Comparisons["Process ID"] = $"{session.Pid} (same process)";
+                }
             }
 
             // Analyze artifacts
@@ -171,7 +247,9 @@ public record SessionSummary(
     List<ArtifactInfo> Artifacts,
     Dictionary<string, string> KeyMetrics,
     List<string> Issues,
-    List<string> Recommendations
+    List<string> Recommendations,
+    string? BaselineSessionId = null,
+    Dictionary<string, string>? Comparisons = null
 );
 
 public record ArtifactInfo(
