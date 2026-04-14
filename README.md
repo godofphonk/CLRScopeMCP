@@ -25,6 +25,11 @@ CLRScope MCP provides AI-powered diagnostic capabilities for .NET applications t
 
 ## Installation
 
+### NuGet Global Tool
+```bash
+dotnet tool install --global ClrScope.Mcp
+```
+
 ### IDE Configuration (VS Code, Visual Studio, etc.)
 
 ```json
