@@ -458,12 +458,12 @@ public sealed class ArtifactTools
         }
     }
 
-    [McpServerTool(Name = "artifact_cleanup", Title = "Cleanup Old Artifacts", ReadOnly = false, Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Delete artifacts based on strategy. Strategies: age (default), importance (keep pinned), duplicates (keep newest per PID+kind)")]
+    [McpServerTool(Name = "artifact_cleanup", Title = "Cleanup Old Artifacts", ReadOnly = false, Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Delete artifacts based on strategy. Strategies: age (default, filter by age and pin status), duplicates (keep newest per PID+kind)")]
     public static async Task<CleanupArtifactsResult> CleanupArtifacts(
         [Description("Maximum age of artifacts to keep (e.g., 7d for 7 days)")] string maxAge,
         McpServer server,
         [Description("Maximum total size to delete in bytes (optional, e.g., 10737418240 for 10GB)")] long? maxSizeBytes = null,
-        [Description("Cleanup strategy: 'age' (default), 'importance' (keep pinned), 'duplicates' (keep newest per PID+kind)")] string strategy = "age",
+        [Description("Cleanup strategy: 'age' (default, filter by age and pin status), 'duplicates' (keep newest per PID+kind)")] string strategy = "age",
         CancellationToken cancellationToken = default)
     {
         var retentionService = server.Services!.GetRequiredService<IArtifactRetentionService>();

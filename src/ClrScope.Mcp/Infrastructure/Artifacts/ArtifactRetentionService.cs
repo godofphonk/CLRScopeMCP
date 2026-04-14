@@ -46,18 +46,11 @@ public class ArtifactRetentionService : IArtifactRetentionService
         switch (strategy.ToLowerInvariant())
         {
             case "age":
-                // Original behavior: filter by age and pin status
+            default:
+                // Filter by age and pin status
                 candidates = artifacts
                     .Where(a => a.CreatedAtUtc < cutoffTime && !a.Pinned)
                     .OrderBy(a => a.CreatedAtUtc);
-                break;
-
-            case "importance":
-                // Keep pinned artifacts regardless of age, delete unpinned by age
-                candidates = artifacts
-                    .Where(a => a.CreatedAtUtc < cutoffTime && !a.Pinned)
-                    .OrderBy(a => a.CreatedAtUtc);
-                _logger.LogInformation("Using importance strategy: keeping pinned artifacts regardless of age");
                 break;
 
             case "duplicates":
