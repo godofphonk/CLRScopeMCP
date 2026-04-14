@@ -70,13 +70,6 @@ public class ArtifactRetentionService : IArtifactRetentionService
                 candidates = toDelete.OrderBy(a => a.CreatedAtUtc);
                 _logger.LogInformation("Using duplicates strategy: keeping newest artifact per PID+Kind, deleting {Count} duplicates", toDelete.Count);
                 break;
-
-            default:
-                _logger.LogWarning("Unknown strategy '{Strategy}', defaulting to age strategy", strategy);
-                candidates = artifacts
-                    .Where(a => a.CreatedAtUtc < cutoffTime && !a.Pinned)
-                    .OrderBy(a => a.CreatedAtUtc);
-                break;
         }
 
         var candidatesList = candidates.ToList();

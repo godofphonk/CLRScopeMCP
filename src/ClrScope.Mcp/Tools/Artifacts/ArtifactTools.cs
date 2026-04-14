@@ -54,6 +54,7 @@ public sealed class ArtifactTools
                     FilePath: string.Empty,
                     SizeBytes: 0,
                     Sha256: string.Empty,
+                    HashState: string.Empty,
                     Pid: 0,
                     CreatedAtUtc: DateTime.UtcNow,
                     Error: "Artifact ID must not be empty"
@@ -74,6 +75,7 @@ public sealed class ArtifactTools
                     FilePath: string.Empty,
                     SizeBytes: 0,
                     Sha256: string.Empty,
+                    HashState: string.Empty,
                     Pid: 0,
                     CreatedAtUtc: DateTime.UtcNow,
                     Error: "Artifact not found"
@@ -107,6 +109,7 @@ public sealed class ArtifactTools
                 FilePath: string.Empty,
                 SizeBytes: 0,
                 Sha256: string.Empty,
+                HashState: string.Empty,
                 Pid: 0,
                 CreatedAtUtc: DateTime.UtcNow,
                 Error: $"Invalid input: {ex.Message}"
@@ -123,6 +126,7 @@ public sealed class ArtifactTools
                 FilePath: string.Empty,
                 SizeBytes: 0,
                 Sha256: string.Empty,
+                HashState: string.Empty,
                 Pid: 0,
                 CreatedAtUtc: DateTime.UtcNow,
                 Error: $"Get artifact metadata failed: {ex.Message}"

@@ -32,6 +32,7 @@ public sealed class CollectTools
                     FilePath: null,
                     SizeBytes: 0,
                     Sha256: null,
+                    HashState: null,
                     Error: "Process ID must be greater than 0",
                     CancellationSemantics: "best_effort"
                 );
@@ -69,6 +70,7 @@ public sealed class CollectTools
                     FilePath: null,
                     SizeBytes: 0,
                     Sha256: null,
+                    HashState: null,
                     Error: result.Error,
                     CancellationSemantics: "best_effort"
                 );
@@ -84,6 +86,7 @@ public sealed class CollectTools
                 FilePath: null,
                 SizeBytes: 0,
                 Sha256: null,
+                HashState: null,
                 Error: $"Invalid input: {ex.Message}",
                 CancellationSemantics: "best_effort"
             );
@@ -98,6 +101,7 @@ public sealed class CollectTools
                 FilePath: null,
                 SizeBytes: 0,
                 Sha256: null,
+                HashState: null,
                 Error: $"Collect dump failed: {ex.Message}",
                 CancellationSemantics: "best_effort"
             );
@@ -128,6 +132,7 @@ public sealed class CollectTools
                     FilePath: null,
                     SizeBytes: 0,
                     Sha256: null,
+                    HashState: null,
                     Error: "Process ID must be greater than 0",
                     CompletionMode: "Failed"
                 );
@@ -142,6 +147,7 @@ public sealed class CollectTools
                     FilePath: null,
                     SizeBytes: 0,
                     Sha256: null,
+                    HashState: null,
                     Error: "Duration must not be empty",
                     CompletionMode: "Failed"
                 );
@@ -156,6 +162,7 @@ public sealed class CollectTools
                     FilePath: null,
                     SizeBytes: 0,
                     Sha256: null,
+                    HashState: null,
                     Error: "Duration must be in hh:mm:ss format (e.g., 00:01:30)",
                     CompletionMode: "Failed"
                 );
@@ -193,6 +200,7 @@ public sealed class CollectTools
                     FilePath: null,
                     SizeBytes: 0,
                     Sha256: null,
+                    HashState: null,
                     Error: result.Error,
                     CompletionMode: result.CompletionMode.ToString()
                 );
@@ -208,6 +216,7 @@ public sealed class CollectTools
                 FilePath: null,
                 SizeBytes: 0,
                 Sha256: null,
+                HashState: null,
                 Error: $"Invalid input: {ex.Message}",
                 CompletionMode: "Failed"
             );
@@ -222,6 +231,7 @@ public sealed class CollectTools
                 FilePath: null,
                 SizeBytes: 0,
                 Sha256: null,
+                HashState: null,
                 Error: $"Collect trace failed: {ex.Message}",
                 CompletionMode: "Failed"
             );

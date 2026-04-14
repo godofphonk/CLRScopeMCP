@@ -1,4 +1,5 @@
 using ClrScope.Mcp.DependencyInjection;
+using ClrScope.Mcp.Infrastructure;
 using ClrScope.Mcp.Options;
 using ClrScope.Mcp.Services;
 using Microsoft.Extensions.Configuration;
