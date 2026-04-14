@@ -53,8 +53,22 @@ After installation, configure your IDE's MCP settings (e.g., VS Code `settings.j
   }
 }
 ```
+## Required Utilities
+
+For full functionality, the following CLI tools are required:
+
+- **dotnet-dump** - Memory dump collection
+- **dotnet-gcdump** - GC heap snapshots
+- **dotnet-stack** - Thread stack analysis
+- **dotnet-counters** - Performance monitoring
+- **dotnet-symbol** - Symbol resolution
+
+See [Full Requirements](docs/requirements.md) for installation instructions and feature-specific requirements.
 
 ## Documentation
 
 - [Investigation Guides](docs/investigation-guides.md) - Step-by-step guides for memory leaks, hangs, high CPU, and baseline performance collection
 - [Tool Integration](docs/integration.md) - Required CLI tools and installation instructions for diagnostic features
+- [Full Requirements](docs/requirements.md) - Comprehensive requirements for using all CLRScope MCP features
+- [Full Requirements](docs/requirements.md) for installation instructions and feature-specific requirements.
+
