@@ -355,7 +355,7 @@ public sealed class ArtifactTools
         }
     }
 
-    [McpServerTool(Name = "artifact_cleanup", Title = "Cleanup Old Artifacts", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false, UseStructuredContent = true), Description("Delete old artifacts older than specified age and/or limit total size")]
+    [McpServerTool(Name = "artifact_cleanup", Title = "Cleanup Old Artifacts", ReadOnly = false, Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Delete old artifacts older than specified age and/or limit total size")]
     public static async Task<CleanupArtifactsResult> CleanupArtifacts(
         [Description("Maximum age of artifacts to keep (e.g., 7d for 7 days)")] string maxAge,
         McpServer server,
