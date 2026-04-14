@@ -144,8 +144,51 @@ public sealed class SummaryTools
 
     private static string GenerateFlameGraph(Artifact artifact, string format)
     {
-        // Generate a placeholder flame graph
-        // In a real implementation, this would parse stack traces and generate SVG/HTML flame graph
+        var flameGraphData = new System.Text.StringBuilder();
+        List<StackFrameData>? stackFrames = null;
+
+        try
+        {
+            // Try to read and parse stack data from artifact
+            if (File.Exists(artifact.FilePath))
+            {
+                var fileContent = File.ReadAllText(artifact.FilePath);
+                if (artifact.FilePath.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Parse JSON format
+                    stackFrames = System.Text.Json.JsonSerializer.Deserialize<List<StackFrameData>>(fileContent);
+                }
+                else
+                {
+                    // Parse plain text format
+                    stackFrames = ParsePlainStackText(fileContent);
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // If parsing fails, use placeholder
+        }
+
+        if (stackFrames == null || stackFrames.Count == 0)
+        {
+            // Fallback to placeholder if no data available
+            return GeneratePlaceholderFlameGraph(artifact, format);
+        }
+
+        // Generate real flame graph from parsed data
+        if (format == "svg")
+        {
+            return GenerateSvgFlameGraph(stackFrames, artifact);
+        }
+        else
+        {
+            return GenerateHtmlFlameGraph(stackFrames, artifact);
+        }
+    }
+
+    private static string GeneratePlaceholderFlameGraph(Artifact artifact, string format)
+    {
         var flameGraphData = new System.Text.StringBuilder();
 
         if (format == "svg")
@@ -157,14 +200,8 @@ public sealed class SummaryTools
             flameGraphData.AppendLine($"    Flame Graph for {artifact.ArtifactId.Value} ({artifact.Kind})");
             flameGraphData.AppendLine("  </text>");
             flameGraphData.AppendLine("  <text x=\"10\" y=\"50\" font-family=\"Arial\" font-size=\"12\" fill=\"#666\">");
-            flameGraphData.AppendLine("    Note: Full flame graph generation requires stack trace parsing");
+            flameGraphData.AppendLine("    No stack data available or could not be parsed");
             flameGraphData.AppendLine("  </text>");
-            flameGraphData.AppendLine("  <rect x=\"10\" y=\"70\" width=\"1180\" height=\"50\" fill=\"#ff6b6b\" rx=\"2\"/>");
-            flameGraphData.AppendLine("  <text x=\"20\" y=\"100\" font-family=\"Arial\" font-size=\"11\" fill=\"white\">Sample Stack Frame 1</text>");
-            flameGraphData.AppendLine("  <rect x=\"10\" y=\"125\" width=\"800\" height=\"50\" fill=\"#4ecdc4\" rx=\"2\"/>");
-            flameGraphData.AppendLine("  <text x=\"20\" y=\"155\" font-family=\"Arial\" font-size=\"11\" fill=\"white\">Sample Stack Frame 2</text>");
-            flameGraphData.AppendLine("  <rect x=\"820\" y=\"125\" width=\"370\" height=\"50\" fill=\"#45b7d1\" rx=\"2\"/>");
-            flameGraphData.AppendLine("  <text x=\"830\" y=\"155\" font-family=\"Arial\" font-size=\"11\" fill=\"white\">Sample Stack Frame 3</text>");
             flameGraphData.AppendLine("</svg>");
         }
         else // html
@@ -175,25 +212,154 @@ public sealed class SummaryTools
             flameGraphData.AppendLine("  <title>Flame Graph - " + artifact.ArtifactId.Value + "</title>");
             flameGraphData.AppendLine("  <style>");
             flameGraphData.AppendLine("    body { font-family: Arial, sans-serif; margin: 20px; }");
-            flameGraphData.AppendLine("    .flame-container { border: 1px solid #ccc; padding: 10px; margin: 10px 0; }");
-            flameGraphData.AppendLine("    .frame { display: inline-block; margin: 2px; padding: 5px 10px; border-radius: 3px; color: white; }");
             flameGraphData.AppendLine("  </style>");
             flameGraphData.AppendLine("</head>");
             flameGraphData.AppendLine("<body>");
             flameGraphData.AppendLine("  <h1>Flame Graph for " + artifact.ArtifactId.Value + " (" + artifact.Kind + ")</h1>");
-            flameGraphData.AppendLine("  <p>Note: Full flame graph generation requires stack trace parsing</p>");
-            flameGraphData.AppendLine("  <div class=\"flame-container\">");
-            flameGraphData.AppendLine("    <div class=\"frame\" style=\"background-color: #ff6b6b; width: 90%;\">Sample Stack Frame 1</div>");
-            flameGraphData.AppendLine("  </div>");
-            flameGraphData.AppendLine("  <div class=\"flame-container\">");
-            flameGraphData.AppendLine("    <div class=\"frame\" style=\"background-color: #4ecdc4; width: 60%;\">Sample Stack Frame 2</div>");
-            flameGraphData.AppendLine("    <div class=\"frame\" style=\"background-color: #45b7d1; width: 28%;\">Sample Stack Frame 3</div>");
-            flameGraphData.AppendLine("  </div>");
+            flameGraphData.AppendLine("  <p>No stack data available or could not be parsed</p>");
             flameGraphData.AppendLine("</body>");
             flameGraphData.AppendLine("</html>");
         }
 
         return flameGraphData.ToString();
+    }
+
+    private static List<StackFrameData> ParsePlainStackText(string text)
+    {
+        var frames = new List<StackFrameData>();
+        var lines = text.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var threadId = 0;
+        var frameIndex = 0;
+
+        foreach (var line in lines)
+        {
+            var trimmedLine = line.Trim();
+            if (trimmedLine.StartsWith("Thread "))
+            {
+                var match = System.Text.RegularExpressions.Regex.Match(trimmedLine, @"Thread (\d+)");
+                if (match.Success)
+                {
+                    threadId = int.Parse(match.Groups[1].Value);
+                }
+            }
+            else if (!string.IsNullOrWhiteSpace(trimmedLine) && !trimmedLine.StartsWith("Child SP"))
+            {
+                var parts = trimmedLine.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length >= 3)
+                {
+                    var callSite = string.Join(" ", parts.Skip(2));
+                    frames.Add(new StackFrameData
+                    {
+                        ThreadId = threadId,
+                        FrameIndex = frameIndex++,
+                        CallSite = callSite
+                    });
+                }
+            }
+        }
+
+        return frames;
+    }
+
+    private static string GenerateSvgFlameGraph(List<StackFrameData> frames, Artifact artifact)
+    {
+        var svg = new System.Text.StringBuilder();
+        var width = 1200;
+        var height = Math.Min(600, frames.Count * 25 + 100);
+        var colors = new[] { "#ff6b6b", "#4ecdc4", "#45b7d1", "#96ceb4", "#ffeaa7", "#dfe6e9", "#fd79a8", "#a29bfe" };
+
+        svg.AppendLine("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
+        svg.AppendLine("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"" + width + "\" height=\"" + height + "\">");
+        svg.AppendLine("  <rect width=\"100%\" height=\"100%\" fill=\"#f8f9fa\"/>");
+        svg.AppendLine("  <text x=\"10\" y=\"30\" font-family=\"Arial\" font-size=\"14\" fill=\"#2d3436\">");
+        svg.AppendLine("    Flame Graph for " + artifact.ArtifactId.Value + " (" + frames.Count + " frames)");
+        svg.AppendLine("  </text>");
+
+        // Group frames by thread
+        var threadGroups = frames.GroupBy(f => f.ThreadId).ToList();
+        var y = 50;
+        var frameHeight = 20;
+
+        foreach (var threadGroup in threadGroups)
+        {
+            var threadFrames = threadGroup.ToList();
+            var x = 10;
+            var frameWidth = (width - 20.0) / threadFrames.Count;
+
+            foreach (var frame in threadFrames)
+            {
+                var color = colors[frame.ThreadId % colors.Length];
+                var displayText = TruncateCallSite(frame.CallSite, (int)(frameWidth / 6));
+
+                svg.AppendLine("  <rect x=\"" + x + "\" y=\"" + y + "\" width=\"" + (frameWidth - 1) + "\" height=\"" + frameHeight + "\" fill=\"" + color + "\" rx=\"2\"/>");
+                svg.AppendLine("  <text x=\"" + (x + 5) + "\" y=\"" + (y + 14) + "\" font-family=\"Arial\" font-size=\"10\" fill=\"white\">" + displayText + "</text>");
+
+                x += (int)frameWidth;
+            }
+
+            y += frameHeight + 5;
+        }
+
+        svg.AppendLine("</svg>");
+        return svg.ToString();
+    }
+
+    private static string GenerateHtmlFlameGraph(List<StackFrameData> frames, Artifact artifact)
+    {
+        var html = new System.Text.StringBuilder();
+        var colors = new[] { "#ff6b6b", "#4ecdc4", "#45b7d1", "#96ceb4", "#ffeaa7", "#dfe6e9", "#fd79a8", "#a29bfe" };
+
+        html.AppendLine("<!DOCTYPE html>");
+        html.AppendLine("<html>");
+        html.AppendLine("<head>");
+        html.AppendLine("  <title>Flame Graph - " + artifact.ArtifactId.Value + "</title>");
+        html.AppendLine("  <style>");
+        html.AppendLine("    body { font-family: Arial, sans-serif; margin: 20px; background-color: #f8f9fa; }");
+        html.AppendLine("    .header { margin-bottom: 20px; }");
+        html.AppendLine("    .thread-section { margin: 10px 0; }");
+        html.AppendLine("    .thread-title { font-weight: bold; margin: 5px 0; color: #2d3436; }");
+        html.AppendLine("    .frame-container { display: flex; flex-wrap: wrap; gap: 2px; }");
+        html.AppendLine("    .frame { padding: 4px 8px; border-radius: 3px; color: white; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }");
+        html.AppendLine("  </style>");
+        html.AppendLine("</head>");
+        html.AppendLine("<body>");
+        html.AppendLine("  <div class=\"header\">");
+        html.AppendLine("    <h1>Flame Graph for " + artifact.ArtifactId.Value + "</h1>");
+        html.AppendLine("    <p>Total frames: " + frames.Count + "</p>");
+        html.AppendLine("  </div>");
+
+        // Group frames by thread
+        var threadGroups = frames.GroupBy(f => f.ThreadId);
+
+        foreach (var threadGroup in threadGroups)
+        {
+            var threadFrames = threadGroup.ToList();
+            var color = colors[threadGroup.Key % colors.Length];
+
+            html.AppendLine("  <div class=\"thread-section\">");
+            html.AppendLine("    <div class=\"thread-title\">Thread " + threadGroup.Key + " (" + threadFrames.Count + " frames)</div>");
+            html.AppendLine("    <div class=\"frame-container\">");
+
+            foreach (var frame in threadFrames)
+            {
+                var displayText = TruncateCallSite(frame.CallSite, 50);
+                html.AppendLine("      <div class=\"frame\" style=\"background-color: " + color + ";\" title=\"" + frame.CallSite + "\">" + displayText + "</div>");
+            }
+
+            html.AppendLine("    </div>");
+            html.AppendLine("  </div>");
+        }
+
+        html.AppendLine("</body>");
+        html.AppendLine("</html>");
+        return html.ToString();
+    }
+
+    private static string TruncateCallSite(string callSite, int maxLength)
+    {
+        if (string.IsNullOrEmpty(callSite) || callSite.Length <= maxLength)
+            return callSite;
+        return callSite.Substring(0, maxLength - 3) + "...";
     }
 
     private static async Task DetectDumpPatterns(string filePath, ISosAnalyzer sosAnalyzer, string[] patternsToDetect, List<DetectedPattern> detectedPatterns, CancellationToken cancellationToken)
@@ -669,4 +835,11 @@ public record VisualizationResult(
 
     public static VisualizationResult Failure(string error) =>
         new(false, string.Empty, "none", error);
+}
+
+public record StackFrameData
+{
+    public int ThreadId { get; init; }
+    public int FrameIndex { get; init; }
+    public string CallSite { get; init; } = string.Empty;
 }
