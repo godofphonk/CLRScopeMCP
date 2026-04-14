@@ -37,6 +37,40 @@ jobs:
       - name: Test
         run: dotnet test --no-build -c Release tests/ClrScope.Mcp.Tests/ClrScope.Mcp.Tests.csproj
 
+      - name: Pack NuGet package
+        run: dotnet pack src/ClrScope.Mcp/ClrScope.Mcp.csproj -c Release
+
+      - name: Verify NuGet package created
+        run: |
+          if [ ! -f src/ClrScope.Mcp/bin/Release/*.nupkg ]; then
+            echo "NuGet package not found"
+            exit 1
+          fi
+          echo "NuGet package created successfully"
+
+      - name: Extract NuGet package to verify contents
+        run: |
+          cd src/ClrScope.Mcp/bin/Release
+          unzip -q *.nupkg -d temp_extract
+
+      - name: Verify README.md in package
+        run: |
+          if [ ! -f src/ClrScope.Mcp/bin/Release/temp_extract/README.md ]; then
+            echo "README.md not found in NuGet package"
+            exit 1
+          fi
+          echo "README.md found in package"
+
+      - name: Verify version in package
+        run: |
+          VERSION=$(grep '<version>' src/ClrScope.Mcp/bin/Release/temp_extract/ClrScope.Mcp.nuspec | sed 's/<version>\(.*\)<\/version>/\1' | tr -d ' ')
+          echo "Package version: $VERSION"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid version format: $VERSION"
+            exit 1
+          fi
+          echo "Version format valid"
+
       - name: Build binary (linux-x64) for validation
         run: dotnet publish src/ClrScope.Mcp/ClrScope.Mcp.csproj -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=false -p:DebugSymbols=false -p:DebugType=None -o ./test-artifacts/linux-x64
 
