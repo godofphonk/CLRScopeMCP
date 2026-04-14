@@ -128,11 +128,13 @@ public sealed class ArtifactTools
         }
     }
 
-    [McpServerTool(Name = "artifact_list", Title = "List Artifacts", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("List all artifacts with optional filtering")]
+    [McpServerTool(Name = "artifact_list", Title = "List Artifacts", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("List artifacts with optional filtering and pagination")]
     public static async Task<ArtifactListResult> ListArtifacts(
         McpServer server,
         [Description("Filter by kind (optional)")] string? kind = null,
         [Description("Filter by status (optional)")] string? status = null,
+        [Description("Offset for pagination (default: 0)")] int offset = 0,
+        [Description("Limit for pagination (default: 50, max: 500)")] int limit = 50,
         CancellationToken cancellationToken = default)
     {
         var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
@@ -140,27 +142,59 @@ public sealed class ArtifactTools
 
         try
         {
+            // Validate pagination parameters
+            if (offset < 0)
+            {
+                return new ArtifactListResult(
+                    Count: 0,
+                    Total: 0,
+                    Offset: 0,
+                    Limit: limit,
+                    HasMore: false,
+                    Artifacts: Array.Empty<ArtifactSummary>(),
+                    Error: "Offset must be >= 0"
+                );
+            }
+
+            if (limit < 1 || limit > 500)
+            {
+                return new ArtifactListResult(
+                    Count: 0,
+                    Total: 0,
+                    Offset: offset,
+                    Limit: limit,
+                    HasMore: false,
+                    Artifacts: Array.Empty<ArtifactSummary>(),
+                    Error: "Limit must be between 1 and 500"
+                );
+            }
+
             var artifacts = await artifactStore.GetAllAsync(cancellationToken);
-            
+
             var filtered = artifacts.AsEnumerable();
-            
+
             if (!string.IsNullOrEmpty(kind) && Enum.TryParse<ArtifactKind>(kind, true, out var kindFilter))
             {
                 filtered = filtered.Where(a => a.Kind == kindFilter);
             }
-            
+
             if (!string.IsNullOrEmpty(status) && Enum.TryParse<ArtifactStatus>(status, true, out var statusFilter))
             {
                 filtered = filtered.Where(a => a.Status == statusFilter);
             }
-            
-            var result = filtered.ToArray();
-            
-            logger.LogInformation("Listed {Count} artifacts", result.Length);
-            
+
+            var totalCount = filtered.Count();
+            var paginated = filtered.Skip(offset).Take(limit).ToArray();
+
+            logger.LogInformation("Listed {Count} artifacts (offset={Offset}, limit={Limit}, total={Total})", paginated.Length, offset, limit, totalCount);
+
             return new ArtifactListResult(
-                Count: result.Length,
-                Artifacts: result.Select(a => new ArtifactSummary(
+                Count: paginated.Length,
+                Total: totalCount,
+                Offset: offset,
+                Limit: limit,
+                HasMore: offset + limit < totalCount,
+                Artifacts: paginated.Select(a => new ArtifactSummary(
                     a.ArtifactId.Value,
                     a.Kind.ToString(),
                     a.Status.ToString(),
@@ -175,7 +209,12 @@ public sealed class ArtifactTools
             logger.LogError(ex, "List artifacts failed");
             return new ArtifactListResult(
                 Count: 0,
-                Artifacts: Array.Empty<ArtifactSummary>()
+                Total: 0,
+                Offset: 0,
+                Limit: limit,
+                HasMore: false,
+                Artifacts: Array.Empty<ArtifactSummary>(),
+                Error: $"List artifacts failed: {ex.Message}"
             );
         }
     }
@@ -553,7 +592,12 @@ public record ArtifactMetadataResult(
 
 public record ArtifactListResult(
     int Count,
-    ArtifactSummary[] Artifacts
+    int Total,
+    int Offset,
+    int Limit,
+    bool HasMore,
+    ArtifactSummary[] Artifacts,
+    string? Error = null
 );
 
 public record ArtifactSummary(
