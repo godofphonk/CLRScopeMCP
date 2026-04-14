@@ -9,19 +9,21 @@ namespace ClrScope.Mcp.Tools.Runtime;
 [McpServerToolType]
 public sealed class RuntimeTools
 {
-    [McpServerTool(Name = "runtime_list_targets", Title = "List .NET Processes", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("List all attachable .NET processes via GetPublishedProcesses()")]
+    [McpServerTool(Name = "runtime_list_targets", Title = "List .NET Processes", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("List all attachable .NET processes via GetPublishedProcesses(). Supports filtering by process name and sorting by pid or name.")]
     public static ListTargetsResult ListTargets(
         McpServer server,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description("Filter processes by name (case-insensitive substring match)")] string? processNameFilter = null,
+        [Description("Sort by: 'pid', 'name', 'pid_desc', 'name_desc'")] string? sortBy = null)
     {
         var runtimeService = server.Services!.GetRequiredService<RuntimeService>();
         var logger = server.Services!.GetRequiredService<ILogger<RuntimeTools>>();
 
         try
         {
-            var targets = runtimeService.ListTargets();
+            var targets = runtimeService.ListTargets(processNameFilter, sortBy);
             logger.LogInformation("Found {Count} .NET processes", targets.Count);
-            
+
             return new ListTargetsResult(
                 Targets: targets.Select(t => new RuntimeTargetInfo(t.Pid, t.ProcessName)).ToArray(),
                 Count: targets.Count

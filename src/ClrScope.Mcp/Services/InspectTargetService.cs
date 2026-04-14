@@ -1,5 +1,6 @@
 using ClrScope.Mcp.Contracts;
 using Microsoft.Diagnostics.NETCore.Client;
+using System.Runtime.InteropServices;
 
 namespace ClrScope.Mcp.Services;
 
@@ -35,15 +36,24 @@ public class InspectTargetService
         // Get process name (guaranteed)
         var processName = process.ProcessName;
 
-        // Note: CommandLine, OperatingSystem, and ProcessArchitecture are not reliably available for external processes
-        // and are omitted to avoid misleading information. These would require platform-specific inspection.
+        // Get OS information from current system (best-effort)
+        var osDescription = RuntimeInformation.OSDescription;
+        var osPlatform = RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "Linux" :
+                         RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "Windows" :
+                         RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "macOS" : "Unknown";
+
+        // Get process architecture from current system (best-effort)
+        var architecture = RuntimeInformation.ProcessArchitecture.ToString();
+
+        // Note: CommandLine is not reliably available for external processes
+        // and is omitted to avoid misleading information. This would require platform-specific inspection.
 
         var details = new RuntimeTargetDetails(
             pid,
             processName,
             CommandLine: null,
-            OperatingSystem: "Unknown",
-            ProcessArchitecture: "Unknown"
+            OperatingSystem: $"{osPlatform} ({osDescription})",
+            ProcessArchitecture: architecture
         );
 
         return InspectTargetResult.Success(details, warnings.ToArray());
