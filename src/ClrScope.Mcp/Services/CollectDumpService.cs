@@ -85,6 +85,7 @@ public class CollectDumpService
         _activeOperationRegistry.TryRegister(session.SessionId, operationCts);
 
         string? filePath = null;
+        string? tempFilePath = null;
         try
         {
             // Setup artifact path
@@ -105,7 +106,7 @@ public class CollectDumpService
                 var dumpType = request.IncludeHeap ? DumpType.WithHeap : DumpType.Normal;
 
                 // If compression is requested, write to temporary file first, then compress
-                var tempFilePath = request.Compress ? Path.Combine(dumpsDir, $"temp_{session.SessionId.Value}.dmp") : filePath;
+                tempFilePath = request.Compress ? Path.Combine(dumpsDir, $"temp_{session.SessionId.Value}.dmp") : filePath;
 
                 // WriteDump is synchronous and doesn't support cancellation from DiagnosticsClient API
                 // Task.Run with cancellation token only prevents the task from starting if cancelled before execution
@@ -228,6 +229,20 @@ public class CollectDumpService
                 catch (Exception deleteEx)
                 {
                     _logger.LogWarning(deleteEx, "Failed to cleanup orphaned file: {FilePath}", filePath);
+                }
+            }
+
+            // Cleanup orphaned temp file on compression failure
+            if (tempFilePath != null && tempFilePath != filePath && File.Exists(tempFilePath))
+            {
+                try
+                {
+                    File.Delete(tempFilePath);
+                    _logger.LogInformation("Cleaned up orphaned temp file: {TempFilePath}", tempFilePath);
+                }
+                catch (Exception deleteEx)
+                {
+                    _logger.LogWarning(deleteEx, "Failed to cleanup orphaned temp file: {TempFilePath}", tempFilePath);
                 }
             }
             throw;
