@@ -13,11 +13,12 @@ namespace ClrScope.Mcp.Tools.Analysis;
 [McpServerToolType]
 public sealed class AnalysisTools
 {
-    [McpServerTool(Name = "analyze_dump_sos"), Description("SOS analysis of dump file with custom commands")]
+    [McpServerTool(Name = "analyze_dump_sos"), Description("SOS analysis of dump file with custom commands. Use 'command' for single command or 'commands' for sequence")]
     public static async Task<AnalyzeDumpSosResult> AnalyzeDumpSos(
         string artifactId,
-        string command,
         McpServer server,
+        [Description("Single SOS command (e.g., 'threads', 'clrstack', 'dumpheap -stat')")] string? command = null,
+        [Description("Sequence of SOS commands to execute in order")] string[]? commands = null,
         CancellationToken cancellationToken = default)
     {
         var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
@@ -34,20 +35,27 @@ public sealed class AnalysisTools
             );
         }
 
-        if (string.IsNullOrEmpty(command))
+        // Determine which commands to execute
+        string[] commandsToExecute;
+        if (commands != null && commands.Length > 0)
+        {
+            commandsToExecute = commands;
+        }
+        else if (!string.IsNullOrEmpty(command))
+        {
+            commandsToExecute = new[] { command };
+        }
+        else
         {
             return new AnalyzeDumpSosResult(
                 Success: false,
                 Output: string.Empty,
-                Error: "SOS command is required"
+                Error: "Either 'command' or 'commands' parameter is required"
             );
         }
 
-        // Remove ! prefix if present (dotnet-dump analyze doesn't require it)
-        if (command.StartsWith("!"))
-        {
-            command = command.Substring(1);
-        }
+        // Remove ! prefix from all commands if present
+        commandsToExecute = commandsToExecute.Select(c => c.StartsWith("!") ? c.Substring(1) : c).ToArray();
 
         try
         {
@@ -100,13 +108,41 @@ Restart MCP server / client after installation.
                 );
             }
 
-            // Execute SOS command
-            var result = await sosAnalyzer.ExecuteCommandAsync(artifact.FilePath, command, cancellationToken);
+            // Execute SOS commands sequentially
+            var outputs = new List<string>();
+            var errors = new List<string>();
+            bool allSuccess = true;
+
+            for (int i = 0; i < commandsToExecute.Length; i++)
+            {
+                var cmd = commandsToExecute[i];
+                logger.LogInformation("Executing SOS command {CommandIndex}/{TotalCommands}: {Command}", i + 1, commandsToExecute.Length, cmd);
+
+                var result = await sosAnalyzer.ExecuteCommandAsync(artifact.FilePath, cmd, cancellationToken);
+
+                if (result.Success)
+                {
+                    outputs.Add($"=== Command {i + 1}/{commandsToExecute.Length}: {cmd} ===");
+                    outputs.Add(result.Output);
+                    outputs.Add(string.Empty); // Empty line between commands
+                }
+                else
+                {
+                    allSuccess = false;
+                    errors.Add($"Command {i + 1}/{commandsToExecute.Length} ({cmd}) failed: {result.Error}");
+                    outputs.Add($"=== Command {i + 1}/{commandsToExecute.Length}: {cmd} ===");
+                    outputs.Add($"Error: {result.Error}");
+                    outputs.Add(string.Empty);
+                }
+            }
+
+            var combinedOutput = string.Join("\n", outputs);
+            var combinedError = errors.Count > 0 ? string.Join("\n", errors) : null;
 
             return new AnalyzeDumpSosResult(
-                Success: result.Success,
-                Output: result.Output,
-                Error: result.Error
+                Success: allSuccess,
+                Output: combinedOutput,
+                Error: combinedError
             );
         }
         catch (Exception ex)
