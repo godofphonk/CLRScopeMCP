@@ -35,8 +35,8 @@ public sealed class ArtifactTools
     [McpServerTool(Name = "artifact_get_metadata", Title = "Get Artifact Metadata", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Get artifact metadata by ID")]
     public static async Task<ArtifactMetadataResult> GetArtifactMetadata(
         [Description("Artifact ID to get metadata for")] string artifactId,
-        [Description("Include file path in response (default: false)")] bool includeFilePath = false,
         McpServer server,
+        [Description("Include file path in response (default: false)")] bool includeFilePath = false,
         CancellationToken cancellationToken = default)
     {
         var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();

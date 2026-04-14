@@ -1,8 +1,5 @@
 using ClrScope.Mcp.Contracts;
 using ClrScope.Mcp.Infrastructure;
-using ClrScope.Mcp.Infrastructure.Backends;
-using ClrScope.Mcp.Infrastructure.Cli;
-using ClrScope.Mcp.Infrastructure.Diagnostics;
 using ClrScope.Mcp.Options;
 using ClrScope.Mcp.Services;
 using ClrScope.Mcp.Tools.Analysis;
