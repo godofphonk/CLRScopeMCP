@@ -1,7 +1,7 @@
 # CLRScope MCP
 
-![Badge](https://img.shields.io/badge/version-v0.1.0-blue)
-![Badge](https://img.shields.io/badge/.NET-10.0-purple)
+![Badge](https://img.shields.io/badge/version-v1.0.0-blue)
+![Badge](https://img.shields.io/badge/.NET%206+-purple)
 ![Badge](https://img.shields.io/badge/license-MIT-green)
 
 > MCP server for comprehensive .NET application diagnostics
@@ -36,3 +36,9 @@ CLRScope MCP provides AI-powered diagnostic capabilities for .NET applications t
     }
   }
 }
+```
+
+## Documentation
+
+- [Investigation Guides](docs/investigation-guides.md) - Step-by-step guides for memory leaks, hangs, high CPU, and baseline performance collection
+- [Tool Integration](docs/integration.md) - Required CLI tools and installation instructions for diagnostic features
