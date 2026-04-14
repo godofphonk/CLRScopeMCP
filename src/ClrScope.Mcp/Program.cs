@@ -1,22 +1,11 @@
-using ClrScope.Mcp.Contracts;
-using ClrScope.Mcp.Infrastructure;
+using ClrScope.Mcp.DependencyInjection;
 using ClrScope.Mcp.Options;
 using ClrScope.Mcp.Services;
-using ClrScope.Mcp.Tools.Analysis;
-using ClrScope.Mcp.Tools.Artifacts;
-using ClrScope.Mcp.Tools.Collect;
-using ClrScope.Mcp.Tools.Resources;
-using ClrScope.Mcp.Tools.Runtime;
-using ClrScope.Mcp.Tools.Sessions;
-using ClrScope.Mcp.Tools.SystemHealth;
-using ClrScope.Mcp.Tools.Workflows;
-using ClrScope.Mcp.Validation;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using ModelContextProtocol;
 
 namespace ClrScope.Mcp;
 
@@ -60,88 +49,11 @@ class Program
                 services.Configure<ClrScopeOptions>(
                     context.Configuration.GetSection(ClrScopeOptions.SectionName));
 
-                // Infrastructure
-                services.AddSingleton<SqliteSchemaInitializer>(sp =>
-                {
-                    var options = sp.GetRequiredService<IOptions<ClrScopeOptions>>();
-                    var dbPath = options.Value.GetDatabasePath();
-                    var directory = Path.GetDirectoryName(dbPath);
-                    if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
-                    {
-                        Directory.CreateDirectory(directory);
-                    }
-                    var connectionString = $"Data Source={dbPath}";
-                    return new SqliteSchemaInitializer(connectionString);
-                });
-
-                services.AddSingleton<ISqliteSessionStore>(sp =>
-                {
-                    var options = sp.GetRequiredService<IOptions<ClrScopeOptions>>();
-                    var connectionString = $"Data Source={options.Value.GetDatabasePath()}";
-                    return new SqliteSessionStore(connectionString);
-                });
-
-                services.AddSingleton<ISqliteArtifactStore>(sp =>
-                {
-                    var options = sp.GetRequiredService<IOptions<ClrScopeOptions>>();
-                    var connectionString = $"Data Source={options.Value.GetDatabasePath()}";
-                    return new SqliteArtifactStore(connectionString);
-                });
-
-                // Validation
-                services.AddSingleton<IPreflightValidator, FullPreflightValidator>();
-
-                // CLI Runner
-                services.AddSingleton<ICliCommandRunner, CliCommandRunner>();
-
-                // CLI Tool Availability Checker
-                services.AddSingleton<ICliToolAvailabilityChecker, CliToolAvailabilityChecker>();
-
-                // PID Lock Manager
-                services.AddSingleton<IPidLockManager, PidLockManager>();
-
-                // Active Operation Registry for session cancellation
-                services.AddSingleton<IActiveOperationRegistry, ActiveOperationRegistry>();
-
-                // Artifact Retention Service
-                services.AddSingleton<IArtifactRetentionService, ArtifactRetentionService>();
-
-                // Correlation ID Provider
-                services.AddSingleton<CorrelationIdProvider>();
-
-                // Counters Backend
-                services.AddSingleton<ICountersBackend, CliCountersBackend>();
-
-                // SOS Analyzer
-                services.AddSingleton<ISosAnalyzer, DotnetDumpAnalyzer>();
-
-                // Symbol Resolver
-                services.AddSingleton<ISymbolResolver, SymbolResolver>();
-
-                // Services
-                services.AddSingleton<HealthService>();
-                services.AddSingleton<RuntimeService>();
-                services.AddSingleton<InspectTargetService>();
-                services.AddSingleton<CollectTraceService>();
-                services.AddSingleton<CollectDumpService>();
-                services.AddSingleton<CollectCountersService>();
-                services.AddSingleton<CollectGcDumpService>();
-                services.AddSingleton<CollectStacksService>();
-
-                // MCP Server
-                services.AddMcpServer()
-                    .WithStdioServerTransport()
-                    .WithTools<RuntimeTools>()
-                    .WithTools<CollectTools>()
-                    .WithTools<CollectCountersTools>()
-                    .WithTools<SystemTools>()
-                    .WithTools<SessionTools>()
-                    .WithTools<ArtifactTools>()
-                    .WithTools<AnalysisTools>()
-                    .WithTools<ResourceTools>()
-                    .WithTools<SummaryTools>()
-                    .WithTools<SessionAnalysisTools>()
-                    .WithTools<WorkflowTools>();
+                // CLRScope services by module
+                services.AddClrScopeStorage();
+                services.AddClrScopeDiagnostics();
+                services.AddClrScopeCollectionServices();
+                services.AddClrScopeMcpTools();
             })
             .Build();
 
