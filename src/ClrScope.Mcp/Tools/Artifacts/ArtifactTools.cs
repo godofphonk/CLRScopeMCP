@@ -128,11 +128,14 @@ public sealed class ArtifactTools
         }
     }
 
-    [McpServerTool(Name = "artifact_list", Title = "List Artifacts", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("List artifacts with optional filtering and pagination")]
+    [McpServerTool(Name = "artifact_list", Title = "List Artifacts", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("List artifacts with optional filtering by pid, kind, status, date range, and pagination")]
     public static async Task<ArtifactListResult> ListArtifacts(
         McpServer server,
+        [Description("Filter by process ID (optional)")] int? pid = null,
         [Description("Filter by kind (optional)")] string? kind = null,
         [Description("Filter by status (optional)")] string? status = null,
+        [Description("Filter by date from (ISO format, e.g., 2024-01-01)")] string? dateFrom = null,
+        [Description("Filter by date to (ISO format, e.g., 2024-12-31)")] string? dateTo = null,
         [Description("Offset for pagination (default: 0)")] int offset = 0,
         [Description("Limit for pagination (default: 50, max: 500)")] int limit = 50,
         CancellationToken cancellationToken = default)
@@ -173,14 +176,33 @@ public sealed class ArtifactTools
 
             var filtered = artifacts.AsEnumerable();
 
+            // Filter by PID
+            if (pid.HasValue && pid.Value > 0)
+            {
+                filtered = filtered.Where(a => a.Pid == pid.Value);
+            }
+
+            // Filter by kind
             if (!string.IsNullOrEmpty(kind) && Enum.TryParse<ArtifactKind>(kind, true, out var kindFilter))
             {
                 filtered = filtered.Where(a => a.Kind == kindFilter);
             }
 
+            // Filter by status
             if (!string.IsNullOrEmpty(status) && Enum.TryParse<ArtifactStatus>(status, true, out var statusFilter))
             {
                 filtered = filtered.Where(a => a.Status == statusFilter);
+            }
+
+            // Filter by date range
+            if (!string.IsNullOrEmpty(dateFrom) && DateTime.TryParse(dateFrom, out var fromDate))
+            {
+                filtered = filtered.Where(a => a.CreatedAtUtc >= fromDate);
+            }
+
+            if (!string.IsNullOrEmpty(dateTo) && DateTime.TryParse(dateTo, out var toDate))
+            {
+                filtered = filtered.Where(a => a.CreatedAtUtc <= toDate.AddDays(1).AddTicks(-1)); // End of the day
             }
 
             var totalCount = filtered.Count();
