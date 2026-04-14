@@ -434,11 +434,12 @@ public sealed class ArtifactTools
         }
     }
 
-    [McpServerTool(Name = "artifact_cleanup", Title = "Cleanup Old Artifacts", ReadOnly = false, Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Delete old artifacts older than specified age and/or limit total size")]
+    [McpServerTool(Name = "artifact_cleanup", Title = "Cleanup Old Artifacts", ReadOnly = false, Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Delete artifacts based on strategy. Strategies: age (default), importance (keep pinned), duplicates (keep newest per PID+kind)")]
     public static async Task<CleanupArtifactsResult> CleanupArtifacts(
         [Description("Maximum age of artifacts to keep (e.g., 7d for 7 days)")] string maxAge,
         McpServer server,
         [Description("Maximum total size to delete in bytes (optional, e.g., 10737418240 for 10GB)")] long? maxSizeBytes = null,
+        [Description("Cleanup strategy: 'age' (default), 'importance' (keep pinned), 'duplicates' (keep newest per PID+kind)")] string strategy = "age",
         CancellationToken cancellationToken = default)
     {
         var retentionService = server.Services!.GetRequiredService<IArtifactRetentionService>();
@@ -455,11 +456,12 @@ public sealed class ArtifactTools
             }
 
             var timeSpan = TimeSpanParser.ParseMaxAge(maxAge);
-            var deletedCount = await retentionService.CleanupOldArtifactsAsync(timeSpan, maxSizeBytes, cancellationToken);
+            var deletedCount = await retentionService.CleanupOldArtifactsAsync(timeSpan, maxSizeBytes, strategy.ToLowerInvariant(), cancellationToken);
 
+            var strategyText = strategy.ToLowerInvariant();
             var message = maxSizeBytes.HasValue
-                ? $"Deleted {deletedCount} artifacts older than {maxAge} (max size: {maxSizeBytes} bytes)"
-                : $"Deleted {deletedCount} artifacts older than {maxAge}";
+                ? $"Deleted {deletedCount} artifacts using '{strategyText}' strategy older than {maxAge} (max size: {maxSizeBytes} bytes)"
+                : $"Deleted {deletedCount} artifacts using '{strategyText}' strategy older than {maxAge}";
 
             logger.LogInformation("Cleanup completed: {DeletedCount} artifacts deleted older than {MaxAge}, max size: {MaxSize}",
                 deletedCount, maxAge, maxSizeBytes);

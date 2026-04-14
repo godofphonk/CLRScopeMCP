@@ -1,3 +1,4 @@
+using ClrScope.Mcp.Domain.Artifacts;
 using ClrScope.Mcp.Infrastructure.Utils;
 using ClrScope.Mcp.Options;
 using Microsoft.Extensions.Logging;
@@ -31,20 +32,65 @@ public class ArtifactRetentionService : IArtifactRetentionService
 
     public async Task<int> CleanupOldArtifactsAsync(TimeSpan maxAge, long? maxTotalSizeBytes, CancellationToken cancellationToken = default)
     {
+        return await CleanupOldArtifactsAsync(maxAge, maxTotalSizeBytes, "age", cancellationToken);
+    }
+
+    public async Task<int> CleanupOldArtifactsAsync(TimeSpan maxAge, long? maxTotalSizeBytes, string strategy, CancellationToken cancellationToken = default)
+    {
         var cutoffTime = DateTime.UtcNow - maxAge;
         var artifacts = await _artifactStore.GetAllAsync(cancellationToken);
         var artifactRoot = _options.Value.GetArtifactRoot();
 
-        // Filter by age and pin status
-        var candidates = artifacts
-            .Where(a => a.CreatedAtUtc < cutoffTime && !a.Pinned)
-            .OrderBy(a => a.CreatedAtUtc)
-            .ToList();
+        IEnumerable<Artifact> candidates;
 
+        switch (strategy.ToLowerInvariant())
+        {
+            case "age":
+                // Original behavior: filter by age and pin status
+                candidates = artifacts
+                    .Where(a => a.CreatedAtUtc < cutoffTime && !a.Pinned)
+                    .OrderBy(a => a.CreatedAtUtc);
+                break;
+
+            case "importance":
+                // Keep pinned artifacts regardless of age, delete unpinned by age
+                candidates = artifacts
+                    .Where(a => a.CreatedAtUtc < cutoffTime && !a.Pinned)
+                    .OrderBy(a => a.CreatedAtUtc);
+                _logger.LogInformation("Using importance strategy: keeping pinned artifacts regardless of age");
+                break;
+
+            case "duplicates":
+                // Keep newest artifact per PID+Kind combination
+                var groupedByPidKind = artifacts
+                    .Where(a => a.CreatedAtUtc < cutoffTime)
+                    .GroupBy(a => new { a.Pid, a.Kind });
+
+                var toDelete = new List<Artifact>();
+                foreach (var group in groupedByPidKind)
+                {
+                    // Keep the newest, delete the rest
+                    var newest = group.OrderByDescending(a => a.CreatedAtUtc).First();
+                    var duplicates = group.Where(a => a.ArtifactId != newest.ArtifactId && !a.Pinned);
+                    toDelete.AddRange(duplicates);
+                }
+                candidates = toDelete.OrderBy(a => a.CreatedAtUtc);
+                _logger.LogInformation("Using duplicates strategy: keeping newest artifact per PID+Kind, deleting {Count} duplicates", toDelete.Count);
+                break;
+
+            default:
+                _logger.LogWarning("Unknown strategy '{Strategy}', defaulting to age strategy", strategy);
+                candidates = artifacts
+                    .Where(a => a.CreatedAtUtc < cutoffTime && !a.Pinned)
+                    .OrderBy(a => a.CreatedAtUtc);
+                break;
+        }
+
+        var candidatesList = candidates.ToList();
         var deletedCount = 0;
         long totalDeletedSize = 0;
 
-        foreach (var artifact in candidates)
+        foreach (var artifact in candidatesList)
         {
             // Check if we would exceed max total size after deleting this artifact (if specified)
             if (maxTotalSizeBytes.HasValue && totalDeletedSize + artifact.SizeBytes > maxTotalSizeBytes.Value)
@@ -86,8 +132,8 @@ public class ArtifactRetentionService : IArtifactRetentionService
             }
         }
 
-        _logger.LogInformation("Cleanup completed: {DeletedCount} artifacts deleted, total size: {TotalSize} bytes",
-            deletedCount, totalDeletedSize);
+        _logger.LogInformation("Cleanup completed using '{Strategy}' strategy: {DeletedCount} artifacts deleted, total size: {TotalSize} bytes",
+            strategy, deletedCount, totalDeletedSize);
         return deletedCount;
     }
 
