@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Server;
 using System.ComponentModel;
+using System.IO.Compression;
 
 namespace ClrScope.Mcp.Tools.Analysis;
 
@@ -84,13 +85,37 @@ public sealed class AnalysisTools
             var artifactRoot = options.Value.GetArtifactRoot();
             PathSecurity.EnsurePathWithinDirectory(artifact.FilePath, artifactRoot);
 
-            // Check if dotnet-sos is available
-            if (!await sosAnalyzer.IsAvailableAsync(cancellationToken))
+            // Decompress dump if it's compressed (.dmp.gz)
+            string? tempDecompressedPath = null;
+            string dumpFilePath = artifact.FilePath;
+            try
             {
-                return new AnalyzeDumpSosResult(
-                    Success: false,
-                    Output: string.Empty,
-                    Error: """
+                if (artifact.FilePath.EndsWith(".dmp.gz", StringComparison.OrdinalIgnoreCase))
+                {
+                    logger.LogInformation("Decompressing dump file: {FilePath}", artifact.FilePath);
+                    var tempDir = Path.Combine(artifactRoot, "temp");
+                    Directory.CreateDirectory(tempDir);
+
+                    tempDecompressedPath = Path.Combine(tempDir, $"decompressed_{Guid.NewGuid()}.dmp");
+                    using var compressedStream = File.OpenRead(artifact.FilePath);
+                    using var gzipStream = new GZipStream(compressedStream, CompressionMode.Decompress);
+                    using var decompressedStream = File.Create(tempDecompressedPath);
+                    await gzipStream.CopyToAsync(decompressedStream, cancellationToken);
+
+                    var originalSize = new FileInfo(artifact.FilePath).Length;
+                    var decompressedSize = new FileInfo(tempDecompressedPath).Length;
+                    logger.LogInformation("Decompressed dump: {OriginalSize} -> {DecompressedSize}", FormatBytes(originalSize), FormatBytes(decompressedSize));
+
+                    dumpFilePath = tempDecompressedPath;
+                }
+
+                // Check if dotnet-sos is available
+                if (!await sosAnalyzer.IsAvailableAsync(cancellationToken))
+                {
+                    return new AnalyzeDumpSosResult(
+                        Success: false,
+                        Output: string.Empty,
+                        Error: """
 dotnet-dump CLI not found.
 
 Install using one of the following methods:
@@ -105,45 +130,62 @@ Install using one of the following methods:
 
 Restart MCP server / client after installation.
 """
+                    );
+                }
+
+                // Execute SOS commands sequentially
+                var outputs = new List<string>();
+                var errors = new List<string>();
+                bool allSuccess = true;
+
+                for (int i = 0; i < commandsToExecute.Length; i++)
+                {
+                    var cmd = commandsToExecute[i];
+                    logger.LogInformation("Executing SOS command {CommandIndex}/{TotalCommands}: {Command}", i + 1, commandsToExecute.Length, cmd);
+
+                    var result = await sosAnalyzer.ExecuteCommandAsync(dumpFilePath, cmd, cancellationToken);
+
+                    if (result.Success)
+                    {
+                        outputs.Add($"=== Command {i + 1}/{commandsToExecute.Length}: {cmd} ===");
+                        outputs.Add(result.Output);
+                        outputs.Add(string.Empty); // Empty line between commands
+                    }
+                    else
+                    {
+                        allSuccess = false;
+                        errors.Add($"Command {i + 1}/{commandsToExecute.Length} ({cmd}) failed: {result.Error}");
+                        outputs.Add($"=== Command {i + 1}/{commandsToExecute.Length}: {cmd} ===");
+                        outputs.Add($"Error: {result.Error}");
+                        outputs.Add(string.Empty);
+                    }
+                }
+
+                var combinedOutput = string.Join("\n", outputs);
+                var combinedError = errors.Count > 0 ? string.Join("\n", errors) : null;
+
+                return new AnalyzeDumpSosResult(
+                    Success: allSuccess,
+                    Output: combinedOutput,
+                    Error: combinedError
                 );
             }
-
-            // Execute SOS commands sequentially
-            var outputs = new List<string>();
-            var errors = new List<string>();
-            bool allSuccess = true;
-
-            for (int i = 0; i < commandsToExecute.Length; i++)
+            finally
             {
-                var cmd = commandsToExecute[i];
-                logger.LogInformation("Executing SOS command {CommandIndex}/{TotalCommands}: {Command}", i + 1, commandsToExecute.Length, cmd);
-
-                var result = await sosAnalyzer.ExecuteCommandAsync(artifact.FilePath, cmd, cancellationToken);
-
-                if (result.Success)
+                // Clean up temporary decompressed file
+                if (tempDecompressedPath != null && File.Exists(tempDecompressedPath))
                 {
-                    outputs.Add($"=== Command {i + 1}/{commandsToExecute.Length}: {cmd} ===");
-                    outputs.Add(result.Output);
-                    outputs.Add(string.Empty); // Empty line between commands
-                }
-                else
-                {
-                    allSuccess = false;
-                    errors.Add($"Command {i + 1}/{commandsToExecute.Length} ({cmd}) failed: {result.Error}");
-                    outputs.Add($"=== Command {i + 1}/{commandsToExecute.Length}: {cmd} ===");
-                    outputs.Add($"Error: {result.Error}");
-                    outputs.Add(string.Empty);
+                    try
+                    {
+                        File.Delete(tempDecompressedPath);
+                        logger.LogInformation("Cleaned up temporary decompressed file: {FilePath}", tempDecompressedPath);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogWarning(ex, "Failed to clean up temporary decompressed file: {FilePath}", tempDecompressedPath);
+                    }
                 }
             }
-
-            var combinedOutput = string.Join("\n", outputs);
-            var combinedError = errors.Count > 0 ? string.Join("\n", errors) : null;
-
-            return new AnalyzeDumpSosResult(
-                Success: allSuccess,
-                Output: combinedOutput,
-                Error: combinedError
-            );
         }
         catch (Exception ex)
         {
@@ -245,6 +287,19 @@ Restart MCP server / client after installation.
                 Error: $"Symbol resolution failed: {ex.Message}"
             );
         }
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB", "TB" };
+        int order = 0;
+        double size = bytes;
+        while (size >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            size /= 1024;
+        }
+        return $"{size:0.##} {sizes[order]}";
     }
 }
 
