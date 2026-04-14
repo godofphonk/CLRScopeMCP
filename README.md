@@ -4,7 +4,7 @@
 ![Badge](https://img.shields.io/badge/.NET-10.0-purple)
 ![Badge](https://img.shields.io/badge/license-MIT-green)
 
-> Enterprise-grade MCP server for comprehensive .NET application diagnostics
+> MCP server for comprehensive .NET application diagnostics
 
 ## Overview
 
