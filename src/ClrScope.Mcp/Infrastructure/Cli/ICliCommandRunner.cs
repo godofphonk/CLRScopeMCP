@@ -12,6 +12,29 @@ public interface ICliCommandRunner
         string command,
         string[] arguments,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Executes a CLI command with a timeout.
+    /// </summary>
+    Task<CommandLineResult> ExecuteAsync(
+        string command,
+        string[] arguments,
+        TimeSpan timeout,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// Normalized error categories for CLI command failures.
+/// </summary>
+public enum CommandErrorCategory
+{
+    None,
+    NotFound,
+    PermissionDenied,
+    Timeout,
+    InvalidArguments,
+    RuntimeError,
+    Unknown
 }
 
 /// <summary>
@@ -21,4 +44,6 @@ public record CommandLineResult(
     int ExitCode,
     string StandardOutput,
     string StandardError,
-    bool Success);
+    bool Success,
+    CommandErrorCategory ErrorCategory = CommandErrorCategory.None,
+    string? ErrorCategoryDetails = null);

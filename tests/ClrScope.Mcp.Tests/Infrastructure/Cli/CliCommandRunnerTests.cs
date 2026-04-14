@@ -179,21 +179,22 @@ public class CliCommandRunnerTests
     public void CommandLineResult_Record_HasCorrectProperties()
     {
         // Arrange
-        var result = new CommandLineResult(0, "output", "error", true);
+        var result = new CommandLineResult(0, "output", "error", true, CommandErrorCategory.None);
 
         // Assert
         Assert.Equal(0, result.ExitCode);
         Assert.Equal("output", result.StandardOutput);
         Assert.Equal("error", result.StandardError);
         Assert.True(result.Success);
+        Assert.Equal(CommandErrorCategory.None, result.ErrorCategory);
     }
 
     [Fact]
     public void CommandLineResult_Record_EqualityWorks()
     {
         // Arrange
-        var result1 = new CommandLineResult(0, "output", "error", true);
-        var result2 = new CommandLineResult(0, "output", "error", true);
+        var result1 = new CommandLineResult(0, "output", "error", true, CommandErrorCategory.None);
+        var result2 = new CommandLineResult(0, "output", "error", true, CommandErrorCategory.None);
 
         // Assert
         Assert.Equal(result1, result2);
@@ -204,8 +205,8 @@ public class CliCommandRunnerTests
     public void CommandLineResult_Record_InequalityWorks()
     {
         // Arrange
-        var result1 = new CommandLineResult(0, "output", "error", true);
-        var result2 = new CommandLineResult(1, "output", "error", false);
+        var result1 = new CommandLineResult(0, "output", "error", true, CommandErrorCategory.None);
+        var result2 = new CommandLineResult(1, "output", "error", false, CommandErrorCategory.RuntimeError);
 
         // Assert
         Assert.NotEqual(result1, result2);
