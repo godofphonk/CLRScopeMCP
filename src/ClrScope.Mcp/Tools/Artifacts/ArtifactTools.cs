@@ -291,10 +291,11 @@ public sealed class ArtifactTools
         }
     }
 
-    [McpServerTool(Name = "artifact_read_text", Title = "Read Artifact Text", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Read text content of artifact (if applicable)")]
+    [McpServerTool(Name = "artifact_read_text", Title = "Read Artifact Text", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Read artifact content. Format: text (for Counters/Stacks), hex (hex dump for binary files), base64 (base64 encoded for binary files)")]
     public static async Task<ReadArtifactTextResult> ReadArtifactText(
-        [Description("Artifact ID to read text from")] string artifactId,
+        [Description("Artifact ID to read from")] string artifactId,
         McpServer server,
+        [Description("Output format: 'text' (for Counters/Stacks), 'hex' (hex dump), 'base64' (base64 encoded)")] string format = "text",
         CancellationToken cancellationToken = default)
     {
         var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
@@ -326,14 +327,25 @@ public sealed class ArtifactTools
                 );
             }
 
-            // Only allow text-only artifact kinds (Counters, Stacks)
-            if (artifact.Kind != ArtifactKind.Counters && artifact.Kind != ArtifactKind.Stacks)
+            // Validate format for text-only artifact kinds
+            if (format == "text" && artifact.Kind != ArtifactKind.Counters && artifact.Kind != ArtifactKind.Stacks)
             {
                 return new ReadArtifactTextResult(
                     Success: false,
                     ArtifactId: artifactId,
                     Content: string.Empty,
-                    Error: $"Artifact kind '{artifact.Kind}' is not text-only. Only Counters and Stacks can be read as text."
+                    Error: $"Artifact kind '{artifact.Kind}' is not text-only. Use 'hex' or 'base64' format for binary files (Dump, Trace, GcDump)."
+                );
+            }
+
+            // Validate format parameter
+            if (format != "text" && format != "hex" && format != "base64")
+            {
+                return new ReadArtifactTextResult(
+                    Success: false,
+                    ArtifactId: artifactId,
+                    Content: string.Empty,
+                    Error: $"Invalid format '{format}'. Supported formats: text, hex, base64."
                 );
             }
 
@@ -351,19 +363,47 @@ public sealed class ArtifactTools
             }
 
             var fileInfo = new FileInfo(artifact.FilePath);
-            if (fileInfo.Length > 1024 * 1024)
+
+            // Adjust size limit based on format
+            var maxSize = format switch
+            {
+                "text" => 1024 * 1024, // 1MB for text
+                "hex" => 1024 * 1024, // 1MB for hex (will be ~2x output)
+                "base64" => 10 * 1024 * 1024, // 10MB for base64 (will be ~1.33x output)
+                _ => 1024 * 1024
+            };
+
+            if (fileInfo.Length > maxSize)
             {
                 return new ReadArtifactTextResult(
                     Success: false,
                     ArtifactId: artifactId,
                     Content: string.Empty,
-                    Error: "File too large for text reading (>1MB)"
+                    Error: $"File too large for {format} reading (>{maxSize / 1024 / 1024}MB)"
                 );
             }
 
-            var content = await File.ReadAllTextAsync(artifact.FilePath, cancellationToken);
-
-            logger.LogInformation("Read text content for artifact {ArtifactId} ({Length} bytes)", artifactId, content.Length);
+            string content;
+            switch (format.ToLowerInvariant())
+            {
+                case "text":
+                    content = await File.ReadAllTextAsync(artifact.FilePath, cancellationToken);
+                    logger.LogInformation("Read text content for artifact {ArtifactId} ({Length} bytes)", artifactId, content.Length);
+                    break;
+                case "hex":
+                    var bytes = await File.ReadAllBytesAsync(artifact.FilePath, cancellationToken);
+                    content = BitConverter.ToString(bytes).Replace("-", " ");
+                    logger.LogInformation("Read hex content for artifact {ArtifactId} ({Length} bytes -> {HexLength} chars)", artifactId, bytes.Length, content.Length);
+                    break;
+                case "base64":
+                    var base64Bytes = await File.ReadAllBytesAsync(artifact.FilePath, cancellationToken);
+                    content = Convert.ToBase64String(base64Bytes);
+                    logger.LogInformation("Read base64 content for artifact {ArtifactId} ({Length} bytes -> {Base64Length} chars)", artifactId, base64Bytes.Length, content.Length);
+                    break;
+                default:
+                    content = string.Empty;
+                    break;
+            }
 
             return new ReadArtifactTextResult(
                 Success: true,
