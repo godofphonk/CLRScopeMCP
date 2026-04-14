@@ -7,10 +7,17 @@ using ClrScope.Mcp.Validation;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Server;
+using System.Text.Json;
 
 namespace ClrScope.Mcp.Services;
 
-public record CollectStacksRequest(int Pid);
+public record CollectStacksRequest(int Pid, string OutputFormat = "text"); // "text" or "json"
+
+public record StackFrame(string ChildSP, string IP, string CallSite);
+
+public record ThreadStack(int ThreadId, string? ThreadName, StackFrame[] Frames);
+
+public record StacksOutput(int Pid, DateTime Timestamp, ThreadStack[] Threads);
 
 public record CollectStacksResult(
     Session Session,
@@ -104,7 +111,8 @@ public class CollectStacksService
             var stacksDir = Path.Combine(artifactRoot, "stacks");
             Directory.CreateDirectory(stacksDir);
 
-            var fileName = $"stacks_{session.SessionId.Value}.txt";
+            var fileExtension = request.OutputFormat == "json" ? ".json" : ".txt";
+            var fileName = $"stacks_{session.SessionId.Value}{fileExtension}";
             filePath = Path.Combine(stacksDir, fileName);
 
             progress?.Report(20);
@@ -123,7 +131,16 @@ public class CollectStacksService
             }
 
             // Write output to file
-            await File.WriteAllTextAsync(filePath, result.StandardOutput, operationCts.Token);
+            if (request.OutputFormat == "json")
+            {
+                var parsedStacks = ParseDotnetStackOutput(result.StandardOutput, request.Pid);
+                var jsonOutput = JsonSerializer.Serialize(parsedStacks, new JsonSerializerOptions { WriteIndented = true });
+                await File.WriteAllTextAsync(filePath, jsonOutput, operationCts.Token);
+            }
+            else
+            {
+                await File.WriteAllTextAsync(filePath, result.StandardOutput, operationCts.Token);
+            }
 
             // Check if file was created
             if (!File.Exists(filePath))
@@ -210,5 +227,64 @@ public class CollectStacksService
         {
             _activeOperationRegistry.Complete(session.SessionId);
         }
+    }
+
+    private static StacksOutput ParseDotnetStackOutput(string output, int pid)
+    {
+        var threads = new List<ThreadStack>();
+        var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+        ThreadStack? currentThread = null;
+        var currentFrames = new List<StackFrame>();
+
+        foreach (var line in lines)
+        {
+            var trimmedLine = line.Trim();
+
+            // Parse thread header: "Thread 1234:" or "Thread 1234 (Name):"
+            if (trimmedLine.StartsWith("Thread "))
+            {
+                // Save previous thread if exists
+                if (currentThread != null && currentFrames.Count > 0)
+                {
+                    threads.Add(currentThread with { Frames = currentFrames.ToArray() });
+                }
+
+                currentFrames.Clear();
+
+                // Parse thread ID and optional name
+                var threadMatch = System.Text.RegularExpressions.Regex.Match(trimmedLine, @"Thread (\d+)(?:\s+\(([^)]+)\))?:");
+                if (threadMatch.Success)
+                {
+                    var threadId = int.Parse(threadMatch.Groups[1].Value);
+                    var threadName = threadMatch.Groups[2].Success ? threadMatch.Groups[2].Value : null;
+                    currentThread = new ThreadStack(threadId, threadName, Array.Empty<StackFrame>());
+                }
+            }
+            // Parse stack frame: "    ChildSP         IP CallSite"
+            else if (currentThread != null && !string.IsNullOrWhiteSpace(trimmedLine) && !trimmedLine.StartsWith("Child SP"))
+            {
+                var frameParts = trimmedLine.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                if (frameParts.Length >= 3)
+                {
+                    var childSP = frameParts[0];
+                    var ip = frameParts[1];
+                    var callSite = string.Join(" ", frameParts.Skip(2));
+                    currentFrames.Add(new StackFrame(childSP, ip, callSite));
+                }
+            }
+        }
+
+        // Save last thread if exists
+        if (currentThread != null && currentFrames.Count > 0)
+        {
+            threads.Add(currentThread with { Frames = currentFrames.ToArray() });
+        }
+
+        return new StacksOutput(
+            Pid: pid,
+            Timestamp: DateTime.UtcNow,
+            Threads: threads.ToArray()
+        );
     }
 }

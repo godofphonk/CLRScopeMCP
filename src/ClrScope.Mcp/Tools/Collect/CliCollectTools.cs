@@ -148,10 +148,11 @@ public sealed class CollectCountersTools
         }
     }
 
-    [McpServerTool(Name = "collect_stacks", Title = "Collect Managed Stacks", ReadOnly = false, Idempotent = false), Description("Collect managed stacks via dotnet-stack CLI")]
+    [McpServerTool(Name = "collect_stacks", Title = "Collect Managed Stacks", ReadOnly = false, Idempotent = false), Description("Collect managed stacks via dotnet-stack CLI. Output format: text (plain text) or json (structured JSON for parsing)")]
     public static async Task<CollectStacksResult> CollectStacks(
         [Description("Process ID to collect managed stacks from")] int pid,
         McpServer server,
+        [Description("Output format: 'text' (plain text) or 'json' (structured JSON)")] string format = "text",
         CancellationToken cancellationToken = default)
     {
         var stacksService = server.Services!.GetRequiredService<CollectStacksService>();
@@ -169,7 +170,7 @@ public sealed class CollectCountersTools
                 );
             }
 
-            var request = new ClrScope.Mcp.Services.CollectStacksRequest(pid);
+            var request = new ClrScope.Mcp.Services.CollectStacksRequest(pid, format);
             var result = await stacksService.CollectStacksAsync(request, cancellationToken: cancellationToken);
 
             if (result.Artifact != null)
