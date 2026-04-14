@@ -153,6 +153,7 @@ public sealed class SummaryTools
             if (File.Exists(artifact.FilePath))
             {
                 var fileContent = File.ReadAllText(artifact.FilePath);
+
                 if (artifact.FilePath.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
                 {
                     // Parse JSON format using the real StacksOutput structure
