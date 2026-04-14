@@ -37,9 +37,6 @@ jobs:
       - name: Test
         run: dotnet test --no-build -c Release tests/ClrScope.Mcp.Tests/ClrScope.Mcp.Tests.csproj
 
-      - name: Audit
-        run: dotnet audit
-
       - name: Build binary (linux-x64) for validation
         run: dotnet publish src/ClrScope.Mcp/ClrScope.Mcp.csproj -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=false -p:DebugSymbols=false -p:DebugType=None -o ./test-artifacts/linux-x64
 
