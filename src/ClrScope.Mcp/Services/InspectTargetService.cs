@@ -36,14 +36,15 @@ public class InspectTargetService
         // Get process name (guaranteed)
         var processName = process.ProcessName;
 
-        // Get OS information from current system (best-effort)
+        // Get OS information from current system (best-effort, assumes same-host)
         var osDescription = RuntimeInformation.OSDescription;
         var osPlatform = RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "Linux" :
                          RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "Windows" :
                          RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "macOS" : "Unknown";
 
-        // Get process architecture from current system (best-effort)
-        var architecture = RuntimeInformation.ProcessArchitecture.ToString();
+        // Cannot reliably determine target process architecture from host
+        // Return Unknown to avoid misleading information
+        var architecture = "Unknown";
 
         // Note: CommandLine is not reliably available for external processes
         // and is omitted to avoid misleading information. This would require platform-specific inspection.
