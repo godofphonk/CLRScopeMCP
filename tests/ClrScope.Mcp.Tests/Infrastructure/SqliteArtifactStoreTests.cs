@@ -173,7 +173,8 @@ public class SqliteArtifactStoreTests : IDisposable
 
         // Assert
         Assert.NotNull(artifact);
-        Assert.NotEqual("skipped_for_large_file", artifact.Sha256);
+        Assert.Equal(HashState.Computed, artifact.HashState);
+        Assert.NotNull(artifact.Sha256);
         Assert.NotEmpty(artifact.Sha256);
 
         // Cleanup
@@ -198,7 +199,8 @@ public class SqliteArtifactStoreTests : IDisposable
 
         // Assert - small file should have hash
         Assert.NotNull(artifact);
-        Assert.NotEqual("skipped_for_large_file", artifact.Sha256);
+        Assert.Equal(HashState.Computed, artifact.HashState);
+        Assert.NotNull(artifact.Sha256);
 
         // Cleanup
         File.Delete(tempFile);

@@ -256,7 +256,7 @@ class Program
             Console.WriteLine($"  Artifact ID: {dumpResult.Artifact.ArtifactId.Value}");
             Console.WriteLine($"  File Path: {dumpResult.Artifact.FilePath}");
             Console.WriteLine($"  Size: {dumpResult.Artifact.SizeBytes} bytes");
-            Console.WriteLine($"  SHA256: {dumpResult.Artifact.Sha256}");
+            Console.WriteLine($"  SHA256: {dumpResult.Artifact.Sha256 ?? "N/A"} ({dumpResult.Artifact.HashState})");
         }
         else
         {

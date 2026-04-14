@@ -54,6 +54,7 @@ public sealed class CollectTools
                     FilePath: result.Artifact.FilePath,
                     SizeBytes: result.Artifact.SizeBytes,
                     Sha256: result.Artifact.Sha256,
+                    HashState: result.Artifact.HashState.ToString(),
                     Error: null,
                     CancellationSemantics: "best_effort"
                 );
@@ -177,6 +178,7 @@ public sealed class CollectTools
                     FilePath: result.Artifact.FilePath,
                     SizeBytes: result.Artifact.SizeBytes,
                     Sha256: result.Artifact.Sha256,
+                    HashState: result.Artifact.HashState.ToString(),
                     Error: null,
                     CompletionMode: result.CompletionMode.ToString()
                 );
@@ -234,6 +236,7 @@ public record CollectDumpResult(
     string? FilePath,
     long SizeBytes,
     string? Sha256,
+    string? HashState,
     string? Error,
     string CancellationSemantics = "best_effort"
 );
@@ -245,6 +248,7 @@ public record CollectTraceResult(
     string? FilePath,
     long SizeBytes,
     string? Sha256,
+    string? HashState,
     string? Error,
     string? CompletionMode = "Complete"
 );

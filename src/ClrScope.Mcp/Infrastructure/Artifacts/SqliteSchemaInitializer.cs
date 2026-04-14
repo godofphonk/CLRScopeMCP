@@ -78,6 +78,10 @@ public class SqliteSchemaInitializer
                 {
                     await Migration004_AddSessionIncidentIdAsync(connection, cancellationToken);
                 }
+                if (currentVersion < 5)
+                {
+                    await Migration005_AddArtifactHashStateAsync(connection, cancellationToken);
+                }
             }
             else
             {
@@ -85,6 +89,7 @@ public class SqliteSchemaInitializer
                 await Migration002_AddSessionPhaseAsync(connection, cancellationToken);
                 await Migration003_AddArtifactPinnedAsync(connection, cancellationToken);
                 await Migration004_AddSessionIncidentIdAsync(connection, cancellationToken);
+                await Migration005_AddArtifactHashStateAsync(connection, cancellationToken);
             }
 
             transaction.Commit();
@@ -221,6 +226,28 @@ public class SqliteSchemaInitializer
         command.CommandText = """
             ALTER TABLE sessions ADD COLUMN incident_id TEXT;
             INSERT INTO schema_info (version, applied_at_utc) VALUES (4, datetime('now'));
+            """;
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static async Task Migration005_AddArtifactHashStateAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    {
+        // Check if column already exists to avoid duplicate column error
+        if (await ColumnExistsAsync(connection, "artifacts", "hash_state", cancellationToken))
+        {
+            // Column already exists, just update version
+            var updateCommand = connection.CreateCommand();
+            updateCommand.CommandText = "INSERT OR IGNORE INTO schema_info (version, applied_at_utc) VALUES (5, datetime('now'))";
+            await updateCommand.ExecuteNonQueryAsync(cancellationToken);
+            return;
+        }
+
+        var command = connection.CreateCommand();
+        command.CommandText = """
+            ALTER TABLE artifacts ADD COLUMN hash_state TEXT NOT NULL DEFAULT 'Computed';
+            UPDATE artifacts SET hash_state = 'SkippedLargeFile' WHERE sha256 = 'skipped_for_large_file';
+            UPDATE artifacts SET sha256 = NULL WHERE sha256 = 'skipped_for_large_file';
+            INSERT INTO schema_info (version, applied_at_utc) VALUES (5, datetime('now'));
             """;
         await command.ExecuteNonQueryAsync(cancellationToken);
     }

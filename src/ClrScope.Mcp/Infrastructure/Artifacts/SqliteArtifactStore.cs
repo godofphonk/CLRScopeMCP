@@ -23,7 +23,7 @@ public class SqliteArtifactStore : ISqliteArtifactStore
 
             var command = connection.CreateCommand();
             command.CommandText = """
-                SELECT artifact_id, kind, status, file_path, diag_uri, file_uri, sha256, size_bytes, pid, session_id, created_at_utc, pinned
+                SELECT artifact_id, kind, status, file_path, diag_uri, file_uri, sha256, hash_state, size_bytes, pid, session_id, created_at_utc, pinned
                 FROM artifacts
                 WHERE artifact_id = $artifactId
                 """;
@@ -86,7 +86,7 @@ public class SqliteArtifactStore : ISqliteArtifactStore
 
             var command = connection.CreateCommand();
             command.CommandText = """
-                SELECT artifact_id, kind, status, file_path, diag_uri, file_uri, sha256, size_bytes, pid, session_id, created_at_utc, pinned
+                SELECT artifact_id, kind, status, file_path, diag_uri, file_uri, sha256, hash_state, size_bytes, pid, session_id, created_at_utc, pinned
                 FROM artifacts
                 WHERE session_id = $sessionId
                 """;
@@ -115,17 +115,35 @@ public class SqliteArtifactStore : ISqliteArtifactStore
         {
             var artifactId = ArtifactId.New();
             var fileInfo = new FileInfo(filePath);
-            
-            // Skip SHA-256 for large files (>100MB) to avoid double disk pass and delayed completion
-            var sha256 = fileInfo.Length > 100 * 1024 * 1024 ? "skipped_for_large_file" : await ComputeSha256Async(filePath, cancellationToken);
+
+            // Compute SHA-256 or skip for large files
+            string? sha256 = null;
+            HashState hashState;
+            if (fileInfo.Length > 100 * 1024 * 1024)
+            {
+                hashState = HashState.SkippedLargeFile;
+            }
+            else
+            {
+                try
+                {
+                    sha256 = await ComputeSha256Async(filePath, cancellationToken);
+                    hashState = HashState.Computed;
+                }
+                catch
+                {
+                    hashState = HashState.Failed;
+                }
+            }
+
             var now = DateTime.UtcNow;
 
             await using var connection = await SqliteSchemaInitializer.OpenConnectionWithForeignKeysAsync(_connectionString, cancellationToken);
 
             var command = connection.CreateCommand();
             command.CommandText = """
-                INSERT INTO artifacts (artifact_id, kind, status, file_path, diag_uri, file_uri, sha256, size_bytes, pid, session_id, created_at_utc, pinned)
-                VALUES ($artifactId, $kind, $status, $filePath, $diagUri, $fileUri, $sha256, $sizeBytes, $pid, $sessionId, $createdAtUtc, $pinned)
+                INSERT INTO artifacts (artifact_id, kind, status, file_path, diag_uri, file_uri, sha256, hash_state, size_bytes, pid, session_id, created_at_utc, pinned)
+                VALUES ($artifactId, $kind, $status, $filePath, $diagUri, $fileUri, $sha256, $hashState, $sizeBytes, $pid, $sessionId, $createdAtUtc, $pinned)
                 """;
             command.Parameters.AddWithValue("$artifactId", artifactId.Value);
             command.Parameters.AddWithValue("$kind", kind.ToString());
@@ -133,7 +151,8 @@ public class SqliteArtifactStore : ISqliteArtifactStore
             command.Parameters.AddWithValue("$filePath", filePath);
             command.Parameters.AddWithValue("$diagUri", string.Empty);
             command.Parameters.AddWithValue("$fileUri", string.Empty);
-            command.Parameters.AddWithValue("$sha256", sha256);
+            command.Parameters.AddWithValue("$sha256", sha256 ?? (object)DBNull.Value);
+            command.Parameters.AddWithValue("$hashState", hashState.ToString());
             command.Parameters.AddWithValue("$sizeBytes", sizeBytes);
             command.Parameters.AddWithValue("$pid", pid);
             command.Parameters.AddWithValue("$sessionId", sessionId.Value);
@@ -150,6 +169,7 @@ public class SqliteArtifactStore : ISqliteArtifactStore
                 null,
                 null,
                 sha256,
+                hashState,
                 sizeBytes,
                 pid,
                 sessionId,
@@ -167,7 +187,7 @@ public class SqliteArtifactStore : ISqliteArtifactStore
 
             var command = connection.CreateCommand();
             command.CommandText = """
-                SELECT artifact_id, kind, status, file_path, diag_uri, file_uri, sha256, size_bytes, pid, session_id, created_at_utc, pinned
+                SELECT artifact_id, kind, status, file_path, diag_uri, file_uri, sha256, hash_state, size_bytes, pid, session_id, created_at_utc, pinned
                 FROM artifacts
                 ORDER BY created_at_utc DESC
                 """;
@@ -234,12 +254,13 @@ public class SqliteArtifactStore : ISqliteArtifactStore
             reader.GetString(3),
             reader.IsDBNull(4) ? null : reader.GetString(4),
             reader.IsDBNull(5) ? null : reader.GetString(5),
-            reader.GetString(6),
-            reader.GetInt64(7),
-            reader.GetInt32(8),
-            new SessionId(reader.GetString(9)),
-            DateTime.Parse(reader.GetString(10), null, System.Globalization.DateTimeStyles.RoundtripKind),
-            reader.IsDBNull(11) ? false : reader.GetInt32(11) == 1
+            reader.IsDBNull(6) ? null : reader.GetString(6),
+            Enum.Parse<HashState>(reader.GetString(7)),
+            reader.GetInt64(8),
+            reader.GetInt32(9),
+            new SessionId(reader.GetString(10)),
+            DateTime.Parse(reader.GetString(11), null, System.Globalization.DateTimeStyles.RoundtripKind),
+            reader.IsDBNull(12) ? false : reader.GetInt32(12) == 1
         );
     }
 
