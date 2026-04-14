@@ -5,7 +5,6 @@ using ClrScope.Mcp.Services;
 using ClrScope.Mcp.Tools.Analysis;
 using ClrScope.Mcp.Tools.Artifacts;
 using ClrScope.Mcp.Tools.Collect;
-using ClrScope.Mcp.Tools.Prompts;
 using ClrScope.Mcp.Tools.Resources;
 using ClrScope.Mcp.Tools.Runtime;
 using ClrScope.Mcp.Tools.Sessions;
@@ -125,7 +124,6 @@ class Program
                     .WithTools<SessionTools>()
                     .WithTools<ArtifactTools>()
                     .WithTools<AnalysisTools>()
-                    .WithTools<PromptTools>()
                     .WithTools<ResourceTools>()
                     .WithTools<SummaryTools>()
                     .WithTools<SessionAnalysisTools>()
