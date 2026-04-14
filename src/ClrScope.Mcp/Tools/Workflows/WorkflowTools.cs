@@ -1,11 +1,12 @@
 using ModelContextProtocol.Server;
+using System.ComponentModel;
 
 namespace ClrScope.Mcp.Tools.Workflows;
 
 [McpServerToolType]
 public sealed class WorkflowTools
 {
-    [McpServerTool(Name = "workflow_capture_high_cpu_bundle")]
+    [McpServerTool(Name = "workflow_capture_high_cpu_bundle"), Description("Get step-by-step instructions for collecting high CPU diagnostic bundle")]
     public static string CaptureHighCpuBundle(int pid)
     {
         return @"High CPU Bundle Collection Workflow
@@ -31,7 +32,7 @@ Follow these steps to collect a high CPU diagnostic bundle for PID " + pid + @":
 Note: Execute these commands in sequence. The collection may take 1-2 minutes.";
     }
 
-    [McpServerTool(Name = "workflow_capture_memory_leak_bundle")]
+    [McpServerTool(Name = "workflow_capture_memory_leak_bundle"), Description("Get step-by-step instructions for collecting memory leak diagnostic bundle")]
     public static string CaptureMemoryLeakBundle(int pid)
     {
         return @"Memory Leak Bundle Collection Workflow
@@ -57,7 +58,7 @@ Follow these steps to collect a memory leak diagnostic bundle for PID " + pid + 
 Note: Execute these commands in sequence. The collection may take 1-2 minutes.";
     }
 
-    [McpServerTool(Name = "workflow_capture_hang_bundle")]
+    [McpServerTool(Name = "workflow_capture_hang_bundle"), Description("Get step-by-step instructions for collecting hang/deadlock diagnostic bundle")]
     public static string CaptureHangBundle(int pid)
     {
         return @"Hang/Deadlock Bundle Collection Workflow
@@ -83,7 +84,7 @@ Follow these steps to collect a hang diagnostic bundle for PID " + pid + @":
 Note: Execute these commands in sequence. The collection may take 1-2 minutes.";
     }
 
-    [McpServerTool(Name = "workflow_capture_baseline_bundle")]
+    [McpServerTool(Name = "workflow_capture_baseline_bundle"), Description("Get step-by-step instructions for collecting baseline performance bundle")]
     public static string CaptureBaselineBundle(int pid)
     {
         return @"Baseline Performance Bundle Collection Workflow

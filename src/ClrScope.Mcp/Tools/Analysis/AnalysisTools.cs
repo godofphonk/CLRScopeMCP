@@ -6,13 +6,14 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Server;
+using System.ComponentModel;
 
 namespace ClrScope.Mcp.Tools.Analysis;
 
 [McpServerToolType]
 public sealed class AnalysisTools
 {
-    [McpServerTool(Name = "analyze_dump_sos")]
+    [McpServerTool(Name = "analyze_dump_sos"), Description("SOS analysis of dump file with custom commands")]
     public static async Task<AnalyzeDumpSosResult> AnalyzeDumpSos(
         string artifactId,
         string command,
@@ -119,7 +120,7 @@ Restart MCP server / client after installation.
         }
     }
 
-    [McpServerTool(Name = "symbols_resolve")]
+    [McpServerTool(Name = "symbols_resolve"), Description("Load symbols for artifact via dotnet-symbol")]
     public static async Task<SymbolsResolveResult> ResolveSymbols(
         string artifactId,
         McpServer server,

@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Server;
+using System.ComponentModel;
 
 namespace ClrScope.Mcp.Tools.Resources;
 
@@ -114,7 +115,7 @@ public sealed class ResourceTools
         }
     }
 
-    [McpServerTool(Name = "resource_session")]
+    [McpServerTool(Name = "resource_session"), Description("Get session resource with artifacts and metadata")]
     public static async Task<string> GetSessionResource(
         string id,
         McpServer server,
