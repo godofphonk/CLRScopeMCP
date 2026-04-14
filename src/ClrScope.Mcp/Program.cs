@@ -269,7 +269,7 @@ class Program
 
     static void PrintVersion()
     {
-        Console.WriteLine("CLRScope MCP v0.1.0");
+        Console.WriteLine("CLRScope MCP v1.0.0");
     }
 
     static void PrintHelp()
