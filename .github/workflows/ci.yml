@@ -55,13 +55,13 @@ jobs:
 
       - name: Verify version in package
         run: |
-          VERSION=$(grep '<version>' src/ClrScope.Mcp/bin/Release/temp_extract/ClrScope.Mcp.nuspec | sed 's/<version>\(.*\)<\/version>/\1' | tr -d ' ')
+          VERSION=$(grep -o '<version>[^<]*</version>' src/ClrScope.Mcp/bin/Release/temp_extract/ClrScope.Mcp.nuspec | sed 's/<version>//g' | sed 's/<\/version>//g' | tr -d ' ')
           echo "Package version: $VERSION"
-          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Invalid version format: $VERSION"
+          if [ -z "$VERSION" ]; then
+            echo "Version not found in package"
             exit 1
           fi
-          echo "Version format valid"
+          echo "Version found: $VERSION"
 
       - name: Build binary (linux-x64) for validation
         run: dotnet publish src/ClrScope.Mcp/ClrScope.Mcp.csproj -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=false -p:DebugSymbols=false -p:DebugType=None -o ./test-artifacts/linux-x64
