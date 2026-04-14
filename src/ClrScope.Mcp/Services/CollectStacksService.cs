@@ -159,7 +159,13 @@ public class CollectStacksService
             }
 
             progress?.Report(70);
-            session = await _sessionStore.GetAsync(session.SessionId, operationCts.Token);
+            var updatedSession = await _sessionStore.GetAsync(session.SessionId, operationCts.Token);
+            if (updatedSession == null)
+            {
+                return CollectStacksResult.Failure(session, "Session not found after update");
+            }
+            session = updatedSession;
+
             await _sessionStore.UpdateAsync(session with { Phase = SessionPhase.Persisting }, operationCts.Token);
 
             // Create artifact record
@@ -181,15 +187,15 @@ public class CollectStacksService
             await _sessionStore.UpdateAsync(session.AsCompleted(), CancellationToken.None);
 
             // Re-read to get updated state
-            var updatedSession = await _sessionStore.GetAsync(session.SessionId, CancellationToken.None);
-            var updatedArtifact = await _artifactStore.GetAsync(artifact.ArtifactId, CancellationToken.None);
+            var finalSession = await _sessionStore.GetAsync(session.SessionId, CancellationToken.None);
+            var finalArtifact = await _artifactStore.GetAsync(artifact.ArtifactId, CancellationToken.None);
 
             progress?.Report(100);
-            return CollectStacksResult.Success(updatedSession ?? session, updatedArtifact ?? artifact);
+            return CollectStacksResult.Success(finalSession ?? session, finalArtifact ?? artifact);
         }
         catch (OperationCanceledException)
         {
-            _logger.LogInformation("Stacks collection cancelled for session {SessionId}", session.SessionId);
+            _logger.LogInformation("Stacks collection cancelled for session {SessionId}", session.SessionId.Value!);
             session = session.AsCancelled();
             await _sessionStore.UpdateAsync(session, CancellationToken.None);
             return CollectStacksResult.Failure(session, "Stacks collection cancelled");
@@ -199,13 +205,14 @@ public class CollectStacksService
             // Best-effort: mark session as failed
             try
             {
-                session = session.AsFailed(ex.Message);
+                var errorMessage = ex.Message ?? "Unknown error";
+                session = session.AsFailed(errorMessage);
                 await _sessionStore.UpdateAsync(session, CancellationToken.None);
-                _logger.LogInformation("Marked session {SessionId} as failed due to exception: {Error}", session.SessionId, ex.Message);
+                _logger.LogInformation("Marked session {SessionId} as failed due to exception: {Error}", session.SessionId.Value!, errorMessage);
             }
             catch (Exception updateEx)
             {
-                _logger.LogError(updateEx, "Failed to mark session {SessionId} as failed", session.SessionId);
+                _logger.LogError(updateEx, "Failed to mark session {SessionId} as failed", session.SessionId.Value!);
             }
 
             // Cleanup orphaned file on unexpected failure

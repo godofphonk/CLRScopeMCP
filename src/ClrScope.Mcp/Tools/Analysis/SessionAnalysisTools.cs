@@ -97,7 +97,9 @@ public sealed class SessionAnalysisTools
             // Compare with baseline if provided
             if (baselineSession != null)
             {
-                summary.Comparisons["Baseline Session"] = baselineSession.SessionId.Value;
+#pragma warning disable CS8602
+                summary.Comparisons["Baseline Session"] = baselineSession.SessionId.ToString();
+#pragma warning restore CS8602
 
                 // Compare artifact count
                 var baselineArtifactCount = baselineArtifacts.Count;
