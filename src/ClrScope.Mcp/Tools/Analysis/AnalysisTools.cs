@@ -27,7 +27,11 @@ public sealed class AnalysisTools
 
         if (string.IsNullOrEmpty(artifactId))
         {
-            throw new ArgumentException("Artifact ID is required", nameof(artifactId));
+            return new AnalyzeDumpSosResult(
+                Success: false,
+                Output: string.Empty,
+                Error: "Artifact ID is required"
+            );
         }
 
         if (string.IsNullOrEmpty(command))
@@ -129,7 +133,11 @@ Restart MCP server / client after installation.
 
         if (string.IsNullOrEmpty(artifactId))
         {
-            throw new ArgumentException("Artifact ID is required", nameof(artifactId));
+            return new SymbolsResolveResult(
+                Success: false,
+                SymbolPath: string.Empty,
+                Error: "Artifact ID is required"
+            );
         }
 
         try

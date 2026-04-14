@@ -51,7 +51,16 @@ public sealed class RuntimeTools
         {
             if (pid <= 0)
             {
-                throw new ArgumentException("Process ID must be greater than 0", nameof(pid));
+                return new InspectTargetResult(
+                    Found: false,
+                    Attachable: false,
+                    ProcessName: string.Empty,
+                    CommandLine: string.Empty,
+                    OperatingSystem: string.Empty,
+                    ProcessArchitecture: string.Empty,
+                    Warnings: Array.Empty<string>(),
+                    Error: "Process ID must be greater than 0"
+                );
             }
 
             var result = inspectService.InspectTarget(pid);

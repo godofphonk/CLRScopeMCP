@@ -26,7 +26,12 @@ public sealed class CollectCountersTools
         {
             if (pid <= 0)
             {
-                throw new ArgumentException("Process ID must be greater than 0", nameof(pid));
+                return new CollectCountersResult(
+                    Success: false,
+                    Message: "Process ID must be greater than 0",
+                    ArtifactId: null,
+                    SessionId: null
+                );
             }
 
             var providerList = providers != null && providers.Length > 0 ? providers : new[] { "System.Runtime" };
@@ -77,7 +82,12 @@ public sealed class CollectCountersTools
         {
             if (pid <= 0)
             {
-                throw new ArgumentException("Process ID must be greater than 0", nameof(pid));
+                return new CollectGcDumpResult(
+                    Success: false,
+                    Message: "Process ID must be greater than 0",
+                    ArtifactId: null,
+                    SessionId: null
+                );
             }
 
             var request = new ClrScope.Mcp.Services.CollectGcDumpRequest(pid);
@@ -127,7 +137,12 @@ public sealed class CollectCountersTools
         {
             if (pid <= 0)
             {
-                throw new ArgumentException("Process ID must be greater than 0", nameof(pid));
+                return new CollectStacksResult(
+                    Success: false,
+                    Message: "Process ID must be greater than 0",
+                    ArtifactId: null,
+                    SessionId: null
+                );
             }
 
             var request = new ClrScope.Mcp.Services.CollectStacksRequest(pid);

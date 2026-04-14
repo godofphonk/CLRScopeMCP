@@ -25,7 +25,20 @@ public sealed class SessionTools
         {
             if (string.IsNullOrWhiteSpace(sessionId))
             {
-                throw new ArgumentException("Session ID must not be empty", nameof(sessionId));
+                return new SessionResult(
+                    Found: false,
+                    SessionId: sessionId,
+                    Kind: null,
+                    Status: null,
+                    Pid: 0,
+                    StartedAtUtc: null,
+                    CompletedAtUtc: null,
+                    SessionError: null,
+                    ArtifactCount: 0,
+                    Artifacts: Array.Empty<SessionArtifactSummary>(),
+                    Error: "Session ID must not be empty",
+                    Phase: null
+                );
             }
 
             var id = new SessionId(sessionId);
@@ -123,7 +136,11 @@ public sealed class SessionTools
         {
             if (string.IsNullOrWhiteSpace(sessionId))
             {
-                throw new ArgumentException("Session ID must not be empty", nameof(sessionId));
+                return new CancelSessionResult(
+                    Success: false,
+                    SessionId: sessionId,
+                    Message: "Session ID must not be empty"
+                );
             }
 
             var id = new SessionId(sessionId);

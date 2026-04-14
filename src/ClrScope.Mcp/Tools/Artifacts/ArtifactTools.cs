@@ -45,7 +45,18 @@ public sealed class ArtifactTools
         {
             if (string.IsNullOrWhiteSpace(artifactId))
             {
-                throw new ArgumentException("Artifact ID must not be empty", nameof(artifactId));
+                return new ArtifactMetadataResult(
+                    Found: false,
+                    ArtifactId: artifactId,
+                    Kind: string.Empty,
+                    Status: string.Empty,
+                    FilePath: string.Empty,
+                    SizeBytes: 0,
+                    Sha256: string.Empty,
+                    Pid: 0,
+                    CreatedAtUtc: DateTime.UtcNow,
+                    Error: "Artifact ID must not be empty"
+                );
             }
 
             var id = new ArtifactId(artifactId);
@@ -183,7 +194,11 @@ public sealed class ArtifactTools
         {
             if (string.IsNullOrWhiteSpace(artifactId))
             {
-                throw new ArgumentException("Artifact ID must not be empty", nameof(artifactId));
+                return new DeleteArtifactResult(
+                    Success: false,
+                    ArtifactId: artifactId,
+                    Message: "Artifact ID must not be empty"
+                );
             }
 
             var id = new ArtifactId(artifactId);
@@ -251,7 +266,12 @@ public sealed class ArtifactTools
         {
             if (string.IsNullOrWhiteSpace(artifactId))
             {
-                throw new ArgumentException("Artifact ID must not be empty", nameof(artifactId));
+                return new ReadArtifactTextResult(
+                    Success: false,
+                    ArtifactId: artifactId,
+                    Content: string.Empty,
+                    Error: "Artifact ID must not be empty"
+                );
             }
 
             var id = new ArtifactId(artifactId);
@@ -349,7 +369,10 @@ public sealed class ArtifactTools
         {
             if (string.IsNullOrWhiteSpace(maxAge))
             {
-                throw new ArgumentException("Max age must not be empty", nameof(maxAge));
+                return new CleanupArtifactsResult(
+                    DeletedCount: 0,
+                    Message: "Max age must not be empty"
+                );
             }
 
             var timeSpan = TimeSpanParser.ParseMaxAge(maxAge);
@@ -399,7 +422,11 @@ public sealed class ArtifactTools
         {
             if (string.IsNullOrWhiteSpace(artifactId))
             {
-                throw new ArgumentException("Artifact ID must not be empty", nameof(artifactId));
+                return new PinArtifactResult(
+                    Success: false,
+                    ArtifactId: artifactId,
+                    Message: "Artifact ID must not be empty"
+                );
             }
 
             var id = new ArtifactId(artifactId);
@@ -459,7 +486,11 @@ public sealed class ArtifactTools
         {
             if (string.IsNullOrWhiteSpace(artifactId))
             {
-                throw new ArgumentException("Artifact ID must not be empty", nameof(artifactId));
+                return new PinArtifactResult(
+                    Success: false,
+                    ArtifactId: artifactId,
+                    Message: "Artifact ID must not be empty"
+                );
             }
 
             var id = new ArtifactId(artifactId);

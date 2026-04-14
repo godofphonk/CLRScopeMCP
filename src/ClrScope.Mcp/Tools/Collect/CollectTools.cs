@@ -24,7 +24,15 @@ public sealed class CollectTools
         {
             if (pid <= 0)
             {
-                throw new ArgumentException("Process ID must be greater than 0", nameof(pid));
+                return new CollectDumpResult(
+                    Success: false,
+                    SessionId: string.Empty,
+                    ArtifactId: null,
+                    FilePath: null,
+                    SizeBytes: 0,
+                    Sha256: null,
+                    Error: "Process ID must be greater than 0"
+                );
             }
 
             logger.LogInformation("Starting dump collection for PID {Pid}, IncludeHeap={IncludeHeap}", pid, includeHeap);
@@ -105,17 +113,44 @@ public sealed class CollectTools
         {
             if (pid <= 0)
             {
-                throw new ArgumentException("Process ID must be greater than 0", nameof(pid));
+                return new CollectTraceResult(
+                    Success: false,
+                    SessionId: string.Empty,
+                    ArtifactId: null,
+                    FilePath: null,
+                    SizeBytes: 0,
+                    Sha256: null,
+                    Error: "Process ID must be greater than 0",
+                    CompletionMode: "Failed"
+                );
             }
 
             if (string.IsNullOrWhiteSpace(duration))
             {
-                throw new ArgumentException("Duration must not be empty", nameof(duration));
+                return new CollectTraceResult(
+                    Success: false,
+                    SessionId: string.Empty,
+                    ArtifactId: null,
+                    FilePath: null,
+                    SizeBytes: 0,
+                    Sha256: null,
+                    Error: "Duration must not be empty",
+                    CompletionMode: "Failed"
+                );
             }
 
             if (!System.Text.RegularExpressions.Regex.IsMatch(duration, @"^\d{2}:\d{2}:\d{2}$"))
             {
-                throw new ArgumentException("Duration must be in hh:mm:ss format (e.g., 00:01:30)", nameof(duration));
+                return new CollectTraceResult(
+                    Success: false,
+                    SessionId: string.Empty,
+                    ArtifactId: null,
+                    FilePath: null,
+                    SizeBytes: 0,
+                    Sha256: null,
+                    Error: "Duration must be in hh:mm:ss format (e.g., 00:01:30)",
+                    CompletionMode: "Failed"
+                );
             }
 
             logger.LogInformation("Starting trace collection for PID {Pid}, Duration={Duration}, Profile={Profile}", pid, duration, profile ?? "default");
