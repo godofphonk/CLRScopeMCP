@@ -1,3 +1,4 @@
+using System.Reflection;
 using ClrScope.Mcp.Options;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -100,10 +101,11 @@ public class HealthService
         }
 
         var isHealthy = artifactRootExists && artifactRootWritable && databaseAccessible;
+        var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "unknown";
 
         return new HealthResult(
             isHealthy,
-            "0.1.0", // Stage 0a-A
+            version,
             new ArtifactRootInfo(artifactRootExists, artifactRootWritable, artifactRoot, freeSpaceBytes),
             new DatabaseInfo(databaseAccessible, databasePath),
             warnings.ToArray()

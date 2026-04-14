@@ -269,7 +269,8 @@ class Program
 
     static void PrintVersion()
     {
-        Console.WriteLine("CLRScope MCP v1.0.0");
+        var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "unknown";
+        Console.WriteLine($"CLRScope MCP v{version}");
     }
 
     static void PrintHelp()

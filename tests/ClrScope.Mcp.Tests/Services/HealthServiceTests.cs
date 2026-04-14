@@ -49,7 +49,8 @@ public class HealthServiceTests
 
             // Assert
             Assert.True(result.IsHealthy);
-            Assert.Equal("0.1.0", result.Version);
+            Assert.NotNull(result.Version);
+            Assert.NotEmpty(result.Version);
             Assert.True(result.ArtifactRoot.Exists);
             Assert.True(result.ArtifactRoot.IsWritable);
             Assert.Equal(tempDir, result.ArtifactRoot.Path);
