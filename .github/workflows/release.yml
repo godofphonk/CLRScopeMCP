@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*'
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 permissions:
   contents: read
 
@@ -24,7 +27,7 @@ jobs:
           dotnet-version: '10.0.100'
 
       - name: Restore
-        run: dotnet restore --locked-mode
+        run: dotnet restore src/ClrScope.Mcp/ClrScope.Mcp.csproj --locked-mode
 
       - name: Publish ${{ matrix.rid }}
         run: dotnet publish src/ClrScope.Mcp/ClrScope.Mcp.csproj -c Release -r ${{ matrix.rid }} --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=false -p:DebugSymbols=false -p:DebugType=None -o ./artifacts/${{ matrix.rid }}
@@ -56,7 +59,7 @@ jobs:
           dotnet-version: '10.0.100'
 
       - name: Restore
-        run: dotnet restore --locked-mode
+        run: dotnet restore src/ClrScope.Mcp/ClrScope.Mcp.csproj --locked-mode
 
       - name: Pack
         run: dotnet pack src/ClrScope.Mcp/ClrScope.Mcp.csproj -c Release

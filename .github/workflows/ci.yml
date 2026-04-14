@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -26,13 +29,21 @@ jobs:
           dotnet-version: '10.0.100'
 
       - name: Restore
-        run: dotnet restore --locked-mode
+        run: dotnet restore src/ClrScope.Mcp/ClrScope.Mcp.csproj --locked-mode
 
       - name: Build
-        run: dotnet build --no-restore -c Release
+        run: dotnet build --no-restore -c Release src/ClrScope.Mcp/ClrScope.Mcp.csproj
 
       - name: Test
-        run: dotnet test --no-build -c Release
+        run: dotnet test --no-build -c Release tests/ClrScope.Mcp.Tests/ClrScope.Mcp.Tests.csproj
 
       - name: Audit
         run: dotnet audit
+
+      - name: Build binary (linux-x64) for validation
+        run: dotnet publish src/ClrScope.Mcp/ClrScope.Mcp.csproj -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=false -p:DebugSymbols=false -p:DebugType=None -o ./test-artifacts/linux-x64
+
+      - name: Smoke test binary
+        run: |
+          chmod +x test-artifacts/linux-x64/ClrScope.Mcp
+          test-artifacts/linux-x64/ClrScope.Mcp --version
