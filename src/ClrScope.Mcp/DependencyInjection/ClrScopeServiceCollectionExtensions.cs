@@ -70,6 +70,9 @@ public static class ClrScopeServiceCollectionExtensions
         services.AddSingleton<IGcDumpGraphAdapter, GcDumpGraphAdapter>();
         services.AddSingleton<DominatorTreeCalculator>();
         services.AddSingleton<HeapRetainerPathsBuilder>();
+        services.AddSingleton<IHeapGraphSourceAdapter, EventPipeHeapGraphSourceAdapter>();
+        services.AddSingleton<IMemoryGraphFacade, PerfViewMemoryGraphFacade>();
+        services.AddSingleton<IHeapSnapshotMapper, MemoryGraphHeapSnapshotMapper>();
 
         return services;
     }

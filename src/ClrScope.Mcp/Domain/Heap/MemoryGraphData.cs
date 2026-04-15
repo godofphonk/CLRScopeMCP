@@ -5,7 +5,8 @@ namespace ClrScope.Mcp.Domain.Heap;
 /// </summary>
 public sealed class MemoryNodeData
 {
-    public required string ObjectId { get; set; }
+    public required long NodeId { get; set; }
+    public ulong? Address { get; set; }
     public required string TypeName { get; set; }
     public required string Namespace { get; set; }
     public required string AssemblyName { get; set; }
@@ -13,8 +14,9 @@ public sealed class MemoryNodeData
     public required long RetainedSizeBytes { get; set; }
     public required int Count { get; set; }
     public required string Generation { get; set; }
-    public required List<string> References { get; set; } = new();
-    public required List<string> ReferencedBy { get; set; } = new();
+    public bool IsRoot { get; set; }
+    public string? RootKind { get; set; }
+    public long? DominatorNodeId { get; set; }
 }
 
 /// <summary>
@@ -22,9 +24,10 @@ public sealed class MemoryNodeData
 /// </summary>
 public sealed class MemoryEdgeData
 {
-    public required string FromObjectId { get; set; }
-    public required string ToObjectId { get; set; }
-    public required string FieldName { get; set; }
+    public required long FromNodeId { get; set; }
+    public required long ToNodeId { get; set; }
+    public required string EdgeKind { get; set; }
+    public bool IsWeak { get; set; }
 }
 
 /// <summary>
@@ -32,10 +35,10 @@ public sealed class MemoryEdgeData
 /// </summary>
 public sealed class RootGroupData
 {
-    public required string RootId { get; set; }
-    public required string RootName { get; set; }
     public required string RootKind { get; set; }
-    public required List<string> RootedObjectIds { get; set; } = new();
+    public required int RootCount { get; set; }
+    public required long ReachableBytes { get; set; }
+    public required long RetainedBytes { get; set; }
 }
 
 /// <summary>
@@ -43,7 +46,7 @@ public sealed class RootGroupData
 /// </summary>
 public sealed class HeapGraphData
 {
-    public required Dictionary<string, MemoryNodeData> Nodes { get; set; }
+    public required Dictionary<long, MemoryNodeData> Nodes { get; set; }
     public required List<MemoryEdgeData> Edges { get; set; }
     public required List<RootGroupData> Roots { get; set; }
 }

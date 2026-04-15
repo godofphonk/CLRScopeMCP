@@ -34,10 +34,16 @@ public sealed class HeapRetainerPathsBuilder
         // 2. Trace paths from all roots to target
         // 3. Build retainer chains with step-by-step information
 
+        MemoryNodeData? targetNode = null;
+        if (long.TryParse(targetObjectId, out var nodeId))
+        {
+            targetNode = graph.Nodes.GetValueOrDefault(nodeId);
+        }
+
         return new RetainerPathData
         {
             TargetObjectId = targetObjectId,
-            TargetTypeName = graph.Nodes.GetValueOrDefault(targetObjectId)?.TypeName ?? "Unknown",
+            TargetTypeName = targetNode?.TypeName ?? "Unknown",
             RetainerChains = chains
         };
     }

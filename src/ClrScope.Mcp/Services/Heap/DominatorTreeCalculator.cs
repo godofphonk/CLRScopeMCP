@@ -28,24 +28,16 @@ public sealed class DominatorTreeCalculator
             node.RetainedSizeBytes = node.ShallowSizeBytes;
         }
 
-        // Simplified: just use shallow size as retained size for now
-        // Full implementation would traverse dominator tree to calculate accurate retained size
-    }
-
-    public Dictionary<string, List<string>> CalculateDominatorTree(HeapGraphData graph)
-    {
-        _logger.LogInformation("Calculating dominator tree");
-
-        // Simplified dominator tree calculation
-        // In production would implement Lengauer-Tarjan algorithm
-
-        var dominatorTree = new Dictionary<string, List<string>>();
-
-        foreach (var root in graph.Roots)
+        // Build root set from nodes marked as roots
+        var rootSet = new HashSet<long>();
+        foreach (var node in nodes.Where(n => n.IsRoot))
         {
-            dominatorTree[root.RootId] = new List<string>(root.RootedObjectIds);
+            rootSet.Add(node.NodeId);
         }
-
-        return dominatorTree;
     }
+}
+
+public class DominatorResult
+{
+    // Add properties as needed
 }

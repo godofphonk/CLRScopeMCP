@@ -22,6 +22,12 @@
           "Microsoft.Extensions.Logging.Abstractions": "8.0.3"
         }
       },
+      "Microsoft.Diagnostics.Tracing.TraceEvent": {
+        "type": "Direct",
+        "requested": "[3.1.3, )",
+        "resolved": "3.1.3",
+        "contentHash": "0i45LzMkHfWKcDZxzyGbE0TiRVRNvr8k+Snrgf1OT/8txwBi6opm3G8rCB7OAM6G4m61Jzd+ZaJ6YAyRGlE9TQ=="
+      },
       "Microsoft.Extensions.Configuration.Binder": {
         "type": "Direct",
         "requested": "[9.0.0, )",

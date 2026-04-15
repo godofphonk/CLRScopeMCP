@@ -4,15 +4,25 @@ namespace ClrScope.Mcp.Domain.Heap;
 
 /// <summary>
 /// Heap snapshot data structure for GcDump artifacts.
-/// Simplified version for heapstat mode (dotnet-gcdump report).
+/// Full version with complete graph data.
 /// </summary>
 public sealed class HeapSnapshotData
 {
     public required Artifact Artifact { get; init; }
     public required HeapMetadata Metadata { get; init; }
 
-    // Aggregated type statistics (from dotnet-gcdump report)
+    // Complete graph data
+    public required IReadOnlyList<MemoryNodeData> Nodes { get; init; }
+    public required IReadOnlyList<MemoryEdgeData> Edges { get; init; }
+    public required IReadOnlyList<RootGroupData> Roots { get; init; }
+
+    // Aggregated type statistics
     public required IReadOnlyList<TypeStatData> TypeStats { get; init; }
+
+    // Post-processing results
+    public required Dictionary<long, long?> Dominators { get; init; }
+    public required Dictionary<long, long> RetainedSizes { get; init; }
+    public required Dictionary<long, int> Depths { get; init; }
 }
 
 /// <summary>
@@ -24,6 +34,8 @@ public sealed class HeapMetadata
     public string ToolVersion { get; init; } = string.Empty;
     public long TotalHeapBytes { get; init; }
     public long TotalObjectCount { get; init; }
+    public int RootCount { get; init; }
+    public int SegmentCount { get; init; }
     public bool IsPartial { get; init; }
     public string? Warning { get; init; }
 }
@@ -40,5 +52,5 @@ public sealed class TypeStatData
 
     public int Count { get; init; }
     public long ShallowSizeBytes { get; init; }
-    public long RetainedSizeBytes { get; init; } // Not available in heapstat mode, will be 0
+    public long RetainedSizeBytes { get; init; }
 }

@@ -26,7 +26,7 @@ public sealed class GcDumpGraphAdapter : IGcDumpGraphAdapter
 
         return new HeapGraphData
         {
-            Nodes = new Dictionary<string, MemoryNodeData>(),
+            Nodes = new Dictionary<long, MemoryNodeData>(),
             Edges = new List<MemoryEdgeData>(),
             Roots = new List<RootGroupData>()
         };
@@ -41,7 +41,7 @@ public sealed class GcDumpGraphAdapter : IGcDumpGraphAdapter
 
         return new HeapGraphData
         {
-            Nodes = new Dictionary<string, MemoryNodeData>(),
+            Nodes = new Dictionary<long, MemoryNodeData>(),
             Edges = new List<MemoryEdgeData>(),
             Roots = new List<RootGroupData>()
         };

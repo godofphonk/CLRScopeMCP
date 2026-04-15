@@ -83,7 +83,13 @@ public sealed class HeapSnapshotPreparer : IHeapSnapshotPreparer
                 {
                     Artifact = artifact,
                     Metadata = new HeapMetadata { IsPartial = false },
-                    TypeStats = new List<TypeStatData>()
+                    Nodes = new List<MemoryNodeData>(),
+                    Edges = new List<MemoryEdgeData>(),
+                    Roots = new List<RootGroupData>(),
+                    TypeStats = new List<TypeStatData>(),
+                    Dominators = new Dictionary<long, long?>(),
+                    RetainedSizes = new Dictionary<long, long>(),
+                    Depths = new Dictionary<long, int>()
                 },
                 SuggestedDefaultView = HeapViewKind.TypeDistribution,
                 FromCache = false,
@@ -350,12 +356,22 @@ public sealed class HeapSnapshotPreparer : IHeapSnapshotPreparer
             Artifact = artifact,
             Metadata = new HeapMetadata
             {
+                RuntimeVersion = string.Empty,
+                ToolVersion = string.Empty,
                 TotalHeapBytes = filteredStats.Sum(t => t.ShallowSizeBytes),
                 TotalObjectCount = filteredStats.Sum(t => t.Count),
+                RootCount = 0,
+                SegmentCount = 0,
                 IsPartial = false,
                 Warning = null
             },
-            TypeStats = filteredStats
+            Nodes = new List<MemoryNodeData>(),
+            Edges = new List<MemoryEdgeData>(),
+            Roots = new List<RootGroupData>(),
+            TypeStats = filteredStats,
+            Dominators = new Dictionary<long, long?>(),
+            RetainedSizes = new Dictionary<long, long>(),
+            Depths = new Dictionary<long, int>()
         };
     }
 
