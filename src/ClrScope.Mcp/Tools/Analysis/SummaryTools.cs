@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
 using System.ComponentModel;
+using System.Text.Json;
 
 namespace ClrScope.Mcp.Tools.Analysis;
 
@@ -1878,9 +1879,17 @@ private static string TruncateCallSite(string callSite, int maxLength)
             logger.LogInformation("Preparing heap snapshot for artifact {ArtifactId}", artifactId);
             var prepared = await preparer.PrepareAsync(artifact, options, cancellationToken);
 
-            // Render based on view kind
+            // Render based on format and view kind
             string content;
-            if (viewKind == HeapViewKind.Treemap)
+            if (format.ToLowerInvariant() == "json")
+            {
+                content = JsonSerializer.Serialize(prepared.Snapshot, new JsonSerializerOptions
+                {
+                    WriteIndented = true,
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                });
+            }
+            else if (viewKind == HeapViewKind.Treemap)
             {
                 var renderer = new HeapTreemapRenderer();
                 content = renderer.RenderHtml(prepared.Snapshot, metricKind);

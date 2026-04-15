@@ -13,13 +13,16 @@ public sealed class HeapSnapshotPreparer : IHeapSnapshotPreparer
 {
     private readonly ICliCommandRunner _cliRunner;
     private readonly ILogger<HeapSnapshotPreparer> _logger;
+    private readonly IHeapSnapshotCache _cache;
 
     public HeapSnapshotPreparer(
         ICliCommandRunner cliRunner,
-        ILogger<HeapSnapshotPreparer> logger)
+        ILogger<HeapSnapshotPreparer> logger,
+        IHeapSnapshotCache cache)
     {
         _cliRunner = cliRunner ?? throw new ArgumentNullException(nameof(cliRunner));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _cache = cache ?? throw new ArgumentNullException(nameof(cache));
     }
 
     public async Task<PreparedHeapVisualizationData> PrepareAsync(
@@ -34,55 +37,185 @@ public sealed class HeapSnapshotPreparer : IHeapSnapshotPreparer
         if (artifact.Kind != ArtifactKind.GcDump)
             throw new InvalidOperationException($"Artifact '{artifact.ArtifactId.Value}' is not a GcDump.");
 
+        var cacheKey = _cache.GenerateCacheKey(artifact, options);
+
+        // Handle analysis mode
+        if (options.AnalysisMode == HeapAnalysisMode.Reuse)
+        {
+            progress?.Report(new HeapPreparationProgress
+            {
+                Phase = "Checking cache",
+                CurrentStep = 1,
+                TotalSteps = 1,
+                Message = "Checking cache..."
+            });
+
+            if (_cache.TryGet(cacheKey, out var cachedSnapshot) && cachedSnapshot != null)
+            {
+                progress?.Report(new HeapPreparationProgress
+                {
+                    Phase = "Completed",
+                    CurrentStep = 1,
+                    TotalSteps = 1,
+                    Message = "Loaded from cache"
+                });
+
+                return new PreparedHeapVisualizationData
+                {
+                    Snapshot = cachedSnapshot,
+                    SuggestedDefaultView = HeapViewKind.TypeDistribution,
+                    FromCache = true,
+                    CacheKey = cacheKey
+                };
+            }
+
+            progress?.Report(new HeapPreparationProgress
+            {
+                Phase = "Completed",
+                CurrentStep = 1,
+                TotalSteps = 1,
+                Message = "Cache miss"
+            });
+
+            return new PreparedHeapVisualizationData
+            {
+                Snapshot = new HeapSnapshotData
+                {
+                    Artifact = artifact,
+                    Metadata = new HeapMetadata { IsPartial = false },
+                    TypeStats = new List<TypeStatData>()
+                },
+                SuggestedDefaultView = HeapViewKind.TypeDistribution,
+                FromCache = false,
+                CacheKey = cacheKey
+            };
+        }
+
+        if (options.AnalysisMode == HeapAnalysisMode.Force)
+        {
+            // Force re-analysis
+            progress?.Report(new HeapPreparationProgress
+            {
+                Phase = "Reading",
+                CurrentStep = 1,
+                TotalSteps = 4,
+                Message = "Running dotnet-gcdump report (force)..."
+            });
+
+            var typeStats = await RunGcDumpReportAsync(artifact.FilePath, cancellationToken);
+
+            progress?.Report(new HeapPreparationProgress
+            {
+                Phase = "Aggregating",
+                CurrentStep = 2,
+                TotalSteps = 4,
+                Message = $"Found {typeStats.Count} types, applying filters..."
+            });
+
+            var filteredStats = FilterAndAggregate(typeStats, options);
+
+            progress?.Report(new HeapPreparationProgress
+            {
+                Phase = "Caching",
+                CurrentStep = 3,
+                TotalSteps = 4,
+                Message = "Caching results..."
+            });
+
+            var snapshot = BuildSnapshot(artifact, filteredStats);
+            _cache.Set(cacheKey, snapshot);
+
+            progress?.Report(new HeapPreparationProgress
+            {
+                Phase = "Completed",
+                CurrentStep = 4,
+                TotalSteps = 4,
+                Message = $"Prepared {filteredStats.Count} types for visualization"
+            });
+
+            return new PreparedHeapVisualizationData
+            {
+                Snapshot = snapshot,
+                SuggestedDefaultView = HeapViewKind.TypeDistribution,
+                FromCache = false,
+                CacheKey = cacheKey
+            };
+        }
+
+        // Auto mode
+        progress?.Report(new HeapPreparationProgress
+        {
+            Phase = "Checking cache",
+            CurrentStep = 1,
+            TotalSteps = 4,
+            Message = "Checking cache..."
+        });
+
+        if (_cache.TryGet(cacheKey, out var autoCachedSnapshot) && autoCachedSnapshot != null)
+        {
+            _logger.LogInformation("Using cached heap snapshot for artifact {ArtifactId}", artifact.ArtifactId.Value);
+            progress?.Report(new HeapPreparationProgress
+            {
+                Phase = "Completed",
+                CurrentStep = 1,
+                TotalSteps = 1,
+                Message = "Loaded from cache"
+            });
+
+            return new PreparedHeapVisualizationData
+            {
+                Snapshot = autoCachedSnapshot,
+                SuggestedDefaultView = HeapViewKind.TypeDistribution,
+                FromCache = true,
+                CacheKey = cacheKey
+            };
+        }
+
         progress?.Report(new HeapPreparationProgress
         {
             Phase = "Reading",
-            CurrentStep = 1,
-            TotalSteps = 3,
+            CurrentStep = 2,
+            TotalSteps = 4,
             Message = "Running dotnet-gcdump report..."
         });
 
-        // Run dotnet-gcdump report to get heap statistics
-        var typeStats = await RunGcDumpReportAsync(artifact.FilePath, cancellationToken);
+        var autoTypeStats = await RunGcDumpReportAsync(artifact.FilePath, cancellationToken);
 
         progress?.Report(new HeapPreparationProgress
         {
             Phase = "Aggregating",
-            CurrentStep = 2,
-            TotalSteps = 3,
-            Message = $"Found {typeStats.Count} types, applying filters..."
+            CurrentStep = 3,
+            TotalSteps = 4,
+            Message = $"Found {autoTypeStats.Count} types, applying filters..."
         });
 
-        // Apply filters and aggregation
-        var filteredStats = FilterAndAggregate(typeStats, options);
+        var autoFilteredStats = FilterAndAggregate(autoTypeStats, options);
+
+        progress?.Report(new HeapPreparationProgress
+        {
+            Phase = "Caching",
+            CurrentStep = 4,
+            TotalSteps = 4,
+            Message = "Caching results..."
+        });
+
+        var autoSnapshot = BuildSnapshot(artifact, autoFilteredStats);
+        _cache.Set(cacheKey, autoSnapshot);
 
         progress?.Report(new HeapPreparationProgress
         {
             Phase = "Completed",
-            CurrentStep = 3,
-            TotalSteps = 3,
-            Message = $"Prepared {filteredStats.Count} types for visualization"
+            CurrentStep = 4,
+            TotalSteps = 4,
+            Message = $"Prepared {autoFilteredStats.Count} types for visualization"
         });
-
-        var snapshot = new HeapSnapshotData
-        {
-            Artifact = artifact,
-            Metadata = new HeapMetadata
-            {
-                TotalHeapBytes = filteredStats.Sum(t => t.ShallowSizeBytes),
-                TotalObjectCount = filteredStats.Sum(t => t.Count),
-                IsPartial = false,
-                Warning = null
-            },
-            TypeStats = filteredStats
-        };
 
         return new PreparedHeapVisualizationData
         {
-            Snapshot = snapshot,
+            Snapshot = autoSnapshot,
             SuggestedDefaultView = HeapViewKind.TypeDistribution,
             FromCache = false,
-            CacheKey = BuildCacheKey(artifact, options)
+            CacheKey = cacheKey
         };
     }
 
@@ -167,6 +300,36 @@ public sealed class HeapSnapshotPreparer : IHeapSnapshotPreparer
     {
         var query = typeStats.AsQueryable();
 
+        // Group by
+        if (options.GroupBy == HeapGroupBy.Namespace)
+        {
+            query = query.GroupBy(t => t.Namespace)
+                .Select(g => new TypeStatData
+                {
+                    TypeName = g.Key ?? "<global>",
+                    Namespace = g.Key ?? string.Empty,
+                    AssemblyName = string.Empty,
+                    Generation = "mixed",
+                    Count = g.Sum(t => t.Count),
+                    ShallowSizeBytes = g.Sum(t => t.ShallowSizeBytes),
+                    RetainedSizeBytes = 0
+                });
+        }
+        else if (options.GroupBy == HeapGroupBy.Assembly)
+        {
+            query = query.GroupBy(t => t.AssemblyName)
+                .Select(g => new TypeStatData
+                {
+                    TypeName = g.Key ?? "<unknown>",
+                    Namespace = string.Empty,
+                    AssemblyName = g.Key ?? string.Empty,
+                    Generation = "mixed",
+                    Count = g.Sum(t => t.Count),
+                    ShallowSizeBytes = g.Sum(t => t.ShallowSizeBytes),
+                    RetainedSizeBytes = 0
+                });
+        }
+
         // Sort by metric
         query = options.Metric switch
         {
@@ -178,6 +341,22 @@ public sealed class HeapSnapshotPreparer : IHeapSnapshotPreparer
         var filtered = query.Take(options.MaxTypes).ToList();
 
         return filtered;
+    }
+
+    private static HeapSnapshotData BuildSnapshot(Artifact artifact, List<TypeStatData> filteredStats)
+    {
+        return new HeapSnapshotData
+        {
+            Artifact = artifact,
+            Metadata = new HeapMetadata
+            {
+                TotalHeapBytes = filteredStats.Sum(t => t.ShallowSizeBytes),
+                TotalObjectCount = filteredStats.Sum(t => t.Count),
+                IsPartial = false,
+                Warning = null
+            },
+            TypeStats = filteredStats
+        };
     }
 
     private static string ExtractNamespace(string typeName)
@@ -194,11 +373,5 @@ public sealed class HeapSnapshotPreparer : IHeapSnapshotPreparer
         // In heapstat mode, assembly info is not available
         // This will be populated in future graph-based implementation
         return string.Empty;
-    }
-
-    private static string BuildCacheKey(Artifact artifact, HeapPreparationOptions options)
-    {
-        var fingerprint = artifact.FilePath ?? artifact.ArtifactId.Value;
-        return $"heap:{fingerprint}:metric={options.Metric}:group={options.GroupBy}:v=1";
     }
 }

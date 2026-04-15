@@ -65,6 +65,7 @@ public static class ClrScopeServiceCollectionExtensions
         services.AddSingleton<ISymbolResolver, SymbolResolver>();
         services.AddSingleton<ISosAnalyzer, DotnetDumpAnalyzer>();
         services.AddSingleton<IHeapSnapshotPreparer, HeapSnapshotPreparer>();
+        services.AddSingleton<IHeapSnapshotCache, HeapSnapshotCache>();
 
         return services;
     }
