@@ -2,7 +2,7 @@
 # Build LINUX x64 binary for local development testing
 #
 # Usage:
-#   ./deployments/build-local-binaries.sh [version]
+#   ./deployments/dev/build-local-binaries.sh [version]
 #
 # This script builds a framework-dependent single-file binary for CLRScope MCP
 # on Linux x64 only. It's intended for local development testing.
@@ -13,7 +13,7 @@ set -e
 
 VERSION=${1:-"0.1.0"}
 OUTPUT_DIR="../DEV/releases/$VERSION"
-PROJECT="../src/ClrScope.Mcp/ClrScope.Mcp.csproj"
+PROJECT="../../src/ClrScope.Mcp/ClrScope.Mcp.csproj"
 
 echo "Building CLRScope MCP v$VERSION (Linux x64 only)..."
 
