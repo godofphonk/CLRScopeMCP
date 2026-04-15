@@ -4,7 +4,7 @@
 # Usage:
 #   ./deployments/build-local-binaries.sh [version]
 #
-# This script builds a self-contained single-file binary for CLRScope MCP
+# This script builds a framework-dependent single-file binary for CLRScope MCP
 # on Linux x64 only. It's intended for local development testing.
 #
 # For actual publishing, use GitHub Actions workflow (.github/workflows/release.yml)
@@ -26,9 +26,7 @@ echo "Building linux-x64..."
 dotnet publish "$PROJECT" \
   -c Release \
   -r linux-x64 \
-  --self-contained true \
-  -p:PublishSingleFile=true \
-  -p:PublishTrimmed=false \
+  --self-contained false \
   -p:DebugSymbols=false \
   -p:DebugType=None \
   -o "$OUTPUT_DIR"
@@ -43,3 +41,4 @@ echo "✅ Built to $OUTPUT_DIR"
 echo ""
 echo "Binary ready for local testing:"
 echo "  - $OUTPUT_DIR/clrscope-mcp"
+echo "Note: Requires .NET 10.0 runtime to be installed on the target system"

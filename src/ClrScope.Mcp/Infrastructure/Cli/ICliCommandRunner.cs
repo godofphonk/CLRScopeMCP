@@ -34,6 +34,9 @@ public enum CommandErrorCategory
     Timeout,
     InvalidArguments,
     RuntimeError,
+    StartFailure,
+    ProcessError,
+    Cancelled,
     Unknown
 }
 

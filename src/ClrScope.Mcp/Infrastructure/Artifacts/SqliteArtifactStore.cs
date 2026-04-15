@@ -121,6 +121,7 @@ public class SqliteArtifactStore : ISqliteArtifactStore
             HashState hashState;
             if (fileInfo.Length > 100 * 1024 * 1024)
             {
+                sha256 = "skipped_for_large_file";
                 hashState = HashState.SkippedLargeFile;
             }
             else
@@ -132,6 +133,7 @@ public class SqliteArtifactStore : ISqliteArtifactStore
                 }
                 catch
                 {
+                    sha256 = "hash_failed";
                     hashState = HashState.Failed;
                 }
             }

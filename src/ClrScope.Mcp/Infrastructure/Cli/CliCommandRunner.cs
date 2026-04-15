@@ -30,7 +30,12 @@ public class CliCommandRunner : ICliCommandRunner
         CancellationToken cancellationToken = default)
     {
         var maskedArguments = MaskSensitiveArguments(arguments);
-        _logger.LogInformation("Executing: {Command} {Arguments}", command, string.Join(" ", maskedArguments));
+        _logger.LogDebug(
+            "Executing command {Command} {Args}; timeout={Timeout}; cancellationRequested={Cancelled}",
+            command,
+            string.Join(" ", maskedArguments),
+            timeout,
+            cancellationToken.IsCancellationRequested);
 
         var startInfo = new ProcessStartInfo
         {
@@ -49,76 +54,138 @@ public class CliCommandRunner : ICliCommandRunner
         using var process = Process.Start(startInfo);
         if (process == null)
         {
-            return new CommandLineResult(-1, "", "Failed to start process", false, CommandErrorCategory.RuntimeError);
+            return new CommandLineResult(-1, "", "Failed to start process", false, CommandErrorCategory.StartFailure);
         }
 
-        var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
+        // Start reading streams immediately to avoid deadlocks
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
 
         try
         {
-            var timeoutTask = timeout == Timeout.InfiniteTimeSpan
-                ? Task.CompletedTask
-                : Task.Delay(timeout, cancellationToken);
-
-            var exitTask = process.WaitForExitAsync(cancellationToken);
-
-            var completedTask = await Task.WhenAny(exitTask, timeoutTask);
-
-            if (completedTask == timeoutTask)
+            if (timeout == Timeout.InfiniteTimeSpan)
             {
-                _logger.LogWarning("Command timed out after {Timeout}, killing process {Pid}", timeout, process.Id);
-                KillProcessTree(process.Id);
-                process.Kill(true);
-                await Task.Delay(100, CancellationToken.None);
-                return new CommandLineResult(-1, "", $"Command timed out after {timeout}", false, CommandErrorCategory.Timeout);
+                await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                timeoutCts.CancelAfter(timeout);
+
+                try
+                {
+                    await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (
+                    !cancellationToken.IsCancellationRequested &&
+                    timeoutCts.IsCancellationRequested)
+                {
+                    // This is a timeout, not external cancellation
+                    _logger.LogWarning("Command timed out after {Timeout}, killing process {Pid}", timeout, process.Id);
+                    TryKill(process);
+
+                    try
+                    {
+                        await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        // Ignore errors during cleanup
+                    }
+
+                    var stdout = await SafeAwait(stdoutTask).ConfigureAwait(false);
+                    var stderr = await SafeAwait(stderrTask).ConfigureAwait(false);
+
+                    return new CommandLineResult(
+                        -1,
+                        stdout,
+                        string.IsNullOrWhiteSpace(stderr)
+                            ? $"Command timed out after {timeout}."
+                            : $"{stderr}{Environment.NewLine}Command timed out after {timeout}.",
+                        false,
+                        CommandErrorCategory.Timeout);
+                }
             }
 
-            await exitTask;
+            var standardOutput = await SafeAwait(stdoutTask).ConfigureAwait(false);
+            var standardError = await SafeAwait(stderrTask).ConfigureAwait(false);
+
+            var success = process.ExitCode == 0;
+            var errorCategory = CategorizeError(process.ExitCode, standardError);
+
+            if (!success)
+            {
+                _logger.LogWarning("Command failed with exit code {ExitCode}, category {Category}: {Error}", process.ExitCode, errorCategory, standardError);
+            }
+
+            return new CommandLineResult(process.ExitCode, standardOutput, standardError, success, errorCategory);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            _logger.LogWarning("Command cancelled, killing process {Pid}", process.Id);
+            // This is external cancellation, not timeout
+            _logger.LogDebug(
+                "Command cancelled. externalCancelled={ExternalCancelled}, processExited={HasExited}",
+                true,
+                process.HasExited);
 
-            try
-            {
-                KillProcessTree(process.Id);
-                process.Kill(true);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to kill process {Pid}", process.Id);
-            }
+            TryKill(process);
 
-            await Task.Delay(100, CancellationToken.None);
-            throw;
+            return new CommandLineResult(
+                -1,
+                "",
+                "Command was cancelled.",
+                false,
+                CommandErrorCategory.Cancelled);
         }
-
-        var output = await outputTask;
-        var error = await errorTask;
-
-        var success = process.ExitCode == 0;
-        var errorCategory = CategorizeError(process.ExitCode, error);
-
-        if (!success)
+        catch (Exception ex)
         {
-            _logger.LogWarning("Command failed with exit code {ExitCode}, category {Category}: {Error}", process.ExitCode, errorCategory, error);
-        }
+            _logger.LogError(ex, "Command execution failed for {Command}", command);
+            TryKill(process);
 
-        return new CommandLineResult(process.ExitCode, output, error, success, errorCategory);
+            return new CommandLineResult(
+                -1,
+                "",
+                ex.Message,
+                false,
+                CommandErrorCategory.RuntimeError);
+        }
+    }
+
+    private static void TryKill(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+        catch
+        {
+            // Ignore errors during cleanup
+        }
+    }
+
+    private static async Task<string> SafeAwait(Task<string> task)
+    {
+        try
+        {
+            return await task.ConfigureAwait(false);
+        }
+        catch
+        {
+            return string.Empty;
+        }
     }
 
     private string[] MaskSensitiveArguments(string[] arguments)
     {
-        // Mask file paths and potentially sensitive arguments
         return arguments.Select(arg =>
         {
-            // Mask file paths (arguments that look like paths)
             if (arg.Contains('/') || arg.Contains('\\'))
             {
                 if (arg.StartsWith("-") || arg.StartsWith("--"))
                 {
-                    // It's a flag with a path value like "-o /path/to/file"
                     var parts = arg.Split(' ', 2);
                     if (parts.Length == 2 && (parts[1].Contains('/') || parts[1].Contains('\\')))
                     {
@@ -127,12 +194,10 @@ public class CliCommandRunner : ICliCommandRunner
                 }
                 else if (arg.StartsWith("/") || arg.Contains(":/") || (arg.Length > 1 && arg[1] == ':'))
                 {
-                    // It's a path
                     return "[MASKED_PATH]";
                 }
             }
 
-            // Mask token-like arguments (commonly used for auth)
             if (arg.ToLowerInvariant().Contains("token") || arg.ToLowerInvariant().Contains("key") || arg.ToLowerInvariant().Contains("secret"))
             {
                 return "[MASKED_CREDENTIAL]";
@@ -161,48 +226,6 @@ public class CliCommandRunner : ICliCommandRunner
             return CommandErrorCategory.InvalidArguments;
         }
 
-        if (exitCode == 124 || errorLower.Contains("timeout") || errorLower.Contains("timed out"))
-        {
-            return CommandErrorCategory.Timeout;
-        }
-
-        return CommandErrorCategory.RuntimeError;
-    }
-
-    private void KillProcessTree(int pid)
-    {
-        try
-        {
-            // On Unix, use pkill to kill process tree
-            if (Environment.OSVersion.Platform == PlatformID.Unix)
-            {
-                var killProcess = Process.Start(
-                    new ProcessStartInfo
-                    {
-                        FileName = "pkill",
-                        ArgumentList = { "-P", pid.ToString() },
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    });
-                killProcess?.WaitForExit();
-            }
-            else
-            {
-                // On Windows, taskkill to kill process tree
-                var killProcess = Process.Start(
-                    new ProcessStartInfo
-                    {
-                        FileName = "taskkill",
-                        ArgumentList = { "/F", "/T", "/PID", pid.ToString() },
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    });
-                killProcess?.WaitForExit();
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to kill process tree for {Pid}", pid);
-        }
+        return CommandErrorCategory.ProcessError;
     }
 }

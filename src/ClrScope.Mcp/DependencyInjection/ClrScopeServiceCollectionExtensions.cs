@@ -108,7 +108,7 @@ public static class ClrScopeServiceCollectionExtensions
             .WithTools<ResourceTools>()
             .WithTools<SummaryTools>()
             .WithTools<SessionAnalysisTools>()
-            .WithTools<WorkflowTools>();
+            .WithTools<WorkflowAutomationTools>();
 
         return services;
     }

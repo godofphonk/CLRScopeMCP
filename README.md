@@ -20,7 +20,8 @@ CLRScope MCP provides AI-powered diagnostic capabilities for .NET applications t
 | **SOS Commands** | Sequential SOS command execution for deep analysis |
 | **Pattern Detection** | Automatic detection of memory leaks, deadlocks, high CPU |
 | **Artifact Management** | Pagination, filtering, and cleanup strategies |
-| **Baseline Comparison** | Compare diagnostic sessions with baseline
+| **Baseline Comparison** | Compare diagnostic sessions with baseline |
+| 🤖 **Automated Workflows** | One-click diagnostic bundles for common scenarios (high CPU, memory leaks, hangs, baseline) |
 
 ## Installation
 

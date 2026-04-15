@@ -2,6 +2,40 @@
 
 This document provides step-by-step guides for common diagnostic scenarios using CLRScope MCP.
 
+## Automated Workflows
+
+CLRScope MCP provides automated workflows that execute multiple diagnostic collection steps in sequence, returning structured results with all collected artifacts.
+
+### Available Automated Workflows
+
+- **workflow_automated_high_cpu_bundle**: Collects CPU trace, performance counters, and thread stacks
+- **workflow_automated_memory_leak_bundle**: Collects GC dump, GC counters, and GC heap trace
+- **workflow_automated_hang_bundle**: Collects memory dump, thread stacks, and thread counters
+- **workflow_automated_baseline_bundle**: Collects counters, baseline trace, GC dump, and thread stacks
+
+### Using Automated Workflows
+
+Automated workflows simplify the diagnostic process by executing all necessary collection steps automatically:
+
+```json
+{
+  "pid": 12345,
+  "duration": "00:01:00"
+}
+```
+
+Each workflow returns:
+- Success status
+- Steps completed / total steps
+- Array of collected artifacts with metadata
+- Session IDs for tracking
+- Execution time in milliseconds
+- Error information if any steps failed
+
+## Manual Investigation Guides
+
+For more granular control or when automated workflows are not suitable, use the following manual step-by-step guides.
+
 ## High CPU Investigation
 
 Step-by-step guide for high CPU investigation:
@@ -15,6 +49,8 @@ Step-by-step guide for high CPU investigation:
 7. Look for methods with high CPU time in the trace
 8. Check thread pool configuration and contention in counters
 9. Review stack traces to identify blocking patterns
+
+**Alternative**: Use `workflow_automated_high_cpu_bundle` for automated collection.
 
 ## Memory Leak Investigation
 
@@ -32,6 +68,8 @@ Step-by-step guide for memory leak investigation:
 10. Check GC pause times in counters
 11. Review allocation rate in trace
 
+**Alternative**: Use `workflow_automated_memory_leak_bundle` for automated collection.
+
 ## Hang/Deadlock Investigation
 
 Step-by-step guide for hang/deadlock investigation:
@@ -48,6 +86,8 @@ Step-by-step guide for hang/deadlock investigation:
 10. Review thread pool queue length and worker threads
 11. Check for async/await deadlocks or thread pool starvation
 
+**Alternative**: Use `workflow_automated_hang_bundle` for automated collection.
+
 ## Baseline Performance Collection
 
 Plan for collecting baseline performance data:
@@ -61,3 +101,5 @@ Plan for collecting baseline performance data:
 7. Save the collected artifacts with descriptive names (e.g., `baseline_cpu.trace`, `baseline_counters.json`)
 8. Document the system conditions (CPU, memory, load) during baseline collection
 9. Store baseline artifacts in a dedicated folder for comparison with future collections
+
+**Alternative**: Use `workflow_automated_baseline_bundle` for automated collection.
