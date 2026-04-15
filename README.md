@@ -14,7 +14,7 @@ CLRScope MCP provides AI-powered diagnostic capabilities for .NET applications t
 
 | Feature | Description |
 |---------|-------------|
-| 🎯 **Runtime Detection** | OS/Architecture detection for attachable .NET processes |
+| 🎯 **Runtime Detection** | Attachable .NET process detection (host OS only; target architecture currently unavailable) |
 | 📊 **Performance Counters** | Real-time CPU, memory, GC, and thread pool metrics |
 | 🔥 **Flame Graph Visualization** | Enhanced stack trace visualization with Dump/Trace support, caching, and progress reporting (v1.2.0) |
 | **Memory Dump Analysis** | Compressed dump support with automatic decompression |
