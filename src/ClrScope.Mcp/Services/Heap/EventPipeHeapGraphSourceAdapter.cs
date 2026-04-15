@@ -5,7 +5,7 @@ namespace ClrScope.Mcp.Services.Heap;
 
 /// <summary>
 /// Adapter for reading heap graph from EventPipe traces (.nettrace files).
-/// This implementation is a placeholder until full source reuse from dotnet/diagnostics is implemented.
+/// Currently a placeholder - full implementation requires dotnet/diagnostics source reuse.
 /// </summary>
 public sealed class EventPipeHeapGraphSourceAdapter : IHeapGraphSourceAdapter
 {
@@ -30,16 +30,16 @@ public sealed class EventPipeHeapGraphSourceAdapter : IHeapGraphSourceAdapter
             Phase = "Reading",
             CurrentStep = 1,
             TotalSteps = 1,
-            Message = "Reading EventPipe heap graph"
+            Message = "Reading EventPipe trace file"
         });
 
-        // TODO: Implement full integration with dotnet/diagnostics source reuse
+        // TODO: Implement full EventPipe trace parsing
         // This requires:
-        // 1. Source reference to Microsoft.Diagnostics.Tools.GCDump
-        // 2. Use EventPipeDotNetHeapDumper.DumpFromEventPipeFile(...)
-        // 3. Convert MemoryGraph to our envelope
+        // 1. Proper TraceEvent API usage for EventPipe traces
+        // 2. Parsing GC bulk events (GCBulkType, GCBulkNode, GCBulkEdge, etc.)
+        // 3. Building MemoryGraph from events
+        // For now, return placeholder
 
-        // For now, return empty envelope
         await Task.CompletedTask;
 
         return new MemoryGraphEnvelope
@@ -55,7 +55,7 @@ public sealed class EventPipeHeapGraphSourceAdapter : IHeapGraphSourceAdapter
                 RuntimeVersion = string.Empty,
                 ToolVersion = string.Empty,
                 IsPartial = true,
-                Warning = "Full EventPipe integration requires source reuse from dotnet/diagnostics"
+                Warning = "EventPipe trace parsing requires dotnet/diagnostics source reuse"
             }
         };
     }

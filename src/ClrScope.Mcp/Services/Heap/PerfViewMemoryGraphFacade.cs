@@ -6,6 +6,7 @@ namespace ClrScope.Mcp.Services.Heap;
 /// <summary>
 /// Facade for reading MemoryGraph from PerfView/Graphs API.
 /// This isolates CLRScope from unstable MemoryGraph API details.
+/// Currently adapted to work with TraceEvent data structures.
 /// </summary>
 public sealed class PerfViewMemoryGraphFacade : IMemoryGraphFacade
 {
@@ -18,39 +19,37 @@ public sealed class PerfViewMemoryGraphFacade : IMemoryGraphFacade
 
     public IReadOnlyList<GraphNodeRecord> GetNodes(object memoryGraph)
     {
-        // TODO: Implement when source reuse from PerfView/Graphs is added
-        // This requires:
-        // 1. Source reference to Graphs library
-        // 2. Adapt to specific MemoryGraph API (GetNode, NodeTypeIndexLimit, etc.)
+        // memoryGraph is currently a placeholder object from EventPipeHeapGraphSourceAdapter
+        // In full implementation with source reuse from dotnet/diagnostics, this would:
+        // 1. Cast memoryGraph to MemoryGraph
+        // 2. Iterate through nodes using MemoryGraph API
         // 3. Extract node properties (address, type, size, etc.)
 
-        _logger.LogWarning("PerfViewMemoryGraphFacade.GetNodes not implemented - requires source reuse from Graphs");
+        _logger.LogWarning("PerfViewMemoryGraphFacade.GetNodes returning empty - full implementation requires dotnet/diagnostics source reuse");
 
         return new List<GraphNodeRecord>();
     }
 
     public IReadOnlyList<GraphEdgeRecord> GetEdges(object memoryGraph)
     {
-        // TODO: Implement when source reuse from PerfView/Graphs is added
-        // This requires:
-        // 1. Source reference to Graphs library
-        // 2. Adapt to specific MemoryGraph API for edges
+        // In full implementation with source reuse from dotnet/diagnostics, this would:
+        // 1. Cast memoryGraph to MemoryGraph
+        // 2. Iterate through edges using MemoryGraph API
         // 3. Extract edge properties (from, to, weak, kind)
 
-        _logger.LogWarning("PerfViewMemoryGraphFacade.GetEdges not implemented - requires source reuse from Graphs");
+        _logger.LogWarning("PerfViewMemoryGraphFacade.GetEdges returning empty - full implementation requires dotnet/diagnostics source reuse");
 
         return new List<GraphEdgeRecord>();
     }
 
     public IReadOnlyList<GraphRootRecord> GetRoots(object memoryGraph)
     {
-        // TODO: Implement when source reuse from PerfView/Graphs is added
-        // This requires:
-        // 1. Source reference to Graphs library
-        // 2. Adapt to specific MemoryGraph API for synthetic root hierarchy
+        // In full implementation with source reuse from dotnet/diagnostics, this would:
+        // 1. Cast memoryGraph to MemoryGraph
+        // 2. Extract synthetic root hierarchy
         // 3. Extract root properties (root node, root kind from synthetic root tree)
 
-        _logger.LogWarning("PerfViewMemoryGraphFacade.GetRoots not implemented - requires source reuse from Graphs");
+        _logger.LogWarning("PerfViewMemoryGraphFacade.GetRoots returning empty - full implementation requires dotnet/diagnostics source reuse");
 
         return new List<GraphRootRecord>();
     }
