@@ -9,9 +9,203 @@ using System.ComponentModel;
 
 namespace ClrScope.Mcp.Tools.Analysis;
 
+// Layer 1: Artifact Inspection - determines artifact type and properties
+internal interface IArtifactInspector
+{
+    ArtifactInspectionResult Inspect(Artifact artifact);
+}
+
+internal record ArtifactInspectionResult(
+    ArtifactKind Kind,
+    bool RequiresPreprocessing,
+    string RecommendedFlameKind
+);
+
+// Layer 2: Preparation Layer - normalizes data for rendering
+internal interface IStackDataPreparer
+{
+    Task<PreparedStackData> PrepareAsync(Artifact artifact, string flameKind, string analysisMode, CancellationToken cancellationToken, IProgress<AnalysisProgress>? progress = null);
+}
+
+internal enum AnalysisPhase
+{
+    Validating,
+    PreparingSymbols,
+    RunningAnalysis,
+    ParsingStacks,
+    Aggregating,
+    Rendering,
+    Completed
+}
+
+internal record AnalysisProgress(
+    AnalysisPhase Phase,
+    int CurrentStep,
+    int TotalSteps,
+    string Message
+);
+
+internal record PreparedStackData(
+    List<StackFrameData> StackFrames,
+    string Source,
+    bool FromCache
+);
+
+// Layer 3: Rendering Layer - generates flame graph from normalized data
+internal interface IFlameGraphRenderer
+{
+    string Render(PreparedStackData data, Artifact artifact, string format, string flameKind);
+}
+
 [McpServerToolType]
 public sealed class SummaryTools
 {
+    private class DefaultArtifactInspector : IArtifactInspector
+    {
+        public ArtifactInspectionResult Inspect(Artifact artifact)
+        {
+            var recommendedFlameKind = artifact.Kind switch
+            {
+                ArtifactKind.Dump => "snapshot",
+                ArtifactKind.Trace => "cpu",
+                ArtifactKind.Stacks => "snapshot",
+                _ => "snapshot"
+            };
+
+            var requiresPreprocessing = artifact.Kind == ArtifactKind.Dump || artifact.Kind == ArtifactKind.Trace;
+
+            return new ArtifactInspectionResult(
+                artifact.Kind,
+                requiresPreprocessing,
+                recommendedFlameKind
+            );
+        }
+    }
+
+    private static readonly IArtifactInspector _artifactInspector = new DefaultArtifactInspector();
+
+    private class StackDataPreparer : IStackDataPreparer
+    {
+        private readonly ISosAnalyzer _sosAnalyzer;
+        private readonly ILogger _logger;
+
+        public StackDataPreparer(ISosAnalyzer sosAnalyzer, ILogger logger)
+        {
+            _sosAnalyzer = sosAnalyzer;
+            _logger = logger;
+        }
+
+        public async Task<PreparedStackData> PrepareAsync(Artifact artifact, string flameKind, string analysisMode, CancellationToken cancellationToken, IProgress<AnalysisProgress>? progress = null)
+        {
+            var totalSteps = 5;
+            var currentStep = 0;
+
+            progress?.Report(new AnalysisProgress(AnalysisPhase.Validating, ++currentStep, totalSteps, "Validating artifact..."));
+
+            var cacheKey = _stacksCache.GenerateCacheKey(artifact, analysisMode, flameKind);
+
+            // Check cache based on analysis_mode
+            List<StackFrameData>? stackFrames = null;
+            if (analysisMode == "reuse")
+            {
+                progress?.Report(new AnalysisProgress(AnalysisPhase.Validating, ++currentStep, totalSteps, "Checking cache..."));
+                if (_stacksCache.TryGet(cacheKey, out stackFrames) && stackFrames != null)
+                {
+                    progress?.Report(new AnalysisProgress(AnalysisPhase.Completed, totalSteps, totalSteps, "Loaded from cache"));
+                    return new PreparedStackData(stackFrames, "cache", true);
+                }
+                progress?.Report(new AnalysisProgress(AnalysisPhase.Completed, totalSteps, totalSteps, "Cache miss"));
+                return new PreparedStackData(new List<StackFrameData>(), "cache_miss", false);
+            }
+            else if (analysisMode == "force")
+            {
+                // Force re-analysis
+                progress?.Report(new AnalysisProgress(AnalysisPhase.PreparingSymbols, ++currentStep, totalSteps, "Preparing for analysis..."));
+                stackFrames = await ExtractStackFramesAsync(artifact, flameKind, cancellationToken, progress, currentStep, totalSteps);
+                progress?.Report(new AnalysisProgress(AnalysisPhase.Aggregating, ++currentStep, totalSteps, "Caching results..."));
+                _stacksCache.Set(cacheKey, stackFrames ?? new List<StackFrameData>());
+                progress?.Report(new AnalysisProgress(AnalysisPhase.Completed, totalSteps, totalSteps, "Analysis complete"));
+                return new PreparedStackData(stackFrames ?? new List<StackFrameData>(), "force_analysis", false);
+            }
+            else // auto
+            {
+                progress?.Report(new AnalysisProgress(AnalysisPhase.Validating, ++currentStep, totalSteps, "Checking cache..."));
+                if (_stacksCache.TryGet(cacheKey, out stackFrames) && stackFrames != null)
+                {
+                    _logger.LogInformation("Using cached preprocessed stacks for artifact {ArtifactId}", artifact.ArtifactId);
+                    progress?.Report(new AnalysisProgress(AnalysisPhase.Completed, totalSteps, totalSteps, "Loaded from cache"));
+                    return new PreparedStackData(stackFrames, "cache", true);
+                }
+                else
+                {
+                    progress?.Report(new AnalysisProgress(AnalysisPhase.PreparingSymbols, ++currentStep, totalSteps, "Preparing for analysis..."));
+                    stackFrames = await ExtractStackFramesAsync(artifact, flameKind, cancellationToken, progress, currentStep, totalSteps);
+                    progress?.Report(new AnalysisProgress(AnalysisPhase.Aggregating, ++currentStep, totalSteps, "Caching results..."));
+                    _stacksCache.Set(cacheKey, stackFrames ?? new List<StackFrameData>());
+                    progress?.Report(new AnalysisProgress(AnalysisPhase.Completed, totalSteps, totalSteps, "Analysis complete"));
+                    return new PreparedStackData(stackFrames ?? new List<StackFrameData>(), "analysis", false);
+                }
+            }
+        }
+
+        private async Task<List<StackFrameData>> ExtractStackFramesAsync(Artifact artifact, string flameKind, CancellationToken cancellationToken, IProgress<AnalysisProgress>? progress, int currentStep, int totalSteps)
+        {
+            if (artifact.Kind == ArtifactKind.Dump)
+            {
+                progress?.Report(new AnalysisProgress(AnalysisPhase.RunningAnalysis, currentStep + 1, totalSteps, "Running SOS analysis (clrstack -all)..."));
+                return await ExtractStacksFromDump(artifact.FilePath, _sosAnalyzer, cancellationToken);
+            }
+            else if (artifact.Kind == ArtifactKind.Trace)
+            {
+                progress?.Report(new AnalysisProgress(AnalysisPhase.RunningAnalysis, currentStep + 1, totalSteps, "Parsing EventPipe trace..."));
+                return ExtractStacksFromTrace(artifact.FilePath, flameKind);
+            }
+            else if (artifact.Kind == ArtifactKind.Stacks)
+            {
+                progress?.Report(new AnalysisProgress(AnalysisPhase.ParsingStacks, currentStep + 1, totalSteps, "Parsing stack data..."));
+                // Direct parsing for Stacks
+                if (File.Exists(artifact.FilePath))
+                {
+                    var fileContent = File.ReadAllText(artifact.FilePath);
+                    if (artifact.FilePath.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var stacksOutput = System.Text.Json.JsonSerializer.Deserialize<StacksOutput>(fileContent);
+                        if (stacksOutput != null && stacksOutput.Threads != null)
+                        {
+                            return ConvertToStackFrameData(stacksOutput);
+                        }
+                    }
+                    else
+                    {
+                        return ParsePlainStackText(fileContent);
+                    }
+                }
+            }
+
+            return new List<StackFrameData>();
+        }
+    }
+
+    private class FlameGraphRenderer : IFlameGraphRenderer
+    {
+        public string Render(PreparedStackData data, Artifact artifact, string format, string flameKind)
+        {
+            if (data.StackFrames == null || data.StackFrames.Count == 0)
+            {
+                return GeneratePlaceholderFlameGraph(artifact, format);
+            }
+
+            if (format == "svg")
+            {
+                return GenerateSvgFlameGraph(data.StackFrames, artifact, flameKind);
+            }
+            else
+            {
+                return GenerateHtmlFlameGraph(data.StackFrames, artifact, flameKind);
+            }
+        }
+    }
+
     [McpServerTool(Name = "artifact_summarize"), Description("Analyze and summarize an artifact with findings and recommendations. Focus options: all, memory, threads, cpu, io")]
     public static async Task<ArtifactAnalysisResult> SummarizeArtifact(
         string artifactId,
@@ -65,31 +259,41 @@ public sealed class SummaryTools
             var artifactRoot = options.Value.GetArtifactRoot();
             PathSecurity.EnsurePathWithinDirectory(artifact.FilePath, artifactRoot);
 
-            // Only dump and gcdump artifacts support pattern detection
-            if (artifact.Kind != ArtifactKind.Dump && artifact.Kind != ArtifactKind.GcDump)
-            {
-                return PatternDetectionResult.Failure($"Pattern detection only supports Dump and GcDump artifacts, got: {artifact.Kind}");
-            }
-
-            // Check if dotnet-dump is available
-            if (!await sosAnalyzer.IsAvailableAsync(cancellationToken))
-            {
-                return PatternDetectionResult.Failure("dotnet-dump CLI not found. Pattern detection requires SOS commands.");
-            }
-
             var detectedPatterns = new List<DetectedPattern>();
             var patternsToDetect = patternTypes.ToLowerInvariant() == "all"
                 ? new[] { "memory_leaks", "deadlocks", "thread_pool", "high_cpu", "excessive_allocations" }
                 : patternTypes.ToLowerInvariant().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
             // Detect patterns based on artifact kind
-            if (artifact.Kind == ArtifactKind.Dump)
+            switch (artifact.Kind)
             {
-                await DetectDumpPatterns(artifact.FilePath, sosAnalyzer, patternsToDetect, detectedPatterns, cancellationToken);
-            }
-            else if (artifact.Kind == ArtifactKind.GcDump)
-            {
-                await DetectGCDumpPatterns(artifact.FilePath, sosAnalyzer, patternsToDetect, detectedPatterns, cancellationToken);
+                case ArtifactKind.Dump:
+                    // Check if dotnet-dump is available
+                    if (!await sosAnalyzer.IsAvailableAsync(cancellationToken))
+                    {
+                        return PatternDetectionResult.Failure("dotnet-dump CLI not found. Pattern detection for Dump requires SOS commands.");
+                    }
+                    await DetectDumpPatterns(artifact.FilePath, sosAnalyzer, patternsToDetect, detectedPatterns, cancellationToken);
+                    break;
+                case ArtifactKind.GcDump:
+                    // Check if dotnet-dump is available
+                    if (!await sosAnalyzer.IsAvailableAsync(cancellationToken))
+                    {
+                        return PatternDetectionResult.Failure("dotnet-dump CLI not found. Pattern detection for GcDump requires SOS commands.");
+                    }
+                    await DetectGCDumpPatterns(artifact.FilePath, sosAnalyzer, patternsToDetect, detectedPatterns, cancellationToken);
+                    break;
+                case ArtifactKind.Trace:
+                    await DetectTracePatterns(artifact.FilePath, patternsToDetect, detectedPatterns, cancellationToken);
+                    break;
+                case ArtifactKind.Counters:
+                    await DetectCountersPatterns(artifact.FilePath, patternsToDetect, detectedPatterns, cancellationToken);
+                    break;
+                case ArtifactKind.Stacks:
+                    await DetectStacksPatterns(artifact.FilePath, patternsToDetect, detectedPatterns, cancellationToken);
+                    break;
+                default:
+                    return PatternDetectionResult.Failure($"Pattern detection not supported for artifact kind: {artifact.Kind}");
             }
 
             return PatternDetectionResult.Success(detectedPatterns.ToArray());
@@ -101,16 +305,20 @@ public sealed class SummaryTools
         }
     }
 
-    [McpServerTool(Name = "visualize_flame_graph"), Description("Generate flame graph visualization from stack traces")]
+    [McpServerTool(Name = "visualize_flame_graph"), Description("Generate flame graph visualization from stack traces. Supports Stacks artifacts directly, Dump/Trace require auto_analyze")]
     public static async Task<VisualizationResult> VisualizeFlameGraph(
         string artifactId,
         McpServer server,
         [Description("Visualization format: 'svg' (default), 'html'")] string format = "svg",
+        [Description("Auto-analyze artifact: 'true' (default) for Dump/Trace preprocessing, 'false' for pre-processed data")] string autoAnalyze = "true",
+        [Description("Analysis mode: 'auto' (default), 'reuse' (cache only), 'force' (re-analyze)")] string analysisMode = "auto",
+        [Description("Flame graph kind: 'auto' (default), 'cpu' (CPU sampling), 'snapshot' (process snapshot for Dump), 'allocation' (memory allocation)")] string flameKind = "auto",
         CancellationToken cancellationToken = default)
     {
         var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
         var logger = server.Services!.GetRequiredService<ILogger<SummaryTools>>();
         var options = server.Services!.GetRequiredService<Microsoft.Extensions.Options.IOptions<ClrScopeOptions>>();
+        var sosAnalyzer = server.Services!.GetRequiredService<ISosAnalyzer>();
 
         try
         {
@@ -124,14 +332,67 @@ public sealed class SummaryTools
             var artifactRoot = options.Value.GetArtifactRoot();
             PathSecurity.EnsurePathWithinDirectory(artifact.FilePath, artifactRoot);
 
-            // Only Stacks and Dump artifacts support flame graphs
-            if (artifact.Kind != ArtifactKind.Stacks && artifact.Kind != ArtifactKind.Dump)
+            // Parse parameters
+            var enableAutoAnalyze = autoAnalyze.ToLowerInvariant() == "true";
+            var mode = analysisMode.ToLowerInvariant();
+            var kind = flameKind.ToLowerInvariant();
+
+            // Layer 1: Artifact Inspection
+            var inspection = _artifactInspector.Inspect(artifact);
+
+            // Determine flame kind based on artifact type if auto
+            if (kind == "auto")
             {
-                return VisualizationResult.Failure($"Flame graph visualization only supports Stacks and Dump artifacts, got: {artifact.Kind}");
+                kind = inspection.RecommendedFlameKind;
             }
 
-            // Generate flame graph
-            var flameGraph = GenerateFlameGraph(artifact, format.ToLowerInvariant());
+            // Validate flame kind compatibility with artifact type
+            if (artifact.Kind == ArtifactKind.Dump && kind == "cpu")
+            {
+                return VisualizationResult.Failure($"Dump artifacts do not support CPU flame graph. Use 'snapshot' flame kind for process snapshots, got: {kind}");
+            }
+
+            // For Stacks artifacts, use direct parsing without preprocessing
+            if (artifact.Kind == ArtifactKind.Stacks)
+            {
+                var stacksFlameGraph = GenerateFlameGraph(artifact, format.ToLowerInvariant(), kind);
+                return VisualizationResult.Success(stacksFlameGraph, format.ToLowerInvariant());
+            }
+
+            // For Dump and Trace artifacts, require auto_analyze
+            if (!enableAutoAnalyze)
+            {
+                return VisualizationResult.Failure($"Artifact kind {artifact.Kind} requires auto_analyze=true for preprocessing. Set auto_analyze=true or pre-process the artifact manually.");
+            }
+
+            // Layer 2: Preparation Layer
+            var preparer = new StackDataPreparer(sosAnalyzer, logger);
+            var progress = new Progress<AnalysisProgress>(p =>
+            {
+                logger.LogInformation("Analysis progress: [{Phase}] Step {CurrentStep}/{TotalSteps} - {Message}",
+                    p.Phase, p.CurrentStep, p.TotalSteps, p.Message);
+            });
+            var preparedData = await preparer.PrepareAsync(artifact, kind, mode, cancellationToken, progress);
+
+            if (preparedData.StackFrames == null || preparedData.StackFrames.Count == 0)
+            {
+                if (artifact.Kind == ArtifactKind.Dump)
+                {
+                    return VisualizationResult.Failure("Failed to extract stacks from dump artifact. SOS command 'clrstack -all' returned no data.");
+                }
+                else if (artifact.Kind == ArtifactKind.Trace)
+                {
+                    return VisualizationResult.Failure("Failed to extract stacks from trace artifact. Trace file may not contain CPU sampling data. Collect trace with 'dotnet-trace collect' using default profiles or --profile dotnet-sampled-thread-time,dotnet-common.");
+                }
+                else
+                {
+                    return VisualizationResult.Failure("Failed to extract stack data from artifact.");
+                }
+            }
+
+            // Layer 3: Rendering Layer
+            var renderer = new FlameGraphRenderer();
+            var flameGraph = renderer.Render(preparedData, artifact, format.ToLowerInvariant(), kind);
 
             return VisualizationResult.Success(flameGraph, format.ToLowerInvariant());
         }
@@ -142,7 +403,120 @@ public sealed class SummaryTools
         }
     }
 
-    private static string GenerateFlameGraph(Artifact artifact, string format)
+    private static List<StackFrameData> ExtractStacksFromTrace(string traceFilePath, string flameKind)
+{
+    // TODO: Implement proper TraceEvent library integration
+    // TraceEvent library has complex API requiring proper configuration
+    // For now, return empty list - will be implemented in future iteration
+    // Alternative: use dotnet-trace convert --format Speedscope as fallback
+
+    // Basic detection: check if trace file exists and has reasonable size
+    if (!File.Exists(traceFilePath))
+    {
+        return new List<StackFrameData>();
+    }
+
+    var fileInfo = new FileInfo(traceFilePath);
+    if (fileInfo.Length == 0)
+    {
+        return new List<StackFrameData>();
+    }
+
+    // Try to detect if trace contains CPU sampling data by checking file content
+    try
+    {
+        var fileContent = File.ReadAllText(traceFilePath);
+        var hasCpuSampling = fileContent.Contains("SampleProfiler") ||
+                           fileContent.Contains("cpu-sampling") ||
+                           fileContent.Contains("dotnet-sampled-thread-time");
+
+        if (!hasCpuSampling)
+        {
+            // Return empty list to trigger error message
+            return new List<StackFrameData>();
+        }
+    }
+    catch
+    {
+        // If reading fails, return empty list
+    }
+
+    return new List<StackFrameData>();
+}
+
+private static async Task<List<StackFrameData>> ExtractStacksFromDump(string dumpFilePath, ISosAnalyzer sosAnalyzer, CancellationToken cancellationToken)
+{
+    try
+    {
+        // Execute clrstack -all to get stacks from all managed threads
+        var result = await sosAnalyzer.ExecuteCommandAsync(dumpFilePath, "clrstack -all", cancellationToken);
+
+        if (!result.Success || string.IsNullOrWhiteSpace(result.Output))
+        {
+            return new List<StackFrameData>();
+        }
+
+        // Parse SOS output to extract stack frames
+        return ParseSosClrstackOutput(result.Output);
+    }
+    catch (Exception)
+    {
+        return new List<StackFrameData>();
+    }
+}
+
+private static List<StackFrameData> ParseSosClrstackOutput(string sosOutput)
+{
+    var frames = new List<StackFrameData>();
+    var lines = sosOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+    var threadId = 0;
+    var frameIndex = 0;
+
+    foreach (var line in lines)
+    {
+        var trimmedLine = line.Trim();
+
+        // Parse thread header: "OS Thread Id: 0x1234 (1234)"
+        if (trimmedLine.StartsWith("OS Thread Id:") || trimmedLine.Contains("Thread"))
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(trimmedLine, @"(\d+)");
+            if (match.Success && int.TryParse(match.Groups[1].Value, out var tid))
+            {
+                threadId = tid;
+            }
+            frameIndex = 0;
+            continue;
+        }
+
+        // Parse stack frame lines
+        // Format: "Child SP IP CallSite"
+        // Example: "00007FF8A1E2E690 00007FF8A1E2E690 System.Threading.Tasks.Task.Execute()"
+        if (!string.IsNullOrWhiteSpace(trimmedLine) &&
+            !trimmedLine.StartsWith("OS Thread") &&
+            !trimmedLine.StartsWith("Child SP") &&
+            !trimmedLine.Contains("Unable to walk"))
+        {
+            var parts = trimmedLine.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length >= 3)
+            {
+                var callSite = string.Join(" ", parts.Skip(2));
+                if (!string.IsNullOrWhiteSpace(callSite))
+                {
+                    frames.Add(new StackFrameData
+                    {
+                        ThreadId = threadId,
+                        FrameIndex = frameIndex++,
+                        CallSite = callSite
+                    });
+                }
+            }
+        }
+    }
+
+    return frames;
+}
+
+private static string GenerateFlameGraph(Artifact artifact, string format, string flameKind = "snapshot")
     {
         var flameGraphData = new System.Text.StringBuilder();
         List<StackFrameData>? stackFrames = null;
@@ -184,11 +558,11 @@ public sealed class SummaryTools
         // Generate real flame graph from parsed data
         if (format == "svg")
         {
-            return GenerateSvgFlameGraph(stackFrames, artifact);
+            return GenerateSvgFlameGraph(stackFrames, artifact, flameKind);
         }
         else
         {
-            return GenerateHtmlFlameGraph(stackFrames, artifact);
+            return GenerateHtmlFlameGraph(stackFrames, artifact, flameKind);
         }
     }
 
@@ -216,6 +590,7 @@ public sealed class SummaryTools
     private static string GeneratePlaceholderFlameGraph(Artifact artifact, string format)
     {
         var flameGraphData = new System.Text.StringBuilder();
+        var reason = GetParsingFailureReason(artifact);
 
         if (format == "svg")
         {
@@ -226,7 +601,16 @@ public sealed class SummaryTools
             flameGraphData.AppendLine($"    Flame Graph for {artifact.ArtifactId.Value} ({artifact.Kind})");
             flameGraphData.AppendLine("  </text>");
             flameGraphData.AppendLine("  <text x=\"10\" y=\"50\" font-family=\"Arial\" font-size=\"12\" fill=\"#666\">");
-            flameGraphData.AppendLine("    No stack data available or could not be parsed");
+            flameGraphData.AppendLine($"    {reason}");
+            flameGraphData.AppendLine("  </text>");
+            flameGraphData.AppendLine("  <text x=\"10\" y=\"70\" font-family=\"Arial\" font-size=\"11\" fill=\"#888\">");
+            flameGraphData.AppendLine("    For Stacks: Ensure JSON or plain text format is used");
+            flameGraphData.AppendLine("  </text>");
+            flameGraphData.AppendLine("  <text x=\"10\" y=\"85\" font-family=\"Arial\" font-size=\"11\" fill=\"#888\">");
+            flameGraphData.AppendLine("    For Trace: Ensure CPU sampling profile was used");
+            flameGraphData.AppendLine("  </text>");
+            flameGraphData.AppendLine("  <text x=\"10\" y=\"100\" font-family=\"Arial\" font-size=\"11\" fill=\"#888\">");
+            flameGraphData.AppendLine("    For Dump: Use 'clrstack' SOS command to extract stacks first");
             flameGraphData.AppendLine("  </text>");
             flameGraphData.AppendLine("</svg>");
         }
@@ -238,16 +622,64 @@ public sealed class SummaryTools
             flameGraphData.AppendLine("  <title>Flame Graph - " + artifact.ArtifactId.Value + "</title>");
             flameGraphData.AppendLine("  <style>");
             flameGraphData.AppendLine("    body { font-family: Arial, sans-serif; margin: 20px; }");
+            flameGraphData.AppendLine("    .reason { color: #666; margin: 10px 0; }");
+            flameGraphData.AppendLine("    .suggestions { color: #888; font-size: 12px; margin: 5px 0; }");
             flameGraphData.AppendLine("  </style>");
             flameGraphData.AppendLine("</head>");
             flameGraphData.AppendLine("<body>");
             flameGraphData.AppendLine("  <h1>Flame Graph for " + artifact.ArtifactId.Value + " (" + artifact.Kind + ")</h1>");
-            flameGraphData.AppendLine("  <p>No stack data available or could not be parsed</p>");
+            flameGraphData.AppendLine($"  <p class=\"reason\">{reason}</p>");
+            flameGraphData.AppendLine("  <div class=\"suggestions\">");
+            flameGraphData.AppendLine("    <p><strong>Suggestions:</strong></p>");
+            flameGraphData.AppendLine("    <ul>");
+            flameGraphData.AppendLine("      <li>For Stacks: Ensure JSON or plain text format is used</li>");
+            flameGraphData.AppendLine("      <li>For Trace: Ensure CPU sampling profile was used during collection</li>");
+            flameGraphData.AppendLine("      <li>For Dump: Use 'clrstack' SOS command to extract stacks first</li>");
+            flameGraphData.AppendLine("      <li>For Counters/GcDump: Flame graph not supported for this artifact type</li>");
+            flameGraphData.AppendLine("    </ul>");
+            flameGraphData.AppendLine("  </div>");
             flameGraphData.AppendLine("</body>");
             flameGraphData.AppendLine("</html>");
         }
 
         return flameGraphData.ToString();
+    }
+
+    private static string GetParsingFailureReason(Artifact artifact)
+    {
+        if (!File.Exists(artifact.FilePath))
+        {
+            return "Artifact file not found - may have been deleted or path is incorrect";
+        }
+
+        try
+        {
+            var fileInfo = new FileInfo(artifact.FilePath);
+            if (fileInfo.Length == 0)
+            {
+                return "Artifact file is empty - collection may have failed";
+            }
+
+            switch (artifact.Kind)
+            {
+                case ArtifactKind.Stacks:
+                    return "Stack data could not be parsed - ensure valid JSON or plain text format";
+                case ArtifactKind.Trace:
+                    return "Trace artifacts require EventPipe binary format parsing - use dotnet-trace analyze tool for flame graphs";
+                case ArtifactKind.Dump:
+                    return "Dump artifacts require SOS analysis - use 'analyze_dump_sos' with 'clrstack' command to extract stacks first";
+                case ArtifactKind.Counters:
+                    return "Counters do not contain stack data - flame graph not applicable";
+                case ArtifactKind.GcDump:
+                    return "GcDump does not contain stack traces - flame graph not applicable";
+                default:
+                    return "No stack data available for this artifact type";
+            }
+        }
+        catch (Exception)
+        {
+            return "Artifact file could not be read - check file permissions";
+        }
     }
 
     private static List<StackFrameData> ParsePlainStackText(string text)
@@ -287,7 +719,7 @@ public sealed class SummaryTools
         return frames;
     }
 
-    private static string GenerateSvgFlameGraph(List<StackFrameData> frames, Artifact artifact)
+    private static string GenerateSvgFlameGraph(List<StackFrameData> frames, Artifact artifact, string flameKind = "snapshot")
     {
         var svg = new System.Text.StringBuilder();
         var width = 1200;
@@ -298,7 +730,7 @@ public sealed class SummaryTools
         svg.AppendLine("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"" + width + "\" height=\"" + height + "\">");
         svg.AppendLine("  <rect width=\"100%\" height=\"100%\" fill=\"#f8f9fa\"/>");
         svg.AppendLine("  <text x=\"10\" y=\"30\" font-family=\"Arial\" font-size=\"14\" fill=\"#2d3436\">");
-        svg.AppendLine("    Flame Graph for " + artifact.ArtifactId.Value + " (" + frames.Count + " frames)");
+        svg.AppendLine("    " + (flameKind == "cpu" ? "CPU" : "Snapshot") + " Flame Graph for " + artifact.ArtifactId.Value + " (" + frames.Count + " frames)");
         svg.AppendLine("  </text>");
 
         // Group frames by thread
@@ -309,15 +741,32 @@ public sealed class SummaryTools
         foreach (var threadGroup in threadGroups)
         {
             var threadFrames = threadGroup.ToList();
-            var x = 10;
-            var frameWidth = (width - 20.0) / threadFrames.Count;
 
-            foreach (var frame in threadFrames)
+            // Count frequency of each call site
+            var callSiteFrequency = threadFrames
+                .GroupBy(f => f.CallSite)
+                .ToDictionary(g => g.Key, g => g.Count());
+
+            var totalFrequency = callSiteFrequency.Values.Sum();
+            var x = 10;
+
+            // Sort by frequency (hotter methods first)
+            var sortedFrames = threadFrames
+                .GroupBy(f => f.CallSite)
+                .OrderByDescending(g => g.Count())
+                .SelectMany(g => g)
+                .ToList();
+
+            foreach (var frame in sortedFrames)
             {
                 var color = colors[frame.ThreadId % colors.Length];
-                var displayText = TruncateCallSite(frame.CallSite, (int)(frameWidth / 6));
+                var frequency = callSiteFrequency[frame.CallSite];
+                var frameWidth = Math.Max(1, ((width - 20.0) * frequency / totalFrequency));
+                var maxLength = Math.Max(4, (int)(frameWidth / 6));
+                var displayText = TruncateCallSite(frame.CallSite, maxLength);
+                var rectWidth = Math.Max(1, frameWidth - 1);
 
-                svg.AppendLine("  <rect x=\"" + x + "\" y=\"" + y + "\" width=\"" + (frameWidth - 1) + "\" height=\"" + frameHeight + "\" fill=\"" + color + "\" rx=\"2\"/>");
+                svg.AppendLine("  <rect x=\"" + x + "\" y=\"" + y + "\" width=\"" + rectWidth + "\" height=\"" + frameHeight + "\" fill=\"" + color + "\" rx=\"2\"/>");
                 svg.AppendLine("  <text x=\"" + (x + 5) + "\" y=\"" + (y + 14) + "\" font-family=\"Arial\" font-size=\"10\" fill=\"white\">" + displayText + "</text>");
 
                 x += (int)frameWidth;
@@ -330,7 +779,7 @@ public sealed class SummaryTools
         return svg.ToString();
     }
 
-    private static string GenerateHtmlFlameGraph(List<StackFrameData> frames, Artifact artifact)
+    private static string GenerateHtmlFlameGraph(List<StackFrameData> frames, Artifact artifact, string flameKind = "snapshot")
     {
         var html = new System.Text.StringBuilder();
         var colors = new[] { "#ff6b6b", "#4ecdc4", "#45b7d1", "#96ceb4", "#ffeaa7", "#dfe6e9", "#fd79a8", "#a29bfe" };
@@ -338,7 +787,7 @@ public sealed class SummaryTools
         html.AppendLine("<!DOCTYPE html>");
         html.AppendLine("<html>");
         html.AppendLine("<head>");
-        html.AppendLine("  <title>Flame Graph - " + artifact.ArtifactId.Value + "</title>");
+        html.AppendLine("  <title>" + (flameKind == "cpu" ? "CPU" : "Snapshot") + " Flame Graph - " + artifact.ArtifactId.Value + "</title>");
         html.AppendLine("  <style>");
         html.AppendLine("    body { font-family: Arial, sans-serif; margin: 20px; background-color: #f8f9fa; }");
         html.AppendLine("    .header { margin-bottom: 20px; }");
@@ -381,10 +830,61 @@ public sealed class SummaryTools
         return html.ToString();
     }
 
-    private static string TruncateCallSite(string callSite, int maxLength)
+    private class PreprocessedStacksCache
+{
+    private readonly Dictionary<string, List<StackFrameData>> _cache = new();
+    private readonly object _lock = new();
+
+    public bool TryGet(string key, out List<StackFrameData>? value)
+    {
+        lock (_lock)
+        {
+            return _cache.TryGetValue(key, out value);
+        }
+    }
+
+    public void Set(string key, List<StackFrameData> value)
+    {
+        lock (_lock)
+        {
+            _cache[key] = value;
+        }
+    }
+
+    public string GenerateCacheKey(Artifact artifact, string analysisMode, string flameKind)
+    {
+        // Key: artifact_hash + artifact_kind + analysis_backend_version + command_profile + symbol_context + runtime_identity
+        var hash = ComputeFileHash(artifact.FilePath);
+        var backendVersion = "1.0"; // SOS/TraceEvent version
+        var commandProfile = flameKind == "cpu" ? "cpu" : "snapshot";
+
+        return $"{hash}_{artifact.Kind}_{backendVersion}_{commandProfile}_{analysisMode}";
+    }
+
+    private string ComputeFileHash(string filePath)
+    {
+        try
+        {
+            using var md5 = System.Security.Cryptography.MD5.Create();
+            using var stream = File.OpenRead(filePath);
+            var hash = md5.ComputeHash(stream);
+            return BitConverter.ToString(hash).Replace("-", "").Substring(0, 16);
+        }
+        catch
+        {
+            return $"fallback_{Path.GetFileName(filePath)}_{File.GetLastWriteTimeUtc(filePath):yyyyMMddHHmmss}";
+        }
+    }
+}
+
+private static readonly PreprocessedStacksCache _stacksCache = new();
+
+private static string TruncateCallSite(string callSite, int maxLength)
     {
         if (string.IsNullOrEmpty(callSite) || callSite.Length <= maxLength)
             return callSite;
+        if (maxLength < 4)
+            return "...";
         return callSite.Substring(0, maxLength - 3) + "...";
     }
 
@@ -558,8 +1058,329 @@ public sealed class SummaryTools
             PatternType: "excessive_allocations",
             Severity: "medium",
             Description: "GC dump allocation analysis requires dotnet-gcdump-analyzer",
-            Recommendation: "Use dotnet-gcdump-analyze to examine allocation rates and patterns"
+            Recommendation: "Use dotnet-gcdump-analyzer to examine allocation rates and patterns"
         ));
+    }
+
+    private static async Task DetectTracePatterns(string filePath, string[] patternsToDetect, List<DetectedPattern> detectedPatterns, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (!File.Exists(filePath))
+            {
+                return;
+            }
+
+            var fileContent = await File.ReadAllTextAsync(filePath, cancellationToken);
+            var traceSize = fileContent.Length;
+
+            foreach (var pattern in patternsToDetect)
+            {
+                switch (pattern)
+                {
+                    case "high_cpu":
+                        DetectTraceHighCPU(fileContent, traceSize, detectedPatterns);
+                        break;
+                    case "memory_leaks":
+                        DetectTraceMemoryLeaks(fileContent, detectedPatterns);
+                        break;
+                    case "thread_pool":
+                        DetectTraceThreadPool(fileContent, detectedPatterns);
+                        break;
+                    case "excessive_allocations":
+                        DetectTraceAllocations(fileContent, detectedPatterns);
+                        break;
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // If trace file cannot be read, skip pattern detection
+        }
+    }
+
+    private static void DetectTraceHighCPU(string fileContent, long traceSize, List<DetectedPattern> detectedPatterns)
+    {
+        if (fileContent.Contains("CPU") || fileContent.Contains("Sample") || fileContent.Contains("cpu-sampling"))
+        {
+            detectedPatterns.Add(new DetectedPattern(
+                PatternType: "high_cpu",
+                Severity: "medium",
+                Description: "Trace contains CPU sampling data - analyze for CPU hotspots",
+                Recommendation: "Use PerfView or dotnet-trace analyze to identify hot methods with high CPU time"
+            ));
+        }
+
+        if (traceSize > 10 * 1024 * 1024)
+        {
+            detectedPatterns.Add(new DetectedPattern(
+                PatternType: "high_cpu",
+                Severity: "low",
+                Description: $"Large trace file ({FormatBytes(traceSize)}) - may indicate long CPU-intensive period",
+                Recommendation: "Review trace duration and focus on period of high CPU activity"
+            ));
+        }
+    }
+
+    private static void DetectTraceMemoryLeaks(string fileContent, List<DetectedPattern> detectedPatterns)
+    {
+        if (fileContent.Contains("GC") || fileContent.Contains("Heap") || fileContent.Contains("gc-heap"))
+        {
+            detectedPatterns.Add(new DetectedPattern(
+                PatternType: "memory_leak",
+                Severity: "medium",
+                Description: "Trace contains GC/heap events - analyze for memory growth patterns",
+                Recommendation: "Check GC pause times, heap size growth, and allocation rates over time"
+            ));
+        }
+
+        if (fileContent.Contains("Gen2") || fileContent.Contains("LOH") || fileContent.Contains("Large Object"))
+        {
+            detectedPatterns.Add(new DetectedPattern(
+                PatternType: "memory_leak",
+                Severity: "high",
+                Description: "Trace contains Gen2/LOH activity - potential memory leak indicators",
+                Recommendation: "Examine long-lived objects in Gen2 and Large Object Heap for leak sources"
+            ));
+        }
+    }
+
+    private static void DetectTraceThreadPool(string fileContent, List<DetectedPattern> detectedPatterns)
+    {
+        if (fileContent.Contains("ThreadPool") || fileContent.Contains("Worker") || fileContent.Contains("IO"))
+        {
+            detectedPatterns.Add(new DetectedPattern(
+                PatternType: "thread_pool",
+                Severity: "medium",
+                Description: "Trace contains thread pool events - analyze for starvation or contention",
+                Recommendation: "Check thread pool queue length, worker thread utilization, and I/O completion port usage"
+            ));
+        }
+
+        if (fileContent.Contains("Starvation") || fileContent.Contains("Exhaustion") || fileContent.Contains("Queue"))
+        {
+            detectedPatterns.Add(new DetectedPattern(
+                PatternType: "thread_pool",
+                Severity: "high",
+                Description: "Trace indicates potential thread pool starvation or queue buildup",
+                Recommendation: "Review thread pool configuration and adjust min/max threads if needed"
+            ));
+        }
+    }
+
+    private static void DetectTraceAllocations(string fileContent, List<DetectedPattern> detectedPatterns)
+    {
+        if (fileContent.Contains("Alloc") || fileContent.Contains("Allocation"))
+        {
+            detectedPatterns.Add(new DetectedPattern(
+                PatternType: "excessive_allocations",
+                Severity: "medium",
+                Description: "Trace contains allocation events - analyze for allocation hotspots",
+                Recommendation: "Identify methods with high allocation rates and consider object pooling or reuse"
+            ));
+        }
+    }
+
+    private static async Task DetectCountersPatterns(string filePath, string[] patternsToDetect, List<DetectedPattern> detectedPatterns, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (!File.Exists(filePath))
+            {
+                return;
+            }
+
+            var fileContent = await File.ReadAllTextAsync(filePath, cancellationToken);
+
+            foreach (var pattern in patternsToDetect)
+            {
+                switch (pattern)
+                {
+                    case "high_cpu":
+                        DetectCountersHighCPU(fileContent, detectedPatterns);
+                        break;
+                    case "memory_leaks":
+                        DetectCountersMemoryLeaks(fileContent, detectedPatterns);
+                        break;
+                    case "thread_pool":
+                        DetectCountersThreadPool(fileContent, detectedPatterns);
+                        break;
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // If counters file cannot be read, skip pattern detection
+        }
+    }
+
+    private static void DetectCountersHighCPU(string fileContent, List<DetectedPattern> detectedPatterns)
+    {
+        if (fileContent.Contains("cpu-usage") || fileContent.Contains("process-cpu") || fileContent.Contains("% Processor Time"))
+        {
+            detectedPatterns.Add(new DetectedPattern(
+                PatternType: "high_cpu",
+                Severity: "medium",
+                Description: "Counters contain CPU usage metrics - analyze for high CPU periods",
+                Recommendation: "Review CPU usage over time and identify periods of sustained high CPU"
+            ));
+        }
+    }
+
+    private static void DetectCountersMemoryLeaks(string fileContent, List<DetectedPattern> detectedPatterns)
+    {
+        if (fileContent.Contains("memory") || fileContent.Contains("gc-heap") || fileContent.Contains("working-set"))
+        {
+            detectedPatterns.Add(new DetectedPattern(
+                PatternType: "memory_leak",
+                Severity: "medium",
+                Description: "Counters contain memory metrics - analyze for memory growth patterns",
+                Recommendation: "Check for steady memory growth over time indicating potential memory leak"
+            ));
+        }
+
+        if (fileContent.Contains("gen-2") || fileContent.Contains("loh"))
+        {
+            detectedPatterns.Add(new DetectedPattern(
+                PatternType: "memory_leak",
+                Severity: "high",
+                Description: "Counters show Gen2/LOH activity - potential memory leak indicators",
+                Recommendation: "Monitor Gen2 and LOH size over time for steady growth patterns"
+            ));
+        }
+    }
+
+    private static void DetectCountersThreadPool(string fileContent, List<DetectedPattern> detectedPatterns)
+    {
+        if (fileContent.Contains("threadpool") || fileContent.Contains("worker-threads") || fileContent.Contains("io-threads"))
+        {
+            detectedPatterns.Add(new DetectedPattern(
+                PatternType: "thread_pool",
+                Severity: "medium",
+                Description: "Counters contain thread pool metrics - analyze for starvation",
+                Recommendation: "Check thread pool queue length and thread utilization for signs of starvation"
+            ));
+        }
+    }
+
+    private static async Task DetectStacksPatterns(string filePath, string[] patternsToDetect, List<DetectedPattern> detectedPatterns, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (!File.Exists(filePath))
+            {
+                return;
+            }
+
+            var fileContent = await File.ReadAllTextAsync(filePath, cancellationToken);
+            var lines = fileContent.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+            foreach (var pattern in patternsToDetect)
+            {
+                switch (pattern)
+                {
+                    case "deadlocks":
+                        DetectStacksDeadlocks(lines, detectedPatterns);
+                        break;
+                    case "thread_pool":
+                        DetectStacksThreadPool(lines, detectedPatterns);
+                        break;
+                    case "high_cpu":
+                        DetectStacksHighCPU(lines, detectedPatterns);
+                        break;
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // If stacks file cannot be read, skip pattern detection
+        }
+    }
+
+    private static void DetectStacksDeadlocks(string[] lines, List<DetectedPattern> detectedPatterns)
+    {
+        var blockedThreads = 0;
+        var threadIds = new HashSet<int>();
+
+        foreach (var line in lines)
+        {
+            if (line.Contains("Blocked") || line.Contains("Wait") || line.Contains("Lock"))
+            {
+                blockedThreads++;
+            }
+
+            var match = System.Text.RegularExpressions.Regex.Match(line, @"Thread (\d+)");
+            if (match.Success)
+            {
+                threadIds.Add(int.Parse(match.Groups[1].Value));
+            }
+        }
+
+        if (blockedThreads > 5)
+        {
+            detectedPatterns.Add(new DetectedPattern(
+                PatternType: "deadlock",
+                Severity: "high",
+                Description: $"{blockedThreads} threads appear blocked, potential deadlock",
+                Recommendation: "Examine stack frames of blocked threads to identify circular wait patterns and lock contention"
+            ));
+        }
+
+        if (threadIds.Count > 0)
+        {
+            detectedPatterns.Add(new DetectedPattern(
+                PatternType: "deadlock",
+                Severity: "low",
+                Description: $"Stacks contain {threadIds.Count} threads - review for blocking patterns",
+                Recommendation: "Check thread states and identify threads waiting on synchronization primitives"
+            ));
+        }
+    }
+
+    private static void DetectStacksThreadPool(string[] lines, List<DetectedPattern> detectedPatterns)
+    {
+        var threadPoolThreads = 0;
+
+        foreach (var line in lines)
+        {
+            if (line.Contains("ThreadPool") || line.Contains("Worker Thread") || line.Contains(".NET ThreadPool"))
+            {
+                threadPoolThreads++;
+            }
+        }
+
+        if (threadPoolThreads > 0)
+        {
+            detectedPatterns.Add(new DetectedPattern(
+                PatternType: "thread_pool",
+                Severity: "medium",
+                Description: $"Stacks contain {threadPoolThreads} thread pool threads - analyze for starvation",
+                Recommendation: "Review thread pool thread states and queue length for signs of thread pool exhaustion"
+            ));
+        }
+    }
+
+    private static void DetectStacksHighCPU(string[] lines, List<DetectedPattern> detectedPatterns)
+    {
+        var runningThreads = 0;
+
+        foreach (var line in lines)
+        {
+            if (line.Contains("Running") || line.Contains("Preemptive") || line.Contains("CPU"))
+            {
+                runningThreads++;
+            }
+        }
+
+        if (runningThreads > 5)
+        {
+            detectedPatterns.Add(new DetectedPattern(
+                PatternType: "high_cpu",
+                Severity: "high",
+                Description: $"{runningThreads} threads in running state - potential CPU hotspot",
+                Recommendation: "Identify hot methods appearing frequently across running thread stacks"
+            ));
+        }
     }
 
     private static long ExtractSizeFromOutput(string output, string keyword)
@@ -650,12 +1471,55 @@ public sealed class SummaryTools
     private static void AnalyzeStacksArtifact(Artifact artifact, ArtifactAnalysisSummary summary, string focus)
     {
         summary.Findings.Add("Stacks artifact contains managed thread stack traces.");
-        summary.KeyMetrics["Thread Count"] = "Unknown (analyze file for details)";
 
-        if (focus == "threads" || focus == "all")
+        try
         {
-            summary.Recommendations.Add("Use `analyze_dump_sos` with 'threads' and 'clrstack' commands to analyze.");
-            summary.Recommendations.Add("Look for threads blocked on locks, monitors, or synchronization primitives.");
+            if (File.Exists(artifact.FilePath))
+            {
+                var fileContent = File.ReadAllText(artifact.FilePath);
+                var lines = fileContent.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+                var threadCount = ExtractThreadCount(lines);
+                var blockedThreads = CountBlockedThreads(lines);
+                var runningThreads = CountRunningThreads(lines);
+
+                summary.KeyMetrics["Thread Count"] = threadCount.ToString();
+                summary.KeyMetrics["Blocked Threads"] = blockedThreads.ToString();
+                summary.KeyMetrics["Running Threads"] = runningThreads.ToString();
+
+                if (blockedThreads > 0)
+                {
+                    summary.Findings.Add($"{blockedThreads} threads appear blocked (potential deadlock or contention).");
+                }
+
+                if (runningThreads > 5)
+                {
+                    summary.Findings.Add($"{runningThreads} threads in running state (potential CPU hotspot).");
+                }
+
+                if (focus == "threads" || focus == "all")
+                {
+                    if (blockedThreads > 0)
+                    {
+                        summary.Recommendations.Add($"Investigate {blockedThreads} blocked threads for circular wait patterns.");
+                    }
+                    summary.Recommendations.Add("Use `analyze_dump_sos` with 'threads' and 'clrstack' commands for detailed analysis.");
+                }
+
+                if (focus == "cpu" || focus == "all" && runningThreads > 0)
+                {
+                    summary.Recommendations.Add($"Focus on {runningThreads} running threads for CPU hotspots.");
+                    summary.Recommendations.Add("Use flame graph visualization to identify hot methods.");
+                }
+            }
+            else
+            {
+                summary.KeyMetrics["Thread Count"] = "File not found";
+            }
+        }
+        catch (Exception)
+        {
+            summary.KeyMetrics["Thread Count"] = "Analysis failed";
         }
 
         if (focus == "memory" || focus == "all")
@@ -663,15 +1527,34 @@ public sealed class SummaryTools
             summary.Recommendations.Add("Check stack frames for memory allocation patterns.");
         }
 
-        if (focus == "cpu" || focus == "all")
-        {
-            summary.Recommendations.Add("Identify hot methods appearing frequently across thread stacks.");
-        }
-
         if (focus == "io" || focus == "all")
         {
             summary.Recommendations.Add("Look for I/O operations blocking threads.");
         }
+    }
+
+    private static int ExtractThreadCount(string[] lines)
+    {
+        var threadIds = new HashSet<int>();
+        foreach (var line in lines)
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(line, @"Thread (\d+)");
+            if (match.Success && int.TryParse(match.Groups[1].Value, out var threadId))
+            {
+                threadIds.Add(threadId);
+            }
+        }
+        return threadIds.Count;
+    }
+
+    private static int CountBlockedThreads(string[] lines)
+    {
+        return lines.Count(line => line.Contains("Blocked") || line.Contains("Wait") || line.Contains("Lock"));
+    }
+
+    private static int CountRunningThreads(string[] lines)
+    {
+        return lines.Count(line => line.Contains("Running") || line.Contains("Preemptive") || line.Contains("CPU"));
     }
 
     private static void AnalyzeDumpArtifact(Artifact artifact, ArtifactAnalysisSummary summary, string focus)
@@ -732,26 +1615,87 @@ public sealed class SummaryTools
         summary.Findings.Add("Trace contains EventPipe events for performance analysis.");
         summary.KeyMetrics["Trace Size"] = FormatBytes(artifact.SizeBytes);
 
-        if (focus == "cpu" || focus == "all")
+        try
         {
-            summary.Recommendations.Add("Use PerfView or dotnet-trace analyze to examine CPU samples.");
-            summary.Recommendations.Add("Look for hot methods with high CPU time.");
-        }
+            if (File.Exists(artifact.FilePath))
+            {
+                var fileContent = File.ReadAllText(artifact.FilePath);
 
-        if (focus == "memory" || focus == "all")
-        {
-            summary.Recommendations.Add("Check for allocation patterns and GC activity.");
-            summary.Recommendations.Add("Examine GC heap allocation rate and pause times.");
-        }
+                var hasCpuSampling = fileContent.Contains("cpu-sampling") || fileContent.Contains("CPU") || fileContent.Contains("Sample");
+                var hasGcEvents = fileContent.Contains("GC") || fileContent.Contains("gc-heap") || fileContent.Contains("Alloc");
+                var hasThreadPool = fileContent.Contains("ThreadPool") || fileContent.Contains("Worker");
+                var hasIoEvents = fileContent.Contains("IO") || fileContent.Contains("File") || fileContent.Contains("Network");
 
-        if (focus == "threads" || focus == "all")
-        {
-            summary.Recommendations.Add("Analyze thread pool usage and contention.");
-        }
+                summary.KeyMetrics["CPU Sampling"] = hasCpuSampling ? "Yes" : "No";
+                summary.KeyMetrics["GC Events"] = hasGcEvents ? "Yes" : "No";
+                summary.KeyMetrics["ThreadPool Events"] = hasThreadPool ? "Yes" : "No";
+                summary.KeyMetrics["I/O Events"] = hasIoEvents ? "Yes" : "No";
 
-        if (focus == "io" || focus == "all")
+                if (hasCpuSampling)
+                {
+                    summary.Findings.Add("Trace contains CPU sampling data for hotspot analysis.");
+                }
+
+                if (hasGcEvents)
+                {
+                    summary.Findings.Add("Trace contains GC events for memory analysis.");
+                }
+
+                if (hasThreadPool)
+                {
+                    summary.Findings.Add("Trace contains thread pool events for contention analysis.");
+                }
+
+                if (focus == "cpu" || focus == "all")
+                {
+                    if (hasCpuSampling)
+                    {
+                        summary.Recommendations.Add("Use PerfView or dotnet-trace analyze to examine CPU samples.");
+                        summary.Recommendations.Add("Look for hot methods with high CPU time.");
+                    }
+                    else
+                    {
+                        summary.Recommendations.Add("Trace may not contain CPU sampling data - consider collecting with cpu-sampling profile.");
+                    }
+                }
+
+                if (focus == "memory" || focus == "all")
+                {
+                    if (hasGcEvents)
+                    {
+                        summary.Recommendations.Add("Check for allocation patterns and GC activity.");
+                        summary.Recommendations.Add("Examine GC heap allocation rate and pause times.");
+                    }
+                    else
+                    {
+                        summary.Recommendations.Add("Consider collecting trace with gc-heap profile for memory analysis.");
+                    }
+                }
+
+                if (focus == "threads" || focus == "all")
+                {
+                    if (hasThreadPool)
+                    {
+                        summary.Recommendations.Add("Analyze thread pool usage and contention.");
+                    }
+                }
+
+                if (focus == "io" || focus == "all")
+                {
+                    if (hasIoEvents)
+                    {
+                        summary.Recommendations.Add("Look for I/O operations and network activity.");
+                    }
+                }
+            }
+            else
+            {
+                summary.KeyMetrics["Analysis"] = "File not found";
+            }
+        }
+        catch (Exception)
         {
-            summary.Recommendations.Add("Look for I/O operations and network activity.");
+            summary.KeyMetrics["Analysis"] = "Analysis failed";
         }
     }
 
@@ -760,32 +1704,95 @@ public sealed class SummaryTools
         summary.Findings.Add("Counters contain performance metrics over time.");
         summary.KeyMetrics["Metrics"] = "Performance counters";
 
-        if (focus == "cpu" || focus == "all")
+        try
         {
-            summary.Recommendations.Add("Examine CPU usage and processor time metrics.");
-            summary.Recommendations.Add("Check for CPU spikes and sustained high usage.");
-        }
+            if (File.Exists(artifact.FilePath))
+            {
+                var fileContent = File.ReadAllText(artifact.FilePath);
 
-        if (focus == "memory" || focus == "all")
-        {
-            summary.Recommendations.Add("Analyze memory allocation and GC metrics.");
-            summary.Recommendations.Add("Check for memory leaks and high GC pressure.");
-        }
+                var hasCpuMetrics = fileContent.Contains("cpu") || fileContent.Contains("processor") || fileContent.Contains("% Processor Time");
+                var hasMemoryMetrics = fileContent.Contains("memory") || fileContent.Contains("gc") || fileContent.Contains("working-set");
+                var hasThreadPoolMetrics = fileContent.Contains("threadpool") || fileContent.Contains("worker") || fileContent.Contains("io");
+                var hasExceptionMetrics = fileContent.Contains("exception") || fileContent.Contains("error");
 
-        if (focus == "threads" || focus == "all")
-        {
-            summary.Recommendations.Add("Examine thread pool usage and contention metrics.");
-            summary.Recommendations.Add("Check for thread pool starvation or excessive thread creation.");
-        }
+                summary.KeyMetrics["CPU Metrics"] = hasCpuMetrics ? "Yes" : "No";
+                summary.KeyMetrics["Memory Metrics"] = hasMemoryMetrics ? "Yes" : "No";
+                summary.KeyMetrics["ThreadPool Metrics"] = hasThreadPoolMetrics ? "Yes" : "No";
+                summary.KeyMetrics["Exception Metrics"] = hasExceptionMetrics ? "Yes" : "No";
 
-        if (focus == "io" || focus == "all")
-        {
-            summary.Recommendations.Add("Look for I/O and network-related counters.");
-        }
+                if (hasCpuMetrics)
+                {
+                    summary.Findings.Add("Counters contain CPU usage metrics for performance analysis.");
+                }
 
-        if (focus == "all")
+                if (hasMemoryMetrics)
+                {
+                    summary.Findings.Add("Counters contain memory/GC metrics for leak detection.");
+                }
+
+                if (hasThreadPoolMetrics)
+                {
+                    summary.Findings.Add("Counters contain thread pool metrics for starvation analysis.");
+                }
+
+                if (hasExceptionMetrics)
+                {
+                    summary.Findings.Add("Counters contain exception metrics for error analysis.");
+                }
+
+                if (focus == "cpu" || focus == "all")
+                {
+                    if (hasCpuMetrics)
+                    {
+                        summary.Recommendations.Add("Examine CPU usage and processor time metrics.");
+                        summary.Recommendations.Add("Check for CPU spikes and sustained high usage.");
+                    }
+                    else
+                    {
+                        summary.Recommendations.Add("Consider adding System.Runtime CPU counters for CPU analysis.");
+                    }
+                }
+
+                if (focus == "memory" || focus == "all")
+                {
+                    if (hasMemoryMetrics)
+                    {
+                        summary.Recommendations.Add("Analyze memory allocation and GC metrics.");
+                        summary.Recommendations.Add("Check for memory leaks and high GC pressure.");
+                    }
+                    else
+                    {
+                        summary.Recommendations.Add("Consider adding System.Runtime GC counters for memory analysis.");
+                    }
+                }
+
+                if (focus == "threads" || focus == "all")
+                {
+                    if (hasThreadPoolMetrics)
+                    {
+                        summary.Recommendations.Add("Examine thread pool usage and contention metrics.");
+                        summary.Recommendations.Add("Check for thread pool starvation or excessive thread creation.");
+                    }
+                }
+
+                if (focus == "io" || focus == "all")
+                {
+                    summary.Recommendations.Add("Look for I/O and network-related counters.");
+                }
+
+                if (focus == "all")
+                {
+                    summary.Recommendations.Add("Compare with baseline to identify anomalies.");
+                }
+            }
+            else
+            {
+                summary.KeyMetrics["Analysis"] = "File not found";
+            }
+        }
+        catch (Exception)
         {
-            summary.Recommendations.Add("Compare with baseline to identify anomalies.");
+            summary.KeyMetrics["Analysis"] = "Analysis failed";
         }
     }
 

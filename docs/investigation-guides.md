@@ -81,10 +81,11 @@ Step-by-step guide for hang/deadlock investigation:
 5. Use `collect_counters` with `System.Runtime` provider to get thread metrics
 6. Use `analyze_dump_sos` with `threads` command to list all threads
 7. Use `analyze_dump_sos` with `clrstack` command to get stack traces for each thread
-8. Look for threads blocked on locks, monitors, or wait handles
-9. Check for deadlock patterns (circular wait chains)
-10. Review thread pool queue length and worker threads
-11. Check for async/await deadlocks or thread pool starvation
+8. Use `visualize_flame_graph` with the dump artifact to generate a snapshot flame graph (v1.2.0)
+9. Look for threads blocked on locks, monitors, or wait handles
+10. Check for deadlock patterns (circular wait chains)
+11. Review thread pool queue length and worker threads
+12. Check for async/await deadlocks or thread pool starvation
 
 **Alternative**: Use `workflow_automated_hang_bundle` for automated collection.
 

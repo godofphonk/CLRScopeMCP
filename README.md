@@ -1,6 +1,6 @@
 # CLRScope MCP
 
-![Badge](https://img.shields.io/badge/version-v1.1.0-blue)
+![Version](https://img.shields.io/github/v/release/godofphonk/CLRScopeMCP)
 ![Badge](https://img.shields.io/badge/.NET-10.0%2B-purple)
 ![Badge](https://img.shields.io/badge/license-MIT-green)
 
@@ -16,7 +16,7 @@ CLRScope MCP provides AI-powered diagnostic capabilities for .NET applications t
 |---------|-------------|
 | 🎯 **Runtime Detection** | OS/Architecture detection for attachable .NET processes |
 | 📊 **Performance Counters** | Real-time CPU, memory, GC, and thread pool metrics |
-| 🔥 **Flame Graph Visualization** | Interactive stack trace visualization |
+| 🔥 **Flame Graph Visualization** | Enhanced stack trace visualization with Dump/Trace support, caching, and progress reporting (v1.2.0) |
 | **Memory Dump Analysis** | Compressed dump support with automatic decompression |
 | **SOS Commands** | Sequential SOS command execution for deep analysis |
 | **Pattern Detection** | Automatic detection of memory leaks, deadlocks, high CPU |

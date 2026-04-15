@@ -8,7 +8,7 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>clrscope-mcp</ToolCommandName>
     <PackageId>ClrScope.Mcp</PackageId>
-    <VersionPrefix>1.1.0</VersionPrefix>
+    <VersionPrefix>1.2.0</VersionPrefix>
     <Authors>godofphonk</Authors>
     <Description>.NET diagnostics MCP server - MCP (Model Context Protocol) server for diagnosing .NET processes via EventPipe, memory dumps, and CLI tools.</Description>
     <PackageTags>dotnet;diagnostics;mcp;profiler;clr;performance</PackageTags>
