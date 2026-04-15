@@ -671,7 +671,7 @@ private static string GenerateFlameGraph(Artifact artifact, string format, strin
                 case ArtifactKind.Counters:
                     return "Counters do not contain stack data - flame graph not applicable";
                 case ArtifactKind.GcDump:
-                    return "GcDump does not contain stack traces - flame graph not applicable";
+                    return "GcDump contains heap graph data rather than call stacks. Use visualize_heap_snapshot.";
                 default:
                     return "No stack data available for this artifact type";
             }
