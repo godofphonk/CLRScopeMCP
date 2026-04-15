@@ -1,7 +1,9 @@
 using ClrScope.Mcp.Domain.Artifacts;
+using ClrScope.Mcp.Domain.Heap;
 using ClrScope.Mcp.Infrastructure;
 using ClrScope.Mcp.Infrastructure.Utils;
 using ClrScope.Mcp.Options;
+using ClrScope.Mcp.Services.Heap;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
@@ -1807,6 +1809,95 @@ private static string TruncateCallSite(string callSite, int maxLength)
             size /= 1024;
         }
         return $"{size:0.##} {sizes[order]}";
+    }
+
+    [McpServerTool(Name = "visualize_heap_snapshot"), Description("Visualize a .gcdump heap snapshot as type distribution or treemap")]
+    public static async Task<VisualizationResult> VisualizeHeapSnapshot(
+        string artifactId,
+        McpServer server,
+        [Description("View kind: 'type_distribution' (default), 'treemap'")] string view = "type_distribution",
+        [Description("Metric: 'shallow_size' (default), 'count'")] string metric = "shallow_size",
+        [Description("Output format: 'html' (default)")] string format = "html",
+        [Description("Grouping: 'type' (default), 'namespace', 'assembly'")] string groupBy = "type",
+        [Description("Analysis mode: 'auto' (default), 'reuse' (cache only), 'force' (re-analyze)")] string analysisMode = "auto",
+        [Description("Maximum types to render")] int maxTypes = 200,
+        CancellationToken cancellationToken = default)
+    {
+        var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
+        var logger = server.Services!.GetRequiredService<ILogger<SummaryTools>>();
+        var preparer = server.Services!.GetRequiredService<IHeapSnapshotPreparer>();
+
+        try
+        {
+            var artifact = await artifactStore.GetAsync(new ArtifactId(artifactId), cancellationToken);
+            if (artifact == null)
+            {
+                return VisualizationResult.Failure($"Artifact not found: {artifactId}");
+            }
+
+            if (artifact.Kind != ArtifactKind.GcDump)
+            {
+                return VisualizationResult.Failure($"Artifact {artifactId} is not a GcDump.");
+            }
+
+            // Parse parameters
+            var viewKind = view.ToLowerInvariant() switch
+            {
+                "treemap" => HeapViewKind.Treemap,
+                _ => HeapViewKind.TypeDistribution
+            };
+
+            var metricKind = metric.ToLowerInvariant() switch
+            {
+                "count" => HeapMetricKind.Count,
+                _ => HeapMetricKind.ShallowSize
+            };
+
+            var groupByKind = groupBy.ToLowerInvariant() switch
+            {
+                "namespace" => HeapGroupBy.Namespace,
+                "assembly" => HeapGroupBy.Assembly,
+                _ => HeapGroupBy.Type
+            };
+
+            var analysisModeKind = analysisMode.ToLowerInvariant() switch
+            {
+                "reuse" => HeapAnalysisMode.Reuse,
+                "force" => HeapAnalysisMode.Force,
+                _ => HeapAnalysisMode.Auto
+            };
+
+            var options = new HeapPreparationOptions
+            {
+                Metric = metricKind,
+                AnalysisMode = analysisModeKind,
+                GroupBy = groupByKind,
+                MaxTypes = maxTypes
+            };
+
+            logger.LogInformation("Preparing heap snapshot for artifact {ArtifactId}", artifactId);
+            var prepared = await preparer.PrepareAsync(artifact, options, cancellationToken);
+
+            // Render based on view kind
+            string content;
+            if (viewKind == HeapViewKind.Treemap)
+            {
+                var renderer = new HeapTreemapRenderer();
+                content = renderer.RenderHtml(prepared.Snapshot, metricKind);
+            }
+            else
+            {
+                var renderer = new HeapTypeDistributionRenderer();
+                content = renderer.RenderHtml(prepared.Snapshot, metricKind);
+            }
+
+            return VisualizationResult.Success(content, format);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Heap snapshot visualization failed for artifact {ArtifactId}", artifactId);
+            return VisualizationResult.Failure($"Heap snapshot visualization failed: {ex.Message}");
+        }
     }
 }
 

@@ -2,6 +2,7 @@ using ClrScope.Mcp.Contracts;
 using ClrScope.Mcp.Infrastructure;
 using ClrScope.Mcp.Options;
 using ClrScope.Mcp.Services;
+using ClrScope.Mcp.Services.Heap;
 using ClrScope.Mcp.Tools.Analysis;
 using ClrScope.Mcp.Tools.Artifacts;
 using ClrScope.Mcp.Tools.Collect;
@@ -63,6 +64,7 @@ public static class ClrScopeServiceCollectionExtensions
         services.AddSingleton<ICliToolAvailabilityChecker, CliToolAvailabilityChecker>();
         services.AddSingleton<ISymbolResolver, SymbolResolver>();
         services.AddSingleton<ISosAnalyzer, DotnetDumpAnalyzer>();
+        services.AddSingleton<IHeapSnapshotPreparer, HeapSnapshotPreparer>();
 
         return services;
     }

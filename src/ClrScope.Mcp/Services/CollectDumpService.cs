@@ -108,13 +108,9 @@ public class CollectDumpService
                 // If compression is requested, write to temporary file first, then compress
                 tempFilePath = request.Compress ? Path.Combine(dumpsDir, $"temp_{session.SessionId.Value}.dmp") : filePath;
 
-                // WriteDump is synchronous and doesn't support cancellation from DiagnosticsClient API
-                // Task.Run with cancellation token only prevents the task from starting if cancelled before execution
-                // Once WriteDump starts, it cannot be cancelled - it will complete regardless of session.cancel
-                await Task.Run(() =>
-                {
-                    client.WriteDump(dumpType, tempFilePath, false);
-                }, operationCts.Token);
+                // WriteDumpAsync supports cooperative cancellation via CancellationToken
+                // This provides true cancellation support instead of best-effort only
+                await client.WriteDumpAsync(dumpType, tempFilePath, logDumpGeneration: false, operationCts.Token);
                 _logger.LogInformation("[50%] WriteDump completed for PID {Pid}", request.Pid);
 
                 // Compress the dump file if requested
@@ -144,10 +140,10 @@ public class CollectDumpService
             }
             catch (OperationCanceledException)
             {
-                _logger.LogWarning("Dump collection cancellation requested for session {SessionId}, but WriteDump is synchronous and may still complete. Cancellation is best-effort only.", session.SessionId);
+                _logger.LogWarning("Dump collection cancellation requested for session {SessionId}. WriteDumpAsync supports cooperative cancellation.", session.SessionId);
                 session = session.AsCancelled();
                 await _sessionStore.UpdateAsync(session, CancellationToken.None);
-                return CollectDumpResult.Failure(session, "Dump collection cancellation requested (best-effort only - operation may still complete)");
+                return CollectDumpResult.Failure(session, "Dump collection cancellation requested");
             }
             catch (Exception ex)
             {

@@ -1,3 +1,5 @@
+using ClrScope.Mcp.Domain.Artifacts;
+
 namespace ClrScope.Mcp.Domain.Heap;
 
 /// <summary>
