@@ -162,29 +162,14 @@ public class FullPreflightValidator : IPreflightValidator
 
     private string? GetProcessEnvironmentVariable(int pid, string variableName)
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return null; // Only supported on Linux
-        }
-
         try
         {
-            var environPath = $"/proc/{pid}/environ";
-            if (!File.Exists(environPath))
-            {
-                return null;
-            }
+            var diagnosticsClient = new DiagnosticsClient(pid);
+            var environment = diagnosticsClient.GetProcessEnvironment();
 
-            var environContent = File.ReadAllText(environPath);
-            var variables = environContent.Split('\0', StringSplitOptions.RemoveEmptyEntries);
-
-            foreach (var variable in variables)
+            if (environment.TryGetValue(variableName, out var value))
             {
-                var parts = variable.Split('=', 2);
-                if (parts.Length == 2 && parts[0] == variableName)
-                {
-                    return parts[1];
-                }
+                return value;
             }
 
             return null;
@@ -210,11 +195,19 @@ public class FullPreflightValidator : IPreflightValidator
                 return true;
             }
 
+            // Check DOTNET_EnableDiagnostics_IPC environment variable (.NET 8+)
+            // When set to "0", disables the Diagnostic Port and cannot be overridden
+            var enableDiagnosticsIpc = GetProcessEnvironmentVariable(pid, "DOTNET_EnableDiagnostics_IPC");
+            if (enableDiagnosticsIpc == "0")
+            {
+                return true;
+            }
+
             return false;
         }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "Could not check DOTNET_EnableDiagnostics");
+            _logger.LogDebug(ex, "Could not check diagnostics environment variables");
             return false;
         }
     }
