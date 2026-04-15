@@ -244,9 +244,8 @@ public class SqliteSchemaInitializer
 
         var command = connection.CreateCommand();
         command.CommandText = """
-            ALTER TABLE artifacts ADD COLUMN hash_state TEXT NOT NULL DEFAULT 'Computed';
+            ALTER TABLE artifacts ADD COLUMN hash_state TEXT DEFAULT 'Computed';
             UPDATE artifacts SET hash_state = 'SkippedLargeFile' WHERE sha256 = 'skipped_for_large_file';
-            UPDATE artifacts SET sha256 = NULL WHERE sha256 = 'skipped_for_large_file';
             INSERT INTO schema_info (version, applied_at_utc) VALUES (5, datetime('now'));
             """;
         await command.ExecuteNonQueryAsync(cancellationToken);
