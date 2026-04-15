@@ -76,7 +76,7 @@ See [Full Requirements](docs/requirements.md) for installation instructions and 
 ## Documentation
 
 - [Investigation Guides](docs/investigation-guides.md) - Step-by-step guides for memory leaks, hangs, high CPU, and baseline performance collection
+- [Best Practices](docs/best-practices.md) - Recommended workflows and optimization techniques for effective diagnostics
+- [Troubleshooting](docs/troubleshooting.md) - Solutions to common issues and error messages
 - [Tool Integration](docs/integration.md) - Required CLI tools and installation instructions for diagnostic features
 - [Full Requirements](docs/requirements.md) - Comprehensive requirements for using all CLRScope MCP features
-- [Full Requirements](docs/requirements.md) for installation instructions and feature-specific requirements.
-
