@@ -21,7 +21,7 @@ public sealed class WorkflowAutomationTools
         CancellationToken cancellationToken = default)
     {
         await _cliSemaphore.WaitAsync(cancellationToken);
-        var logger = server.Services.GetRequiredService<ILogger<WorkflowAutomationTools>>();
+        var logger = server.Services!.GetRequiredService<ILogger<WorkflowAutomationTools>>();
         var startTime = DateTime.UtcNow;
         var artifacts = new List<ArtifactInfo>();
         var sessionIds = new List<string>();
@@ -33,7 +33,7 @@ public sealed class WorkflowAutomationTools
             logger.LogInformation("Starting automated high CPU bundle collection for PID {Pid}", pid);
             // Step 1: Collect trace
             logger.LogInformation("Step 1/3: Collecting trace for PID {Pid}", pid);
-            var traceService = server.Services.GetRequiredService<CollectTraceService>();
+            var traceService = server.Services!.GetRequiredService<CollectTraceService>();
             var traceRequest = new CollectTraceRequest(pid, duration, Profile: "cpu-sampling");
             var traceResult = await traceService.CollectTraceAsync(traceRequest, null, cancellationToken);
             if (traceResult.Artifact != null)
@@ -50,7 +50,7 @@ public sealed class WorkflowAutomationTools
 
             // Step 2: Collect counters
             logger.LogInformation("Step 2/3: Collecting counters for PID {Pid}", pid);
-            var countersService = server.Services.GetRequiredService<CollectCountersService>();
+            var countersService = server.Services!.GetRequiredService<CollectCountersService>();
             var countersRequest = new CollectCountersRequest(pid, duration, Providers: new[] { "System.Runtime" });
             var countersResult = await countersService.CollectCountersAsync(countersRequest, null, cancellationToken);
             if (countersResult.Artifact != null)
@@ -67,7 +67,7 @@ public sealed class WorkflowAutomationTools
 
             // Step 3: Collect stacks
             logger.LogInformation("Step 3/3: Collecting stacks for PID {Pid}", pid);
-            var stacksService = server.Services.GetRequiredService<CollectStacksService>();
+            var stacksService = server.Services!.GetRequiredService<CollectStacksService>();
             var stacksRequest = new CollectStacksRequest(pid);
             var stacksResult = await stacksService.CollectStacksAsync(stacksRequest, null, cancellationToken);
             if (stacksResult.Artifact != null)
@@ -128,7 +128,7 @@ public sealed class WorkflowAutomationTools
         CancellationToken cancellationToken = default)
     {
         await _cliSemaphore.WaitAsync(cancellationToken);
-        var logger = server.Services.GetRequiredService<ILogger<WorkflowAutomationTools>>();
+        var logger = server.Services!.GetRequiredService<ILogger<WorkflowAutomationTools>>();
         var startTime = DateTime.UtcNow;
         var artifacts = new List<ArtifactInfo>();
         var sessionIds = new List<string>();
@@ -140,7 +140,7 @@ public sealed class WorkflowAutomationTools
             logger.LogInformation("Starting automated memory leak bundle collection for PID {Pid}", pid);
             // Step 1: Collect GC dump
             logger.LogInformation("Step 1/3: Collecting GC dump for PID {Pid}", pid);
-            var gcdumpService = server.Services.GetRequiredService<CollectGcDumpService>();
+            var gcdumpService = server.Services!.GetRequiredService<CollectGcDumpService>();
             var gcdumpRequest = new CollectGcDumpRequest(pid);
             var gcdumpResult = await gcdumpService.CollectGcDumpAsync(gcdumpRequest, null, cancellationToken);
             if (gcdumpResult.Artifact != null)
@@ -157,7 +157,7 @@ public sealed class WorkflowAutomationTools
 
             // Step 2: Collect GC counters
             logger.LogInformation("Step 2/3: Collecting GC counters for PID {Pid}", pid);
-            var countersService = server.Services.GetRequiredService<CollectCountersService>();
+            var countersService = server.Services!.GetRequiredService<CollectCountersService>();
             var countersRequest = new CollectCountersRequest(pid, duration, Providers: new[] { "System.Runtime" });
             var countersResult = await countersService.CollectCountersAsync(countersRequest, null, cancellationToken);
             if (countersResult.Artifact != null)
@@ -174,7 +174,7 @@ public sealed class WorkflowAutomationTools
 
             // Step 3: Collect GC heap trace
             logger.LogInformation("Step 3/3: Collecting GC heap trace for PID {Pid}", pid);
-            var traceService = server.Services.GetRequiredService<CollectTraceService>();
+            var traceService = server.Services!.GetRequiredService<CollectTraceService>();
             var traceRequest = new CollectTraceRequest(pid, duration, Profile: "gc-heap");
             var traceResult = await traceService.CollectTraceAsync(traceRequest, null, cancellationToken);
             if (traceResult.Artifact != null)
@@ -235,7 +235,7 @@ public sealed class WorkflowAutomationTools
         CancellationToken cancellationToken = default)
     {
         await _cliSemaphore.WaitAsync(cancellationToken);
-        var logger = server.Services.GetRequiredService<ILogger<WorkflowAutomationTools>>();
+        var logger = server.Services!.GetRequiredService<ILogger<WorkflowAutomationTools>>();
         var startTime = DateTime.UtcNow;
         var artifacts = new List<ArtifactInfo>();
         var sessionIds = new List<string>();
@@ -247,7 +247,7 @@ public sealed class WorkflowAutomationTools
             logger.LogInformation("Starting automated hang bundle collection for PID {Pid}", pid);
             // Step 1: Collect memory dump
             logger.LogInformation("Step 1/3: Collecting memory dump for PID {Pid}", pid);
-            var dumpService = server.Services.GetRequiredService<CollectDumpService>();
+            var dumpService = server.Services!.GetRequiredService<CollectDumpService>();
             var dumpRequest = new CollectDumpRequest(pid, IncludeHeap: true, Compress: false);
             var dumpResult = await dumpService.CollectDumpAsync(dumpRequest, null, cancellationToken);
             if (dumpResult.Artifact != null)
@@ -264,7 +264,7 @@ public sealed class WorkflowAutomationTools
 
             // Step 2: Collect thread stacks
             logger.LogInformation("Step 2/3: Collecting thread stacks for PID {Pid}", pid);
-            var stacksService = server.Services.GetRequiredService<CollectStacksService>();
+            var stacksService = server.Services!.GetRequiredService<CollectStacksService>();
             var stacksRequest = new CollectStacksRequest(pid);
             var stacksResult = await stacksService.CollectStacksAsync(stacksRequest, null, cancellationToken);
             if (stacksResult.Artifact != null)
@@ -281,7 +281,7 @@ public sealed class WorkflowAutomationTools
 
             // Step 3: Collect thread counters
             logger.LogInformation("Step 3/3: Collecting thread counters for PID {Pid}", pid);
-            var countersService = server.Services.GetRequiredService<CollectCountersService>();
+            var countersService = server.Services!.GetRequiredService<CollectCountersService>();
             var countersRequest = new CollectCountersRequest(pid, duration, Providers: new[] { "System.Runtime" });
             var countersResult = await countersService.CollectCountersAsync(countersRequest, null, cancellationToken);
             if (countersResult.Artifact != null)
@@ -342,7 +342,7 @@ public sealed class WorkflowAutomationTools
         CancellationToken cancellationToken = default)
     {
         await _cliSemaphore.WaitAsync(cancellationToken);
-        var logger = server.Services.GetRequiredService<ILogger<WorkflowAutomationTools>>();
+        var logger = server.Services!.GetRequiredService<ILogger<WorkflowAutomationTools>>();
         var startTime = DateTime.UtcNow;
         var artifacts = new List<ArtifactInfo>();
         var sessionIds = new List<string>();
@@ -354,7 +354,7 @@ public sealed class WorkflowAutomationTools
             logger.LogInformation("Starting automated baseline bundle collection for PID {Pid}", pid);
             // Step 1: Collect performance counters
             logger.LogInformation("Step 1/4: Collecting performance counters for PID {Pid}", pid);
-            var countersService = server.Services.GetRequiredService<CollectCountersService>();
+            var countersService = server.Services!.GetRequiredService<CollectCountersService>();
             var countersRequest = new CollectCountersRequest(pid, duration, Providers: new[] { "System.Runtime" });
             var countersResult = await countersService.CollectCountersAsync(countersRequest, null, cancellationToken);
             if (countersResult.Artifact != null)
@@ -371,7 +371,7 @@ public sealed class WorkflowAutomationTools
 
             // Step 2: Collect baseline trace
             logger.LogInformation("Step 2/4: Collecting baseline trace for PID {Pid}", pid);
-            var traceService = server.Services.GetRequiredService<CollectTraceService>();
+            var traceService = server.Services!.GetRequiredService<CollectTraceService>();
             var traceRequest = new CollectTraceRequest(pid, duration, Profile: "cpu-sampling");
             var traceResult = await traceService.CollectTraceAsync(traceRequest, null, cancellationToken);
             if (traceResult.Artifact != null)
@@ -388,7 +388,7 @@ public sealed class WorkflowAutomationTools
 
             // Step 3: Collect GC dump
             logger.LogInformation("Step 3/4: Collecting GC dump for PID {Pid}", pid);
-            var gcdumpService = server.Services.GetRequiredService<CollectGcDumpService>();
+            var gcdumpService = server.Services!.GetRequiredService<CollectGcDumpService>();
             var gcdumpRequest = new CollectGcDumpRequest(pid);
             var gcdumpResult = await gcdumpService.CollectGcDumpAsync(gcdumpRequest, null, cancellationToken);
             if (gcdumpResult.Artifact != null)
@@ -405,7 +405,7 @@ public sealed class WorkflowAutomationTools
 
             // Step 4: Collect thread stacks
             logger.LogInformation("Step 4/4: Collecting thread stacks for PID {Pid}", pid);
-            var stacksService = server.Services.GetRequiredService<CollectStacksService>();
+            var stacksService = server.Services!.GetRequiredService<CollectStacksService>();
             var stacksRequest = new CollectStacksRequest(pid);
             var stacksResult = await stacksService.CollectStacksAsync(stacksRequest, null, cancellationToken);
             if (stacksResult.Artifact != null)
