@@ -1,4 +1,5 @@
 using ClrScope.Mcp.Contracts;
+using ClrScope.Mcp.Domain.Heap;
 using ClrScope.Mcp.Infrastructure;
 using ClrScope.Mcp.Options;
 using ClrScope.Mcp.Services;
@@ -66,6 +67,9 @@ public static class ClrScopeServiceCollectionExtensions
         services.AddSingleton<ISosAnalyzer, DotnetDumpAnalyzer>();
         services.AddSingleton<IHeapSnapshotPreparer, HeapSnapshotPreparer>();
         services.AddSingleton<IHeapSnapshotCache, HeapSnapshotCache>();
+        services.AddSingleton<IGcDumpGraphAdapter, GcDumpGraphAdapter>();
+        services.AddSingleton<DominatorTreeCalculator>();
+        services.AddSingleton<HeapRetainerPathsBuilder>();
 
         return services;
     }

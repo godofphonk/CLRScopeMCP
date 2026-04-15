@@ -9,6 +9,8 @@ using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
 using System.ComponentModel;
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Threading.Tasks;
 
 namespace ClrScope.Mcp.Tools.Analysis;
 
@@ -1812,16 +1814,18 @@ private static string TruncateCallSite(string callSite, int maxLength)
         return $"{size:0.##} {sizes[order]}";
     }
 
-    [McpServerTool(Name = "visualize_heap_snapshot"), Description("Visualize a .gcdump heap snapshot as type distribution or treemap")]
+    [McpServerTool(Name = "visualize_heap_snapshot"), Description("Visualize a .gcdump heap snapshot as type distribution, treemap, retained flame, diff, or retainer paths")]
     public static async Task<VisualizationResult> VisualizeHeapSnapshot(
         string artifactId,
         McpServer server,
-        [Description("View kind: 'type_distribution' (default), 'treemap'")] string view = "type_distribution",
-        [Description("Metric: 'shallow_size' (default), 'count'")] string metric = "shallow_size",
-        [Description("Output format: 'html' (default)")] string format = "html",
+        [Description("View kind: 'type_distribution' (default), 'treemap', 'retained_flame', 'diff', 'retainer_paths'")] string view = "type_distribution",
+        [Description("Metric: 'shallow_size' (default), 'count', 'retained_size'")] string metric = "shallow_size",
+        [Description("Output format: 'html' (default), 'json'")] string format = "html",
         [Description("Grouping: 'type' (default), 'namespace', 'assembly'")] string groupBy = "type",
         [Description("Analysis mode: 'auto' (default), 'reuse' (cache only), 'force' (re-analyze)")] string analysisMode = "auto",
         [Description("Maximum types to render")] int maxTypes = 200,
+        [Description("Baseline artifact ID for diff view")] string? baselineArtifactId = null,
+        [Description("Target object ID for retainer_paths view")] string? targetObjectId = null,
         CancellationToken cancellationToken = default)
     {
         var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
@@ -1845,12 +1849,16 @@ private static string TruncateCallSite(string callSite, int maxLength)
             var viewKind = view.ToLowerInvariant() switch
             {
                 "treemap" => HeapViewKind.Treemap,
+                "retained_flame" => HeapViewKind.RetainedFlame,
+                "diff" => HeapViewKind.Diff,
+                "retainer_paths" => HeapViewKind.RetainerPaths,
                 _ => HeapViewKind.TypeDistribution
             };
 
             var metricKind = metric.ToLowerInvariant() switch
             {
                 "count" => HeapMetricKind.Count,
+                "retained_size" => HeapMetricKind.RetainedSize,
                 _ => HeapMetricKind.ShallowSize
             };
 
@@ -1868,36 +1876,104 @@ private static string TruncateCallSite(string callSite, int maxLength)
                 _ => HeapAnalysisMode.Auto
             };
 
-            var options = new HeapPreparationOptions
-            {
-                Metric = metricKind,
-                AnalysisMode = analysisModeKind,
-                GroupBy = groupByKind,
-                MaxTypes = maxTypes
-            };
-
-            logger.LogInformation("Preparing heap snapshot for artifact {ArtifactId}", artifactId);
-            var prepared = await preparer.PrepareAsync(artifact, options, cancellationToken);
-
-            // Render based on format and view kind
+            // Handle different view kinds
             string content;
-            if (format.ToLowerInvariant() == "json")
+            if (viewKind == HeapViewKind.Diff)
             {
-                content = JsonSerializer.Serialize(prepared.Snapshot, new JsonSerializerOptions
+                if (string.IsNullOrEmpty(baselineArtifactId))
                 {
-                    WriteIndented = true,
-                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-                });
+                    return VisualizationResult.Failure("baselineArtifactId is required for diff view");
+                }
+
+                var baselineArtifact = await artifactStore.GetAsync(new ArtifactId(baselineArtifactId), cancellationToken);
+                if (baselineArtifact == null)
+                {
+                    return VisualizationResult.Failure($"Baseline artifact not found: {baselineArtifactId}");
+                }
+
+                if (baselineArtifact.Kind != ArtifactKind.GcDump)
+                {
+                    return VisualizationResult.Failure($"Baseline artifact {baselineArtifactId} is not a GcDump.");
+                }
+
+                var baselineOptions = new HeapPreparationOptions
+                {
+                    Metric = metricKind,
+                    AnalysisMode = analysisModeKind,
+                    GroupBy = groupByKind,
+                    MaxTypes = maxTypes
+                };
+
+                var targetOptions = new HeapPreparationOptions
+                {
+                    Metric = metricKind,
+                    AnalysisMode = analysisModeKind,
+                    GroupBy = groupByKind,
+                    MaxTypes = maxTypes
+                };
+
+                var baselinePrepared = await preparer.PrepareAsync(baselineArtifact, baselineOptions, cancellationToken);
+                var targetPrepared = await preparer.PrepareAsync(artifact, targetOptions, cancellationToken);
+
+                var differLogger = server.Services!.GetRequiredService<ILogger<HeapSnapshotDiffer>>();
+                var differ = new HeapSnapshotDiffer(differLogger);
+                var diff = differ.Diff(baselinePrepared.Snapshot, targetPrepared.Snapshot);
+                var diffRenderer = new HeapDiffRenderer();
+                content = diffRenderer.RenderHtml(diff, metricKind);
             }
-            else if (viewKind == HeapViewKind.Treemap)
+            else if (viewKind == HeapViewKind.RetainerPaths)
             {
-                var renderer = new HeapTreemapRenderer();
-                content = renderer.RenderHtml(prepared.Snapshot, metricKind);
+                if (string.IsNullOrEmpty(targetObjectId))
+                {
+                    return VisualizationResult.Failure("targetObjectId is required for retainer_paths view");
+                }
+
+                var graphAdapter = server.Services!.GetRequiredService<IGcDumpGraphAdapter>();
+                var retainerBuilder = server.Services!.GetRequiredService<HeapRetainerPathsBuilder>();
+
+                var graph = await graphAdapter.LoadGraphAsync(artifact.FilePath, cancellationToken);
+                var paths = retainerBuilder.BuildRetainerPaths(graph, targetObjectId);
+                var pathsRenderer = new HeapRetainerPathsRenderer();
+                content = pathsRenderer.RenderHtml(paths);
+            }
+            else if (viewKind == HeapViewKind.RetainedFlame)
+            {
+                var graphAdapter = server.Services!.GetRequiredService<IGcDumpGraphAdapter>();
+                var graph = await graphAdapter.LoadGraphAsync(artifact.FilePath, cancellationToken);
+                var flameRenderer = new HeapRetainedFlameRenderer();
+                content = flameRenderer.RenderHtml(graph, metricKind);
             }
             else
             {
-                var renderer = new HeapTypeDistributionRenderer();
-                content = renderer.RenderHtml(prepared.Snapshot, metricKind);
+                var options = new HeapPreparationOptions
+                {
+                    Metric = metricKind,
+                    AnalysisMode = analysisModeKind,
+                    GroupBy = groupByKind,
+                    MaxTypes = maxTypes
+                };
+
+                logger.LogInformation("Preparing heap snapshot for artifact {ArtifactId}", artifactId);
+                var prepared = await preparer.PrepareAsync(artifact, options, cancellationToken);
+
+                if (format.ToLowerInvariant() == "json")
+                {
+                    content = JsonSerializer.Serialize(prepared.Snapshot, new JsonSerializerOptions
+                    {
+                        WriteIndented = true,
+                        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                    });
+                }
+                else if (viewKind == HeapViewKind.Treemap)
+                {
+                    var renderer = new HeapTreemapRenderer();
+                    content = renderer.RenderHtml(prepared.Snapshot, metricKind);
+                }
+                else
+                {
+                    var renderer = new HeapTypeDistributionRenderer();
+                    content = renderer.RenderHtml(prepared.Snapshot, metricKind);
+                }
             }
 
             return VisualizationResult.Success(content, format);

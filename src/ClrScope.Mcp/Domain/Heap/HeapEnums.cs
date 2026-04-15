@@ -7,26 +7,23 @@ public enum HeapViewKind
 {
     TypeDistribution,
     Treemap,
-    // Future views:
-    // Sunburst,
-    // RetainedFlame,
-    // RetainerPaths,
-    // Diff
+    RetainedFlame,
+    Diff,
+    RetainerPaths
 }
 
 /// <summary>
-/// Metric kind for heap snapshot analysis.
+/// Heap metric kind for aggregation.
 /// </summary>
 public enum HeapMetricKind
 {
     ShallowSize,
     Count,
-    // Future metrics:
-    // RetainedSize
+    RetainedSize
 }
 
 /// <summary>
-/// Grouping options for heap snapshot visualization.
+/// Heap grouping strategy.
 /// </summary>
 public enum HeapGroupBy
 {
@@ -36,7 +33,7 @@ public enum HeapGroupBy
 }
 
 /// <summary>
-/// Analysis mode for heap snapshot.
+/// Heap analysis mode.
 /// </summary>
 public enum HeapAnalysisMode
 {
