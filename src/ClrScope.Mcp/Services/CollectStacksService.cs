@@ -158,6 +158,14 @@ public class CollectStacksService
                 return CollectStacksResult.Failure(session, "Stacks file is empty");
             }
 
+            // Warn if stacks file is large
+            const long largeStacksThreshold = 10 * 1024 * 1024; // 10 MB
+            if (fileInfo.Length > largeStacksThreshold)
+            {
+                _logger.LogWarning("Large stacks file detected: {Size} MB for PID {Pid}. This may indicate many threads or deep stack traces.",
+                    fileInfo.Length / (1024 * 1024), request.Pid);
+            }
+
             progress?.Report(70);
             var updatedSession = await _sessionStore.GetAsync(session.SessionId, operationCts.Token);
             if (updatedSession == null)

@@ -239,6 +239,14 @@ public class CollectTraceService
             return CollectTraceResult.Failure(session, "Trace file is empty", TraceCompletionMode.Failed);
         }
 
+        // Warn if trace file is large
+        const long largeTraceThreshold = 100 * 1024 * 1024; // 100 MB
+        if (fileInfo.Length > largeTraceThreshold)
+        {
+            _logger.LogWarning("[{Phase}] Large trace file detected: {Size} MB for PID {Pid}. Consider reducing duration or using more specific providers.",
+                SessionPhase.Collecting, fileInfo.Length / (1024 * 1024), request.Pid);
+        }
+
         // Persist artifact
         progress?.Report(90);
         await _sessionStore.UpdateAsync(session with { Phase = SessionPhase.Persisting }, operationCts.Token);

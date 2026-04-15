@@ -138,6 +138,14 @@ public class CollectGcDumpService
                 return CollectGcDumpResult.Failure(session, "GC dump file is empty");
             }
 
+            // Warn if gcdump file is large
+            const long largeGcDumpThreshold = 200 * 1024 * 1024; // 200 MB
+            if (fileInfo.Length > largeGcDumpThreshold)
+            {
+                _logger.LogWarning("Large GC dump file detected: {Size} MB for PID {Pid}. Consider using full memory dump instead for comprehensive analysis.",
+                    fileInfo.Length / (1024 * 1024), request.Pid);
+            }
+
             progress?.Report(70);
             session = session with { Phase = SessionPhase.Persisting };
             await _sessionStore.UpdateAsync(session, operationCts.Token);

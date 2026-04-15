@@ -172,6 +172,14 @@ public class CollectDumpService
                 return CollectDumpResult.Failure(session, "Dump file is empty");
             }
 
+            // Warn if dump file is large
+            const long largeDumpThreshold = 500 * 1024 * 1024; // 500 MB
+            if (fileInfo.Length > largeDumpThreshold)
+            {
+                _logger.LogWarning("Large dump file detected: {Size} MB for PID {Pid}. Consider using compression (--compress) or collecting without heap if not needed.",
+                    fileInfo.Length / (1024 * 1024), request.Pid);
+            }
+
             // Create artifact record
             progress?.Report(70);
             _logger.LogInformation("[70%] Persisting artifact for session {SessionId}", session.SessionId);

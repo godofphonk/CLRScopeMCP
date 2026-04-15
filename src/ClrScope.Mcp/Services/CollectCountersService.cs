@@ -144,6 +144,14 @@ public class CollectCountersService
                 return CollectCountersResult.Failure(session, "Counter file is empty");
             }
 
+            // Warn if counters file is large
+            const long largeCountersThreshold = 5 * 1024 * 1024; // 5 MB
+            if (fileInfo.Length > largeCountersThreshold)
+            {
+                _logger.LogWarning("Large counters file detected: {Size} MB for PID {Pid}. Consider reducing duration or using fewer providers.",
+                    fileInfo.Length / (1024 * 1024), request.Pid);
+            }
+
             progress?.Report(70);
             session = session with { Phase = SessionPhase.Persisting };
             await _sessionStore.UpdateAsync(session, operationCts.Token);
