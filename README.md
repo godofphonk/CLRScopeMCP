@@ -42,12 +42,47 @@ dotnet tool install --global ClrScope.Mcp
 
 [See detailed instructions](docs/installation/nuget-global-tool.md)
 
+### MCP Installation (Official .NET MCP Flow) 🚀
+
+For MCP clients that support the official .NET MCP discovery mechanism (VS Code, Visual Studio, etc.), CLRScope MCP can be installed and run using the `dnx` command from .NET 10 SDK:
+
+```bash
+dnx ClrScope.Mcp@1.2.0 --yes
+```
+
+This command will:
+- Download the CLRScope.Mcp package from NuGet.org
+- Extract and execute the MCP server
+- Wait for MCP protocol messages over stdin/stdout
+
+**MCP Client Configuration:**
+
+For VS Code or Visual Studio, configure your MCP settings (e.g., VS Code `settings.json`):
+
+```json
+{
+  "mcpServers": {
+    "clrscope": {
+      "type": "stdio",
+      "command": "dnx",
+      "args": ["ClrScope.Mcp@1.2.0", "--yes"]
+    }
+  }
+}
+```
+
+**Requirements:**
+- .NET 10 SDK or later (includes the `dnx` command)
+- No pre-installation of the global tool required
+
+This approach provides better discoverability through the MCP Registry and follows the official Microsoft pattern for .NET MCP servers.
+
 ### Alternative Installation Methods
 
 - [Binary Downloads](docs/installation/binary-downloads.md) - Pre-built binaries for your platform (no .NET SDK required)
 - [Local .NET Tool](docs/installation/dotnet-local-tool.md) - Project-specific installation
 
-### IDE Configuration (VS Code, Visual Studio, etc.)
+### IDE Configuration (Legacy)
 
 After installation, configure your IDE's MCP settings (e.g., VS Code `settings.json`):
 

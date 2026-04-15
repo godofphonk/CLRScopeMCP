@@ -8,6 +8,8 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>clrscope-mcp</ToolCommandName>
     <PackageId>ClrScope.Mcp</PackageId>
+    <PackageType>McpServer</PackageType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
     <VersionPrefix>1.2.0</VersionPrefix>
     <Authors>godofphonk</Authors>
     <Description>.NET diagnostics MCP server - MCP (Model Context Protocol) server for diagnosing .NET processes via EventPipe, memory dumps, and CLI tools.</Description>
@@ -34,6 +36,10 @@
   <ItemGroup>
     <None Update="appsettings.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="README.md">
+      <Pack>true</Pack>
+      <PackagePath>\</PackagePath>
     </None>
   </ItemGroup>
 
