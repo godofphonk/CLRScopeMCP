@@ -64,7 +64,7 @@ jobs:
           echo "Version found: $VERSION"
 
       - name: Build binary (linux-x64) for validation
-        run: dotnet publish src/ClrScope.Mcp/ClrScope.Mcp.csproj -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=false -p:DebugSymbols=false -p:DebugType=None -o ./test-artifacts/linux-x64
+        run: dotnet publish src/ClrScope.Mcp/ClrScope.Mcp.csproj -c Release -r linux-x64 --self-contained false -p:DebugSymbols=false -p:DebugType=None -o ./test-artifacts/linux-x64
 
       - name: Smoke test binary
         run: |
