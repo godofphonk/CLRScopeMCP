@@ -11,6 +11,8 @@ namespace ClrScope.Mcp.Tools.Workflows;
 [McpServerToolType]
 public sealed class WorkflowAutomationTools
 {
+    private static readonly SemaphoreSlim _cliSemaphore = new SemaphoreSlim(1, 1);
+
     [McpServerTool(Name = "workflow_automated_high_cpu_bundle"), Description("Automated collection of high CPU diagnostic bundle - executes collect_trace, collect_counters, and collect_stacks in sequence")]
     public static async Task<WorkflowAutomationResult> AutomatedHighCpuBundle(
         [Description("Process ID to collect high CPU diagnostic bundle from")] int pid,
@@ -18,10 +20,9 @@ public sealed class WorkflowAutomationTools
         [Description("Duration for trace and counters collection (hh:mm:ss format, default: 00:01:00)")] string duration = "00:01:00",
         CancellationToken cancellationToken = default)
     {
+        await _cliSemaphore.WaitAsync(cancellationToken);
         var logger = server.Services.GetRequiredService<ILogger<WorkflowAutomationTools>>();
         var startTime = DateTime.UtcNow;
-        logger.LogInformation("Starting automated high CPU bundle collection for PID {Pid}", pid);
-
         var artifacts = new List<ArtifactInfo>();
         var sessionIds = new List<string>();
         int stepsCompleted = 0;
@@ -29,6 +30,7 @@ public sealed class WorkflowAutomationTools
 
         try
         {
+            logger.LogInformation("Starting automated high CPU bundle collection for PID {Pid}", pid);
             // Step 1: Collect trace
             logger.LogInformation("Step 1/3: Collecting trace for PID {Pid}", pid);
             var traceService = server.Services.GetRequiredService<CollectTraceService>();
@@ -112,6 +114,10 @@ public sealed class WorkflowAutomationTools
                 ExecutionTimeMs: executionTimeMs
             );
         }
+        finally
+        {
+            _cliSemaphore.Release();
+        }
     }
 
     [McpServerTool(Name = "workflow_automated_memory_leak_bundle"), Description("Automated collection of memory leak diagnostic bundle - executes collect_gcdump, collect_counters, and collect_trace in sequence")]
@@ -121,10 +127,9 @@ public sealed class WorkflowAutomationTools
         [Description("Duration for trace and counters collection (hh:mm:ss format, default: 00:01:00)")] string duration = "00:01:00",
         CancellationToken cancellationToken = default)
     {
+        await _cliSemaphore.WaitAsync(cancellationToken);
         var logger = server.Services.GetRequiredService<ILogger<WorkflowAutomationTools>>();
         var startTime = DateTime.UtcNow;
-        logger.LogInformation("Starting automated memory leak bundle collection for PID {Pid}", pid);
-
         var artifacts = new List<ArtifactInfo>();
         var sessionIds = new List<string>();
         int stepsCompleted = 0;
@@ -132,6 +137,7 @@ public sealed class WorkflowAutomationTools
 
         try
         {
+            logger.LogInformation("Starting automated memory leak bundle collection for PID {Pid}", pid);
             // Step 1: Collect GC dump
             logger.LogInformation("Step 1/3: Collecting GC dump for PID {Pid}", pid);
             var gcdumpService = server.Services.GetRequiredService<CollectGcDumpService>();
@@ -215,6 +221,10 @@ public sealed class WorkflowAutomationTools
                 ExecutionTimeMs: executionTimeMs
             );
         }
+        finally
+        {
+            _cliSemaphore.Release();
+        }
     }
 
     [McpServerTool(Name = "workflow_automated_hang_bundle"), Description("Automated collection of hang/deadlock diagnostic bundle - executes collect_dump, collect_stacks, and collect_counters in sequence")]
@@ -224,10 +234,9 @@ public sealed class WorkflowAutomationTools
         [Description("Duration for counters collection (hh:mm:ss format, default: 00:00:30)")] string duration = "00:00:30",
         CancellationToken cancellationToken = default)
     {
+        await _cliSemaphore.WaitAsync(cancellationToken);
         var logger = server.Services.GetRequiredService<ILogger<WorkflowAutomationTools>>();
         var startTime = DateTime.UtcNow;
-        logger.LogInformation("Starting automated hang bundle collection for PID {Pid}", pid);
-
         var artifacts = new List<ArtifactInfo>();
         var sessionIds = new List<string>();
         int stepsCompleted = 0;
@@ -235,6 +244,7 @@ public sealed class WorkflowAutomationTools
 
         try
         {
+            logger.LogInformation("Starting automated hang bundle collection for PID {Pid}", pid);
             // Step 1: Collect memory dump
             logger.LogInformation("Step 1/3: Collecting memory dump for PID {Pid}", pid);
             var dumpService = server.Services.GetRequiredService<CollectDumpService>();
@@ -318,6 +328,10 @@ public sealed class WorkflowAutomationTools
                 ExecutionTimeMs: executionTimeMs
             );
         }
+        finally
+        {
+            _cliSemaphore.Release();
+        }
     }
 
     [McpServerTool(Name = "workflow_automated_baseline_bundle"), Description("Automated collection of baseline performance bundle - executes collect_counters, collect_trace, collect_gcdump, and collect_stacks in sequence")]
@@ -327,10 +341,9 @@ public sealed class WorkflowAutomationTools
         [Description("Duration for trace and counters collection (hh:mm:ss format, default: 00:01:00)")] string duration = "00:01:00",
         CancellationToken cancellationToken = default)
     {
+        await _cliSemaphore.WaitAsync(cancellationToken);
         var logger = server.Services.GetRequiredService<ILogger<WorkflowAutomationTools>>();
         var startTime = DateTime.UtcNow;
-        logger.LogInformation("Starting automated baseline bundle collection for PID {Pid}", pid);
-
         var artifacts = new List<ArtifactInfo>();
         var sessionIds = new List<string>();
         int stepsCompleted = 0;
@@ -338,6 +351,7 @@ public sealed class WorkflowAutomationTools
 
         try
         {
+            logger.LogInformation("Starting automated baseline bundle collection for PID {Pid}", pid);
             // Step 1: Collect performance counters
             logger.LogInformation("Step 1/4: Collecting performance counters for PID {Pid}", pid);
             var countersService = server.Services.GetRequiredService<CollectCountersService>();
@@ -437,6 +451,10 @@ public sealed class WorkflowAutomationTools
                 Error: ex.Message,
                 ExecutionTimeMs: executionTimeMs
             );
+        }
+        finally
+        {
+            _cliSemaphore.Release();
         }
     }
 }
