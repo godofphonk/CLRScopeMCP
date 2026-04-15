@@ -10,11 +10,10 @@ This document provides comprehensive requirements for using all CLRScope MCP fea
 - **Windows**: Windows 10/11 or Windows Server 2019+
 
 ### .NET Runtime
-- **Required**: .NET 6.0 Runtime or higher
-- **Recommended**: .NET 8.0 Runtime or higher
+- **Required**: .NET 10.0 Runtime or higher
 
 ### .NET SDK (for CLI tools)
-- **Required**: .NET SDK 6.0 or higher
+- **Required**: .NET SDK 10.0 or higher
 - **Install**: [Download from Microsoft](https://dotnet.microsoft.com/download)
 
 ## CLI Tools by Feature
@@ -90,7 +89,7 @@ This document provides comprehensive requirements for using all CLRScope MCP fea
 ## Feature-Specific Requirements
 
 ### All Features
-- **Minimum**: .NET SDK 6.0+
+- **Minimum**: .NET SDK 10.0+
 
 ### Memory Dump Analysis
 - **Required**: dotnet-dump
@@ -126,7 +125,7 @@ dotnet tool install --global ClrScope.Mcp
 
 ### Recommended Setup (Full Diagnostics)
 ```bash
-# Install .NET SDK 6.0+
+# Install .NET SDK 10.0+
 
 # Install all diagnostic tools
 dotnet tool install -g dotnet-dump

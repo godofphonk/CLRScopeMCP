@@ -8,14 +8,14 @@ CLRScope MCP integrates with .NET CLI tools for diagnostics. Some features requi
 
 **Purpose:** Install and run all CLI tools
 
-**Version:** .NET SDK 6.0 or higher
+**Version:** .NET SDK 10.0 or higher
 
 **Install:**
 ```bash
 # Linux
 wget https://dot.net/v1/dotnet-install.sh -O dotnet-install.sh
 chmod +x dotnet-install.sh
-./dotnet-install.sh --channel 6.0
+./dotnet-install.sh --channel 10.0
 
 # macOS
 brew install dotnet
@@ -110,7 +110,7 @@ dotnet-symbol set-symbol-server https://msdl.microsoft.com/download/symbols
 ## Minimal Configuration
 
 **Required:**
-- .NET SDK 6.0+
+- .NET SDK 10.0+
 - dotnet-dump (or gcore on Linux)
 
 **Recommended:**
