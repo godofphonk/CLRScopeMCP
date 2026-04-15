@@ -51,6 +51,105 @@ mcp1_runtime_list_targets
 
 This prevents wasting time on non-.NET processes or processes that have already crashed.
 
+## Collection Parameter Guidelines
+
+### Trace Collection (collect_trace)
+
+**Duration:**
+- **CPU Profiling**: 30-60 seconds for representative data
+- **Memory Allocation**: 60-120 seconds to capture allocation patterns
+- **Baseline**: 60 seconds for consistent comparison
+- **Avoid**: Durations > 5 minutes (produces large files with diminishing returns)
+
+**Profile Selection:**
+- **cpu-sampling**: Use for CPU investigation, hot path identification
+- **gc-heap**: Use for memory allocation analysis, GC behavior
+- **default**: Use for general runtime events, baseline collection
+- **Custom providers**: Use when specific diagnostics needed (e.g., HTTP, SQL)
+
+**Custom Providers (if needed):**
+- Format: `ProviderName:Level:Keywords`
+- Example: `Microsoft-Windows-DotNETRuntime:Informational:0x00000001`
+- Use sparingly - more providers = larger files
+
+### Dump Collection (collect_dump)
+
+**Include Heap:**
+- **true** (default): Include heap for memory leak investigation, object analysis
+- **false**: Faster collection, smaller file for thread analysis only
+- **Recommendation**: Use false for hang/deadlock investigation, true for memory leaks
+
+**Compression:**
+- **true**: Reduces file size significantly (2-5x compression ratio)
+- **false** (default): Faster collection, larger file
+- **Recommendation**: Use true for large processes (>1GB memory), false for small processes
+
+**When to Use:**
+- **Hang/Deadlock**: Collect dump immediately when process is hung
+- **Memory Leak**: Use gcdump first, dump if gcdump insufficient
+- **Crash Analysis**: Collect dump as soon as possible after crash
+- **Avoid**: Frequent dump collection in production (high overhead)
+
+### GC Heap Snapshot (collect_gcdump)
+
+**When to Use:**
+- **Memory Leak Investigation**: Faster than full dump, focuses on heap
+- **Object Analysis**: Identify large objects, type distribution
+- **GC Behavior**: Analyze generation distribution, collection patterns
+
+**When Not to Use:**
+- **Thread Analysis**: Use stacks or dump instead
+- **Native Memory**: Use full dump instead
+- **Crash Analysis**: Use full dump instead
+
+**Limitations:**
+- Requires process to be in stable state
+- May not capture all objects during collection
+- Not suitable for real-time monitoring
+
+### Thread Stacks (collect_stacks)
+
+**Output Format:**
+- **json** (recommended): Structured data, easier to parse, flame graph compatible
+- **text**: Human-readable, compatible with dotnet-stack output
+- **Recommendation**: Use json for automated analysis, text for manual inspection
+
+**When to Use:**
+- **Hang/Deadlock**: Capture blocking patterns, circular wait chains
+- **Thread Pool Analysis**: Identify starvation, queue buildup
+- **Async/Await Issues**: Detect deadlocks in async code
+
+**Best Practices:**
+- Collect during active issue state
+- Use json format for flame graph visualization
+- Combine with counters for thread pool context
+
+### Performance Counters (collect_counters)
+
+**Duration:**
+- **CPU Profiling**: 30-60 seconds for representative data
+- **Memory Analysis**: 60-120 seconds to capture GC patterns
+- **Thread Pool**: 60 seconds to observe thread behavior
+- **Baseline**: 60 seconds for consistent comparison
+
+**Provider Selection:**
+- **System.Runtime** (default): CPU, memory, GC, thread pool metrics
+- **Microsoft.AspNetCore.Hosting**: HTTP metrics for web applications
+- **System.Net.Http**: HTTP client metrics
+- **System.Net.Security**: TLS metrics
+- **Multiple providers**: Use comma-separated list for comprehensive monitoring
+
+**Provider Selection Guide:**
+- **General diagnostics**: System.Runtime only
+- **Web applications**: System.Runtime + Microsoft.AspNetCore.Hosting
+- **HTTP services**: System.Runtime + System.Net.Http
+- **Comprehensive**: System.Runtime + Microsoft.AspNetCore.Hosting + System.Net.Http
+
+**Avoid:**
+- Too many providers (large files, overhead)
+- Very long durations (>5 minutes)
+- Collecting during high load (may impact performance)
+
 ## Artifact-Specific Best Practices
 
 ### Memory Dumps
