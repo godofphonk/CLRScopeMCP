@@ -34,7 +34,7 @@ dotnet tool run clrscope-mcp --version
 
 Output:
 ```
-CLRScope MCP v1.0.0
+CLRScope MCP v1.1.0
 ```
 
 Alternative invocation:
@@ -83,7 +83,9 @@ dotnet tool uninstall ClrScope.Mcp
 
 ## Requirements
 
-- .NET SDK 10.0 or later
+- **.NET SDK 10.0 or later** (includes .NET 10.0 runtime)
+  - Download: https://dotnet.microsoft.com/download/dotnet/10.0
+  - Verify installation: `dotnet --version`
 - Internet connection for initial download
 
 ## When to Use

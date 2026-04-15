@@ -1,6 +1,6 @@
 # Binary Distribution Installation
 
-Download pre-built binaries for your platform without requiring .NET SDK installation.
+Download pre-built binaries for your platform. **Requires .NET 10.0 runtime to be installed.**
 
 ## Download
 
@@ -82,11 +82,13 @@ Configure in your IDE's MCP settings (e.g., VS Code `settings.json`):
 ## Advantages
 
 - No .NET SDK required
-- Self-contained single-file binary
+- Small download size (~100KB)
 - Works on any supported platform
 - Easy to distribute and deploy
 
 ## Requirements
 
+- **.NET 10.0 runtime** must be installed
+  - Download: https://dotnet.microsoft.com/download/dotnet/10.0
+  - Verify installation: `dotnet --version`
 - Operating system: Linux (x64/ARM64), macOS ARM64, or Windows x64
-- No .NET SDK or runtime required

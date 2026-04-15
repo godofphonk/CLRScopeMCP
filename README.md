@@ -1,6 +1,7 @@
 # CLRScope MCP
 
-![Badge](https://img.shields.io/badge/version-v1.0.0-blue)
+![Badge](https://img.shields.io/badge/version-v1.1.0-blue)
+![Badge](https://img.shields.io/badge/.NET-10.0%2B-purple)
 ![Badge](https://img.shields.io/badge/license-MIT-green)
 
 > MCP server for comprehensive .NET application diagnostics
@@ -22,6 +23,12 @@ CLRScope MCP provides AI-powered diagnostic capabilities for .NET applications t
 | **Artifact Management** | Pagination, filtering, and cleanup strategies |
 | **Baseline Comparison** | Compare diagnostic sessions with baseline |
 | 🤖 **Automated Workflows** | One-click diagnostic bundles for common scenarios (high CPU, memory leaks, hangs, baseline) |
+
+## System Requirements
+
+- **.NET 10.0 runtime** must be installed on your system
+  - Download: https://dotnet.microsoft.com/download/dotnet/10.0
+  - Verify installation: `dotnet --version`
 
 ## Installation
 
