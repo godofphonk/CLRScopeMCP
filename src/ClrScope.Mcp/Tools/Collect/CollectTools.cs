@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
 using System.ComponentModel;
+using System.Globalization;
 
 namespace ClrScope.Mcp.Tools.Collect;
 
@@ -18,26 +19,27 @@ public sealed class CollectTools
         IProgress<double>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        // Validate PID before getting services
+        if (pid <= 0)
+        {
+            return new CollectDumpResult(
+                Success: false,
+                SessionId: string.Empty,
+                ArtifactId: null,
+                FilePath: null,
+                SizeBytes: 0,
+                Sha256: null,
+                HashState: null,
+                Error: "Process ID must be greater than 0",
+                CancellationSemantics: "best_effort"
+            );
+        }
+
         var dumpService = server.Services!.GetRequiredService<CollectDumpService>();
         var logger = server.Services!.GetRequiredService<ILogger<CollectTools>>();
 
         try
         {
-            if (pid <= 0)
-            {
-                return new CollectDumpResult(
-                    Success: false,
-                    SessionId: string.Empty,
-                    ArtifactId: null,
-                    FilePath: null,
-                    SizeBytes: 0,
-                    Sha256: null,
-                    HashState: null,
-                    Error: "Process ID must be greater than 0",
-                    CancellationSemantics: "best_effort"
-                );
-            }
-
             logger.LogInformation("Starting dump collection for PID {Pid}, IncludeHeap={IncludeHeap}, Compress={Compress}", pid, includeHeap, compress);
 
             var request = new CollectDumpRequest(pid, includeHeap, compress);
@@ -118,56 +120,117 @@ public sealed class CollectTools
         [Description("Custom providers in format 'ProviderName:Level:Keywords' (e.g., 'Microsoft-Windows-DotNETRuntime:Informational:0x00000001'). Overrides profile if specified.")] string[]? customProviders = null,
         CancellationToken cancellationToken = default)
     {
+        // Validate PID before getting services
+        if (pid <= 0)
+        {
+            return new CollectTraceResult(
+                Success: false,
+                SessionId: string.Empty,
+                ArtifactId: null,
+                FilePath: null,
+                SizeBytes: 0,
+                Sha256: null,
+                HashState: null,
+                Error: "Process ID must be greater than 0",
+                CompletionMode: "Failed"
+            );
+        }
+
+        // Validate duration before getting services
+        if (string.IsNullOrWhiteSpace(duration))
+        {
+            return new CollectTraceResult(
+                Success: false,
+                SessionId: string.Empty,
+                ArtifactId: null,
+                FilePath: null,
+                SizeBytes: 0,
+                Sha256: null,
+                HashState: null,
+                Error: "Duration must not be empty",
+                CompletionMode: "Failed"
+            );
+        }
+
+        if (!TimeSpan.TryParseExact(duration, "hh\\:mm\\:ss", CultureInfo.InvariantCulture, out var _))
+        {
+            return new CollectTraceResult(
+                Success: false,
+                SessionId: string.Empty,
+                ArtifactId: null,
+                FilePath: null,
+                SizeBytes: 0,
+                Sha256: null,
+                HashState: null,
+                Error: "Duration must be in hh:mm:ss format (e.g., 00:01:30)",
+                CompletionMode: "Failed"
+            );
+        }
+
+        // Validate profile before getting services
+        if (!string.IsNullOrWhiteSpace(profile))
+        {
+            var validProfiles = new[] { "cpu-sampling", "gc-heap", "default" };
+            if (!validProfiles.Contains(profile, StringComparer.OrdinalIgnoreCase))
+            {
+                return new CollectTraceResult(
+                    Success: false,
+                    SessionId: string.Empty,
+                    ArtifactId: null,
+                    FilePath: null,
+                    SizeBytes: 0,
+                    Sha256: null,
+                    HashState: null,
+                    Error: $"Profile must be one of: {string.Join(", ", validProfiles)}",
+                    CompletionMode: "Failed"
+                );
+            }
+        }
+
+        // Validate customProviders format before getting services
+        if (customProviders != null && customProviders.Length > 0)
+        {
+            foreach (var provider in customProviders)
+            {
+                if (string.IsNullOrWhiteSpace(provider))
+                {
+                    return new CollectTraceResult(
+                        Success: false,
+                        SessionId: string.Empty,
+                        ArtifactId: null,
+                        FilePath: null,
+                        SizeBytes: 0,
+                        Sha256: null,
+                        HashState: null,
+                        Error: "Custom providers must not be empty",
+                        CompletionMode: "Failed"
+                    );
+                }
+
+                // Validate format: ProviderName:Level:Keywords
+                var parts = provider.Split(':');
+                if (parts.Length < 2)
+                {
+                    return new CollectTraceResult(
+                        Success: false,
+                        SessionId: string.Empty,
+                        ArtifactId: null,
+                        FilePath: null,
+                        SizeBytes: 0,
+                        Sha256: null,
+                        HashState: null,
+                        Error: $"Custom provider '{provider}' must be in format 'ProviderName:Level:Keywords'",
+                        CompletionMode: "Failed"
+                    );
+                }
+            }
+        }
+
         var traceService = server.Services!.GetRequiredService<CollectTraceService>();
         var logger = server.Services!.GetRequiredService<ILogger<CollectTools>>();
 
         try
         {
-            if (pid <= 0)
-            {
-                return new CollectTraceResult(
-                    Success: false,
-                    SessionId: string.Empty,
-                    ArtifactId: null,
-                    FilePath: null,
-                    SizeBytes: 0,
-                    Sha256: null,
-                    HashState: null,
-                    Error: "Process ID must be greater than 0",
-                    CompletionMode: "Failed"
-                );
-            }
-
-            if (string.IsNullOrWhiteSpace(duration))
-            {
-                return new CollectTraceResult(
-                    Success: false,
-                    SessionId: string.Empty,
-                    ArtifactId: null,
-                    FilePath: null,
-                    SizeBytes: 0,
-                    Sha256: null,
-                    HashState: null,
-                    Error: "Duration must not be empty",
-                    CompletionMode: "Failed"
-                );
-            }
-
-            if (!System.Text.RegularExpressions.Regex.IsMatch(duration, @"^\d{2}:\d{2}:\d{2}$"))
-            {
-                return new CollectTraceResult(
-                    Success: false,
-                    SessionId: string.Empty,
-                    ArtifactId: null,
-                    FilePath: null,
-                    SizeBytes: 0,
-                    Sha256: null,
-                    HashState: null,
-                    Error: "Duration must be in hh:mm:ss format (e.g., 00:01:30)",
-                    CompletionMode: "Failed"
-                );
-            }
-
             logger.LogInformation("Starting trace collection for PID {Pid}, Duration={Duration}, Profile={Profile}, CustomProviders={CustomProviders}", pid, duration, profile ?? "default", customProviders != null ? string.Join(", ", customProviders) : "none");
 
             var request = new CollectTraceRequest(pid, duration, profile, customProviders);

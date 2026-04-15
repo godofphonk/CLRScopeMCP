@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Server;
 using System.ComponentModel;
+using System.Globalization;
 
 namespace ClrScope.Mcp.Tools.Artifacts;
 
@@ -39,28 +40,29 @@ public sealed class ArtifactTools
         [Description("Include file path in response (default: false)")] bool includeFilePath = false,
         CancellationToken cancellationToken = default)
     {
+        // Validate artifactId before getting services
+        if (string.IsNullOrWhiteSpace(artifactId))
+        {
+            return new ArtifactMetadataResult(
+                Found: false,
+                ArtifactId: artifactId,
+                Kind: null,
+                Status: null,
+                SizeBytes: 0,
+                Sha256: null,
+                HashState: null,
+                Pid: 0,
+                CreatedAtUtc: null,
+                FilePath: null,
+                Error: "Artifact ID must not be empty"
+            );
+        }
+
         var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
         var logger = server.Services!.GetRequiredService<ILogger<ArtifactTools>>();
 
         try
         {
-            if (string.IsNullOrWhiteSpace(artifactId))
-            {
-                return new ArtifactMetadataResult(
-                    Found: false,
-                    ArtifactId: artifactId,
-                    Kind: string.Empty,
-                    Status: string.Empty,
-                    FilePath: string.Empty,
-                    SizeBytes: 0,
-                    Sha256: string.Empty,
-                    HashState: string.Empty,
-                    Pid: 0,
-                    CreatedAtUtc: DateTime.UtcNow,
-                    Error: "Artifact ID must not be empty"
-                );
-            }
-
             var id = new ArtifactId(artifactId);
             var artifact = await artifactStore.GetAsync(id, cancellationToken);
             
@@ -147,26 +149,37 @@ public sealed class ArtifactTools
         [Description("Include file path in response (default: false)")] bool includeFilePath = false,
         CancellationToken cancellationToken = default)
     {
-        var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
-        var logger = server.Services!.GetRequiredService<ILogger<ArtifactTools>>();
-
-        try
+        // Validate pagination parameters before getting services
+        if (offset < 0)
         {
-            // Validate pagination parameters
-            if (offset < 0)
-            {
-                return new ArtifactListResult(
-                    Count: 0,
-                    Total: 0,
-                    Offset: 0,
-                    Limit: limit,
-                    HasMore: false,
-                    Artifacts: Array.Empty<ArtifactSummary>(),
-                    Error: "Offset must be >= 0"
-                );
-            }
+            return new ArtifactListResult(
+                Count: 0,
+                Total: 0,
+                Offset: 0,
+                Limit: limit,
+                HasMore: false,
+                Artifacts: Array.Empty<ArtifactSummary>(),
+                Error: "Offset must be >= 0"
+            );
+        }
 
-            if (limit < 1 || limit > 500)
+        if (limit < 1 || limit > 500)
+        {
+            return new ArtifactListResult(
+                Count: 0,
+                Total: 0,
+                Offset: offset,
+                Limit: limit,
+                HasMore: false,
+                Artifacts: Array.Empty<ArtifactSummary>(),
+                Error: "Limit must be between 1 and 500"
+            );
+        }
+
+        // Validate dateFrom format before getting services
+        if (!string.IsNullOrWhiteSpace(dateFrom))
+        {
+            if (!DateTime.TryParseExact(dateFrom, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var _))
             {
                 return new ArtifactListResult(
                     Count: 0,
@@ -175,10 +188,33 @@ public sealed class ArtifactTools
                     Limit: limit,
                     HasMore: false,
                     Artifacts: Array.Empty<ArtifactSummary>(),
-                    Error: "Limit must be between 1 and 500"
+                    Error: "DateFrom must be in ISO format (YYYY-MM-DD)"
                 );
             }
+        }
 
+        // Validate dateTo format before getting services
+        if (!string.IsNullOrWhiteSpace(dateTo))
+        {
+            if (!DateTime.TryParseExact(dateTo, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var _))
+            {
+                return new ArtifactListResult(
+                    Count: 0,
+                    Total: 0,
+                    Offset: offset,
+                    Limit: limit,
+                    HasMore: false,
+                    Artifacts: Array.Empty<ArtifactSummary>(),
+                    Error: "DateTo must be in ISO format (YYYY-MM-DD)"
+                );
+            }
+        }
+
+        var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
+        var logger = server.Services!.GetRequiredService<ILogger<ArtifactTools>>();
+
+        try
+        {
             var artifacts = await artifactStore.GetAllAsync(cancellationToken);
 
             var filtered = artifacts.AsEnumerable();
@@ -254,21 +290,22 @@ public sealed class ArtifactTools
         McpServer server,
         CancellationToken cancellationToken = default)
     {
+        // Validate artifactId before getting services
+        if (string.IsNullOrWhiteSpace(artifactId))
+        {
+            return new DeleteArtifactResult(
+                Success: false,
+                ArtifactId: artifactId,
+                Message: "Artifact ID must not be empty"
+            );
+        }
+
         var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
         var logger = server.Services!.GetRequiredService<ILogger<ArtifactTools>>();
         var options = server.Services!.GetRequiredService<IOptions<ClrScopeOptions>>();
 
         try
         {
-            if (string.IsNullOrWhiteSpace(artifactId))
-            {
-                return new DeleteArtifactResult(
-                    Success: false,
-                    ArtifactId: artifactId,
-                    Message: "Artifact ID must not be empty"
-                );
-            }
-
             var id = new ArtifactId(artifactId);
             var artifact = await artifactStore.GetAsync(id, cancellationToken);
 
@@ -327,22 +364,34 @@ public sealed class ArtifactTools
         [Description("Output format: 'text' (for Counters/Stacks), 'hex' (hex dump), 'base64' (base64 encoded)")] string format = "text",
         CancellationToken cancellationToken = default)
     {
+        // Validate artifactId before getting services
+        if (string.IsNullOrWhiteSpace(artifactId))
+        {
+            return new ReadArtifactTextResult(
+                Success: false,
+                ArtifactId: artifactId,
+                Content: null,
+                Error: "Artifact ID must not be empty"
+            );
+        }
+
+        // Validate format before getting services
+        if (format != "text" && format != "hex" && format != "base64")
+        {
+            return new ReadArtifactTextResult(
+                Success: false,
+                ArtifactId: artifactId,
+                Content: null,
+                Error: "Format must be 'text', 'hex', or 'base64'"
+            );
+        }
+
         var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
         var logger = server.Services!.GetRequiredService<ILogger<ArtifactTools>>();
         var options = server.Services!.GetRequiredService<IOptions<ClrScopeOptions>>();
 
         try
         {
-            if (string.IsNullOrWhiteSpace(artifactId))
-            {
-                return new ReadArtifactTextResult(
-                    Success: false,
-                    ArtifactId: artifactId,
-                    Content: string.Empty,
-                    Error: "Artifact ID must not be empty"
-                );
-            }
-
             var id = new ArtifactId(artifactId);
             var artifact = await artifactStore.GetAsync(id, cancellationToken);
 
@@ -471,19 +520,42 @@ public sealed class ArtifactTools
         [Description("Cleanup strategy: 'age' (default, filter by age and pin status), 'duplicates' (keep newest per PID+kind)")] string strategy = "age",
         CancellationToken cancellationToken = default)
     {
+        // Validate maxAge before getting services
+        if (string.IsNullOrWhiteSpace(maxAge))
+        {
+            return new CleanupArtifactsResult(
+                DeletedCount: 0,
+                Message: "Max age must not be empty"
+            );
+        }
+
+        // Validate strategy before getting services
+        if (!string.IsNullOrWhiteSpace(strategy))
+        {
+            var validStrategies = new[] { "age", "duplicates", "importance" };
+            if (!validStrategies.Contains(strategy, StringComparer.OrdinalIgnoreCase))
+            {
+                return new CleanupArtifactsResult(
+                    DeletedCount: 0,
+                    Message: $"Strategy must be one of: {string.Join(", ", validStrategies)}"
+                );
+            }
+        }
+
+        // Validate maxSizeBytes before getting services
+        if (maxSizeBytes.HasValue && maxSizeBytes.Value <= 0)
+        {
+            return new CleanupArtifactsResult(
+                DeletedCount: 0,
+                Message: "MaxSizeBytes must be greater than 0"
+            );
+        }
+
         var retentionService = server.Services!.GetRequiredService<IArtifactRetentionService>();
         var logger = server.Services!.GetRequiredService<ILogger<ArtifactTools>>();
 
         try
         {
-            if (string.IsNullOrWhiteSpace(maxAge))
-            {
-                return new CleanupArtifactsResult(
-                    DeletedCount: 0,
-                    Message: "Max age must not be empty"
-                );
-            }
-
             var timeSpan = TimeSpanParser.ParseMaxAge(maxAge);
             var deletedCount = await retentionService.CleanupOldArtifactsAsync(timeSpan, maxSizeBytes, strategy.ToLowerInvariant(), cancellationToken);
 
@@ -525,20 +597,21 @@ public sealed class ArtifactTools
         McpServer server,
         CancellationToken cancellationToken = default)
     {
+        // Validate artifactId before getting services
+        if (string.IsNullOrWhiteSpace(artifactId))
+        {
+            return new PinArtifactResult(
+                Success: false,
+                ArtifactId: artifactId,
+                Message: "Artifact ID must not be empty"
+            );
+        }
+
         var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
         var logger = server.Services!.GetRequiredService<ILogger<ArtifactTools>>();
 
         try
         {
-            if (string.IsNullOrWhiteSpace(artifactId))
-            {
-                return new PinArtifactResult(
-                    Success: false,
-                    ArtifactId: artifactId,
-                    Message: "Artifact ID must not be empty"
-                );
-            }
-
             var id = new ArtifactId(artifactId);
             var artifact = await artifactStore.GetAsync(id, cancellationToken);
 
@@ -589,20 +662,21 @@ public sealed class ArtifactTools
         McpServer server,
         CancellationToken cancellationToken = default)
     {
+        // Validate artifactId before getting services
+        if (string.IsNullOrWhiteSpace(artifactId))
+        {
+            return new PinArtifactResult(
+                Success: false,
+                ArtifactId: artifactId,
+                Message: "Artifact ID must not be empty"
+            );
+        }
+
         var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
         var logger = server.Services!.GetRequiredService<ILogger<ArtifactTools>>();
 
         try
         {
-            if (string.IsNullOrWhiteSpace(artifactId))
-            {
-                return new PinArtifactResult(
-                    Success: false,
-                    ArtifactId: artifactId,
-                    Message: "Artifact ID must not be empty"
-                );
-            }
-
             var id = new ArtifactId(artifactId);
             var artifact = await artifactStore.GetAsync(id, cancellationToken);
 

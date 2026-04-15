@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
 using System.ComponentModel;
+using System.Globalization;
 
 namespace ClrScope.Mcp.Tools.Collect;
 
@@ -19,21 +20,43 @@ public sealed class CollectCountersTools
         [Description("Counter providers (e.g., System.Runtime, Microsoft.AspNetCore.Hosting). Defaults to System.Runtime if not specified.")] string[]? providers = null,
         CancellationToken cancellationToken = default)
     {
+        // Validate PID before getting services
+        if (pid <= 0)
+        {
+            return new CollectCountersResult(
+                Success: false,
+                Message: "Process ID must be greater than 0",
+                ArtifactId: null,
+                SessionId: null
+            );
+        }
+
+        // Validate duration before getting services
+        if (string.IsNullOrWhiteSpace(duration))
+        {
+            return new CollectCountersResult(
+                Success: false,
+                Message: "Duration must not be empty",
+                ArtifactId: null,
+                SessionId: null
+            );
+        }
+
+        if (!TimeSpan.TryParseExact(duration, "hh\\:mm\\:ss", CultureInfo.InvariantCulture, out var _))
+        {
+            return new CollectCountersResult(
+                Success: false,
+                Message: "Duration must be in hh:mm:ss format (e.g., 00:01:00)",
+                ArtifactId: null,
+                SessionId: null
+            );
+        }
+
         var countersService = server.Services!.GetRequiredService<CollectCountersService>();
         var logger = server.Services!.GetRequiredService<ILogger<CollectCountersTools>>();
 
         try
         {
-            if (pid <= 0)
-            {
-                return new CollectCountersResult(
-                    Success: false,
-                    Message: "Process ID must be greater than 0",
-                    ArtifactId: null,
-                    SessionId: null
-                );
-            }
-
             // Validate and set default provider
             var providerList = providers != null && providers.Length > 0 ? providers : new[] { "System.Runtime" };
 
@@ -99,21 +122,22 @@ public sealed class CollectCountersTools
         McpServer server,
         CancellationToken cancellationToken = default)
     {
+        // Validate PID before getting services
+        if (pid <= 0)
+        {
+            return new CollectGcDumpResult(
+                Success: false,
+                Message: "Process ID must be greater than 0",
+                ArtifactId: null,
+                SessionId: null
+            );
+        }
+
         var gcdumpService = server.Services!.GetRequiredService<CollectGcDumpService>();
         var logger = server.Services!.GetRequiredService<ILogger<CollectCountersTools>>();
 
         try
         {
-            if (pid <= 0)
-            {
-                return new CollectGcDumpResult(
-                    Success: false,
-                    Message: "Process ID must be greater than 0",
-                    ArtifactId: null,
-                    SessionId: null
-                );
-            }
-
             var request = new ClrScope.Mcp.Services.CollectGcDumpRequest(pid);
             var result = await gcdumpService.CollectGcDumpAsync(request, cancellationToken: cancellationToken);
 
@@ -155,21 +179,33 @@ public sealed class CollectCountersTools
         [Description("Output format: 'text' (plain text) or 'json' (structured JSON)")] string format = "text",
         CancellationToken cancellationToken = default)
     {
+        // Validate PID before getting services
+        if (pid <= 0)
+        {
+            return new CollectStacksResult(
+                Success: false,
+                Message: "Process ID must be greater than 0",
+                ArtifactId: null,
+                SessionId: null
+            );
+        }
+
+        // Validate format before getting services
+        if (format != "text" && format != "json")
+        {
+            return new CollectStacksResult(
+                Success: false,
+                Message: "Format must be 'text' or 'json'",
+                ArtifactId: null,
+                SessionId: null
+            );
+        }
+
         var stacksService = server.Services!.GetRequiredService<CollectStacksService>();
         var logger = server.Services!.GetRequiredService<ILogger<CollectCountersTools>>();
 
         try
         {
-            if (pid <= 0)
-            {
-                return new CollectStacksResult(
-                    Success: false,
-                    Message: "Process ID must be greater than 0",
-                    ArtifactId: null,
-                    SessionId: null
-                );
-            }
-
             var request = new ClrScope.Mcp.Services.CollectStacksRequest(pid, format);
             var result = await stacksService.CollectStacksAsync(request, cancellationToken: cancellationToken);
 

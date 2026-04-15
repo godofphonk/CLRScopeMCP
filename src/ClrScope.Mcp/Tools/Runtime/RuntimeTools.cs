@@ -16,6 +16,20 @@ public sealed class RuntimeTools
         [Description("Filter processes by name (case-insensitive substring match)")] string? processNameFilter = null,
         [Description("Sort by: 'pid', 'name', 'pid_desc', 'name_desc'")] string? sortBy = null)
     {
+        // Validate sortBy before getting services
+        if (!string.IsNullOrWhiteSpace(sortBy))
+        {
+            var validSortOptions = new[] { "pid", "name", "pid_desc", "name_desc" };
+            if (!validSortOptions.Contains(sortBy, StringComparer.OrdinalIgnoreCase))
+            {
+                return new ListTargetsResult(
+                    Targets: Array.Empty<RuntimeTargetInfo>(),
+                    Count: 0,
+                    Error: $"SortBy must be one of: {string.Join(", ", validSortOptions)}"
+                );
+            }
+        }
+
         var runtimeService = server.Services!.GetRequiredService<RuntimeService>();
         var logger = server.Services!.GetRequiredService<ILogger<RuntimeTools>>();
 
@@ -46,25 +60,26 @@ public sealed class RuntimeTools
         McpServer server,
         CancellationToken cancellationToken = default)
     {
+        // Validate PID before getting services
+        if (pid <= 0)
+        {
+            return new InspectTargetResult(
+                Found: false,
+                Attachable: false,
+                ProcessName: string.Empty,
+                CommandLine: string.Empty,
+                OperatingSystem: string.Empty,
+                ProcessArchitecture: string.Empty,
+                Warnings: Array.Empty<string>(),
+                Error: "Process ID must be greater than 0"
+            );
+        }
+
         var inspectService = server.Services!.GetRequiredService<InspectTargetService>();
         var logger = server.Services!.GetRequiredService<ILogger<RuntimeTools>>();
 
         try
         {
-            if (pid <= 0)
-            {
-                return new InspectTargetResult(
-                    Found: false,
-                    Attachable: false,
-                    ProcessName: string.Empty,
-                    CommandLine: string.Empty,
-                    OperatingSystem: string.Empty,
-                    ProcessArchitecture: string.Empty,
-                    Warnings: Array.Empty<string>(),
-                    Error: "Process ID must be greater than 0"
-                );
-            }
-
             var result = inspectService.InspectTarget(pid);
             
             if (!result.Found)

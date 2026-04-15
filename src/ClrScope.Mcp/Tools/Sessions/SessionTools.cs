@@ -17,30 +17,31 @@ public sealed class SessionTools
         McpServer server,
         CancellationToken cancellationToken = default)
     {
+        // Validate sessionId before getting services
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            return new SessionResult(
+                Found: false,
+                SessionId: sessionId,
+                Kind: null,
+                Status: null,
+                Pid: 0,
+                StartedAtUtc: null,
+                CompletedAtUtc: null,
+                SessionError: null,
+                ArtifactCount: 0,
+                Artifacts: Array.Empty<SessionArtifactSummary>(),
+                Error: "Session ID must not be empty",
+                Phase: null
+            );
+        }
+
         var sessionStore = server.Services!.GetRequiredService<ISqliteSessionStore>();
         var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
         var logger = server.Services!.GetRequiredService<ILogger<SessionTools>>();
 
         try
         {
-            if (string.IsNullOrWhiteSpace(sessionId))
-            {
-                return new SessionResult(
-                    Found: false,
-                    SessionId: sessionId,
-                    Kind: null,
-                    Status: null,
-                    Pid: 0,
-                    StartedAtUtc: null,
-                    CompletedAtUtc: null,
-                    SessionError: null,
-                    ArtifactCount: 0,
-                    Artifacts: Array.Empty<SessionArtifactSummary>(),
-                    Error: "Session ID must not be empty",
-                    Phase: null
-                );
-            }
-
             var id = new SessionId(sessionId);
             var session = await sessionStore.GetAsync(id, cancellationToken);
 
@@ -200,20 +201,21 @@ public sealed class SessionTools
         McpServer server,
         CancellationToken cancellationToken = default)
     {
+        // Validate sessionId before getting services
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            return new CancelSessionResult(
+                Success: false,
+                SessionId: sessionId,
+                Message: "Session ID must not be empty"
+            );
+        }
+
         var sessionStore = server.Services!.GetRequiredService<ISqliteSessionStore>();
         var logger = server.Services!.GetRequiredService<ILogger<SessionTools>>();
 
         try
         {
-            if (string.IsNullOrWhiteSpace(sessionId))
-            {
-                return new CancelSessionResult(
-                    Success: false,
-                    SessionId: sessionId,
-                    Message: "Session ID must not be empty"
-                );
-            }
-
             var id = new SessionId(sessionId);
             var session = await sessionStore.GetAsync(id, cancellationToken);
 
