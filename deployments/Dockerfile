@@ -4,6 +4,8 @@ WORKDIR /src
 
 # Copy csproj and restore dependencies
 COPY src/ClrScope.Mcp/ClrScope.Mcp.csproj src/ClrScope.Mcp/
+COPY third_party/ third_party/
+COPY src/ClrScope.HeapParser/ src/ClrScope.HeapParser/
 RUN dotnet restore src/ClrScope.Mcp/ClrScope.Mcp.csproj
 
 # Copy everything else and build
@@ -23,11 +25,11 @@ RUN apt-get update && apt-get install -y \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
-# Install dotnet-dump
-RUN wget https://dot.net/v1/dotnet-install.sh -O dotnet-install.sh \
-    && chmod +x dotnet-install.sh \
-    && ./dotnet-install.sh --channel 9.0 --runtime dotnet --install-dir /usr/share/dotnet \
-    && rm dotnet-install.sh
+# Install .NET diagnostic tools
+RUN /usr/share/dotnet/dotnet tool install -g dotnet-dump \
+    && /usr/share/dotnet/dotnet tool install -g dotnet-gcdump \
+    && /usr/share/dotnet/dotnet tool install -g dotnet-stack \
+    && /usr/share/dotnet/dotnet tool install -g dotnet-counters
 
 # Install dotnet-symbol
 RUN /usr/share/dotnet/dotnet tool install -g dotnet-symbol

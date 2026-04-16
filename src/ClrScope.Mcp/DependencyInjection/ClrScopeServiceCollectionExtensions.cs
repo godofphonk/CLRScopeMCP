@@ -1,7 +1,13 @@
 using ClrScope.Mcp.Contracts;
+using ClrScope.Mcp.Domain.Heap.Adapters;
+using ClrScope.Mcp.Domain.Heap.Envelopes;
+using ClrScope.Mcp.Domain.Heap.Facades;
 using ClrScope.Mcp.Infrastructure;
 using ClrScope.Mcp.Options;
-using ClrScope.Mcp.Services;
+using ClrScope.Mcp.Services.Collect;
+using ClrScope.Mcp.Services.Health;
+using ClrScope.Mcp.Services.Heap;
+using ClrScope.Mcp.Services.Runtime;
 using ClrScope.Mcp.Tools.Analysis;
 using ClrScope.Mcp.Tools.Artifacts;
 using ClrScope.Mcp.Tools.Collect;
@@ -63,6 +69,17 @@ public static class ClrScopeServiceCollectionExtensions
         services.AddSingleton<ICliToolAvailabilityChecker, CliToolAvailabilityChecker>();
         services.AddSingleton<ISymbolResolver, SymbolResolver>();
         services.AddSingleton<ISosAnalyzer, DotnetDumpAnalyzer>();
+        services.AddSingleton<IHeapSnapshotPreparer, HeapSnapshotPreparer>();
+        services.AddSingleton<IHeapSnapshotCache, HeapSnapshotCache>();
+        services.AddSingleton<IGcDumpGraphAdapter, GcDumpProcessAdapter>();
+        services.AddSingleton<DominatorTreeCalculator>();
+        services.AddSingleton<HeapRetainerPathsBuilder>();
+        // TODO: rework - EventPipeHeapGraphSourceAdapter not used in current pipeline, needs integration or removal
+        // services.AddSingleton<IHeapGraphSourceAdapter, EventPipeHeapGraphSourceAdapter>();
+        services.AddSingleton<IMemoryGraphFacade, PerfViewMemoryGraphFacade>();
+        services.AddSingleton<IHeapSnapshotMapper, MemoryGraphHeapSnapshotMapper>();
+        services.AddSingleton<NettracePreflight>();
+        // NettraceGraphAdapter and HeapGraphDataConverter disabled due to vendored library bugs
 
         return services;
     }

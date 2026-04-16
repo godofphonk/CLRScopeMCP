@@ -24,4 +24,8 @@
     <ProjectReference Include="..\..\src\ClrScope.Mcp\ClrScope.Mcp.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="..\..\test-data\**" Link="test-data\%(RecursiveDir)%(FileName)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

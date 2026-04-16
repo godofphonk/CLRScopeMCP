@@ -8,7 +8,9 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>clrscope-mcp</ToolCommandName>
     <PackageId>ClrScope.Mcp</PackageId>
-    <VersionPrefix>1.1.0</VersionPrefix>
+    <PackageType>McpServer</PackageType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <VersionPrefix>1.2.0</VersionPrefix>
     <Authors>godofphonk</Authors>
     <Description>.NET diagnostics MCP server - MCP (Model Context Protocol) server for diagnosing .NET processes via EventPipe, memory dumps, and CLI tools.</Description>
     <PackageTags>dotnet;diagnostics;mcp;profiler;clr;performance</PackageTags>
@@ -25,15 +27,24 @@
   <ItemGroup>
     <PackageReference Include="ModelContextProtocol" Version="1.2.0" />
     <PackageReference Include="Microsoft.Diagnostics.NETCore.Client" Version="0.2.661903" />
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="9.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Diagnostics.Tracing.TraceEvent" Version="3.1.3" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.6" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.6" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.6" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.6" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\third_party\DotNetHeapDump\DotNetHeapDump.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <None Update="appsettings.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\README.md">
+      <Pack>true</Pack>
+      <PackagePath>\</PackagePath>
     </None>
   </ItemGroup>
 

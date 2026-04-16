@@ -18,7 +18,10 @@ permissions:
 
 jobs:
   ci:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98
@@ -34,8 +37,17 @@ jobs:
       - name: Build
         run: dotnet build --no-restore -c Release src/ClrScope.Mcp/ClrScope.Mcp.csproj
 
-      - name: Test
-        run: dotnet test --no-build -c Release tests/ClrScope.Mcp.Tests/ClrScope.Mcp.Tests.csproj
+      - name: Test with coverage
+        run: dotnet test --no-build -c Release tests/ClrScope.Mcp.Tests/ClrScope.Mcp.Tests.csproj --collect:"XPlat Code Coverage" --results-directory ./coverage
+
+      - name: Upload coverage to Codecov
+        if: matrix.os == 'ubuntu-latest'
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage/**/coverage.cobertura.xml
+          flags: unittests
+          name: codecov-${{ matrix.os }}
+          fail_ci_if_error: false
 
       - name: Pack NuGet package
         run: dotnet pack src/ClrScope.Mcp/ClrScope.Mcp.csproj -c Release
@@ -47,11 +59,30 @@ jobs:
             exit 1
           fi
           echo "NuGet package created successfully"
+        shell: bash
 
-      - name: Extract NuGet package to verify contents
+      - name: Extract NuGet package to verify contents (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          $package = Get-ChildItem 'src/ClrScope.Mcp/bin/Release/*.nupkg' | Select-Object -First 1
+          if (-not $package) {
+            Write-Error "NuGet package not found"
+            exit 1
+          }
+          $destination = 'src/ClrScope.Mcp/bin/Release/temp_extract'
+          if (Test-Path $destination) {
+            Remove-Item $destination -Recurse -Force
+          }
+          Expand-Archive -Path $package.FullName -DestinationPath $destination -Force
+        shell: pwsh
+
+      - name: Extract NuGet package to verify contents (Non-Windows)
+        if: matrix.os != 'windows-latest'
         run: |
           cd src/ClrScope.Mcp/bin/Release
+          rm -rf temp_extract
           unzip -q *.nupkg -d temp_extract
+        shell: bash
 
       - name: Verify version in package
         run: |
@@ -62,11 +93,20 @@ jobs:
             exit 1
           fi
           echo "Version found: $VERSION"
+        shell: bash
 
-      - name: Build binary (linux-x64) for validation
-        run: dotnet publish src/ClrScope.Mcp/ClrScope.Mcp.csproj -c Release -r linux-x64 --self-contained false -p:DebugSymbols=false -p:DebugType=None -o ./test-artifacts/linux-x64
-
-      - name: Smoke test binary
+      - name: Build binary for validation
         run: |
-          chmod +x test-artifacts/linux-x64/ClrScope.Mcp
-          test-artifacts/linux-x64/ClrScope.Mcp --version
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            dotnet publish src/ClrScope.Mcp/ClrScope.Mcp.csproj -c Release -r linux-x64 --self-contained false -p:DebugSymbols=false -p:DebugType=None -o ./test-artifacts/linux-x64
+            chmod +x test-artifacts/linux-x64/ClrScope.Mcp
+            ./test-artifacts/linux-x64/ClrScope.Mcp --version
+          elif [ "${{ runner.os }}" = "Windows" ]; then
+            dotnet publish src/ClrScope.Mcp/ClrScope.Mcp.csproj -c Release -r win-x64 --self-contained false -p:DebugSymbols=false -p:DebugType=None -o ./test-artifacts/win-x64
+            ./test-artifacts/win-x64/ClrScope.Mcp.exe --version
+          elif [ "${{ runner.os }}" = "macOS" ]; then
+            dotnet publish src/ClrScope.Mcp/ClrScope.Mcp.csproj -c Release -r osx-arm64 --self-contained false -p:DebugSymbols=false -p:DebugType=None -o ./test-artifacts/osx-arm64
+            chmod +x test-artifacts/osx-arm64/ClrScope.Mcp
+            ./test-artifacts/osx-arm64/ClrScope.Mcp --version
+          fi
+        shell: bash

@@ -1,5 +1,6 @@
 using ClrScope.Mcp.Contracts;
 using ClrScope.Mcp.Services;
+using ClrScope.Mcp.Services.Runtime;
 using Xunit;
 
 namespace ClrScope.Mcp.Tests.Services;

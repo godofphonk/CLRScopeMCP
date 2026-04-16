@@ -136,7 +136,7 @@ public sealed class ArtifactTools
         }
     }
 
-    [McpServerTool(Name = "artifact_list", Title = "List Artifacts", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("List artifacts with optional filtering by pid, kind, status, date range, and pagination")]
+    [McpServerTool(Name = "artifact_list", Title = "List Artifacts", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("List artifacts with optional filtering by pid, kind, status, date range, session, and pagination")]
     public static async Task<ArtifactListResult> ListArtifacts(
         McpServer server,
         [Description("Filter by process ID (optional)")] int? pid = null,
@@ -144,6 +144,7 @@ public sealed class ArtifactTools
         [Description("Filter by status (optional)")] string? status = null,
         [Description("Filter by date from (ISO format, e.g., 2024-01-01)")] string? dateFrom = null,
         [Description("Filter by date to (ISO format, e.g., 2024-12-31)")] string? dateTo = null,
+        [Description("Filter by session ID (optional)")] string? sessionId = null,
         [Description("Offset for pagination (default: 0)")] int offset = 0,
         [Description("Limit for pagination (default: 50, max: 500)")] int limit = 50,
         [Description("Include file path in response (default: false)")] bool includeFilePath = false,
@@ -210,6 +211,23 @@ public sealed class ArtifactTools
             }
         }
 
+        // Validate sessionId format before getting services
+        if (!string.IsNullOrWhiteSpace(sessionId))
+        {
+            if (!System.Text.RegularExpressions.Regex.IsMatch(sessionId, @"^ses_[0-9a-f]{32}$"))
+            {
+                return new ArtifactListResult(
+                    Count: 0,
+                    Total: 0,
+                    Offset: offset,
+                    Limit: limit,
+                    HasMore: false,
+                    Artifacts: Array.Empty<ArtifactSummary>(),
+                    Error: "SessionId must be in the format 'ses_' followed by 32 lowercase hex characters (e.g. ses_a1b2c3d4e5f6...)"
+                );
+            }
+        }
+
         var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
         var logger = server.Services!.GetRequiredService<ILogger<ArtifactTools>>();
 
@@ -218,6 +236,12 @@ public sealed class ArtifactTools
             var artifacts = await artifactStore.GetAllAsync(cancellationToken);
 
             var filtered = artifacts.AsEnumerable();
+
+            // Filter by Session ID
+            if (!string.IsNullOrEmpty(sessionId))
+            {
+                filtered = filtered.Where(a => a.SessionId.Value == sessionId);
+            }
 
             // Filter by PID
             if (pid.HasValue && pid.Value > 0)

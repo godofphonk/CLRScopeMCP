@@ -1,4 +1,5 @@
-using ClrScope.Mcp.Services;
+using ClrScope.Mcp.Services.Collect;
+using ClrScope.Mcp.Services.Runtime;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
@@ -7,7 +8,6 @@ using System.Globalization;
 
 namespace ClrScope.Mcp.Tools.Workflows;
 
-// TODO: Workflow automation - re-enabled for testing
 [McpServerToolType]
 public sealed class WorkflowAutomationTools
 {

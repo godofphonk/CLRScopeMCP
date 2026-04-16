@@ -3,6 +3,7 @@ using ClrScope.Mcp.Domain.Sessions;
 using ClrScope.Mcp.Infrastructure;
 using ClrScope.Mcp.Options;
 using ClrScope.Mcp.Services;
+using ClrScope.Mcp.Services.Collect;
 using ClrScope.Mcp.Validation;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
