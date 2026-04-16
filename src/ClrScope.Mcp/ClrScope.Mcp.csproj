@@ -46,6 +46,11 @@
       <Pack>true</Pack>
       <PackagePath>\</PackagePath>
     </None>
+    <Content Include=".mcp\server.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Pack>true</Pack>
+      <PackagePath>.mcp\</PackagePath>
+    </Content>
   </ItemGroup>
 
 </Project>

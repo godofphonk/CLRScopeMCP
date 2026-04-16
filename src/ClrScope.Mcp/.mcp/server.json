@@ -1,0 +1,13 @@
+{
+  "name": "ClrScope.Mcp",
+  "version": "1.2.0",
+  "description": ".NET diagnostics MCP server for diagnosing .NET processes via EventPipe, memory dumps, and CLI tools",
+  "author": "godofphonk",
+  "license": "MIT",
+  "homepage": "https://github.com/godofphonk/CLRScopeMCP",
+  "repository": "https://github.com/godofphonk/CLRScopeMCP",
+  "runtime": "dotnet",
+  "command": "dnx",
+  "args": ["ClrScope.Mcp@1.2.0", "--yes"],
+  "env": {}
+}
