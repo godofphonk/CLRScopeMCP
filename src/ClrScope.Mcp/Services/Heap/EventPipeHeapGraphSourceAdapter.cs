@@ -39,8 +39,19 @@ public sealed class EventPipeHeapGraphSourceAdapter : IHeapGraphSourceAdapter
             Message = "Initializing MemoryGraph"
         });
 
-        var memoryGraph = new MemoryGraph(100000);
-        var dotNetHeapInfo = new DotNetHeapInfo();
+        MemoryGraph? memoryGraph = null;
+        DotNetHeapInfo? dotNetHeapInfo = null;
+
+        try
+        {
+            memoryGraph = new MemoryGraph(100000);
+            dotNetHeapInfo = new DotNetHeapInfo();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to initialize MemoryGraph or DotNetHeapInfo");
+            throw new InvalidOperationException("Failed to initialize MemoryGraph or DotNetHeapInfo", ex);
+        }
 
         progress?.Report(new HeapPreparationProgress
         {
@@ -85,16 +96,23 @@ public sealed class EventPipeHeapGraphSourceAdapter : IHeapGraphSourceAdapter
             Message = "Building envelope"
         });
 
-        var segments = dotNetHeapInfo.Segments.Select(s => new HeapSegmentInfo
+        if (memoryGraph == null || dotNetHeapInfo == null)
         {
-            Start = s.Start,
-            End = s.End,
-            Gen0End = s.Gen0End,
-            Gen1End = s.Gen1End,
-            Gen2End = s.Gen2End,
-            Gen3End = s.Gen3End,
-            Gen4End = s.Gen4End
-        }).ToList();
+            throw new InvalidOperationException("MemoryGraph or DotNetHeapInfo is null after parsing");
+        }
+
+        var segments = dotNetHeapInfo.Segments != null
+            ? dotNetHeapInfo.Segments.Select(s => new HeapSegmentInfo
+            {
+                Start = s.Start,
+                End = s.End,
+                Gen0End = s.Gen0End,
+                Gen1End = s.Gen1End,
+                Gen2End = s.Gen2End,
+                Gen3End = s.Gen3End,
+                Gen4End = s.Gen4End
+            }).ToList()
+            : new List<HeapSegmentInfo>();
 
         return new MemoryGraphEnvelope
         {

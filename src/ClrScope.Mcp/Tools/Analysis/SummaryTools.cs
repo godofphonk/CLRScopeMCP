@@ -1848,7 +1848,17 @@ private static string TruncateCallSite(string callSite, int maxLength)
 
             var envelope = await eventPipeAdapter.ReadAsync(artifact.FilePath, cancellationToken, null);
 
+            if (envelope == null || envelope.MemoryGraph == null)
+            {
+                return VisualizationResult.Failure("Failed to read EventPipe heap graph - MemoryGraph is null");
+            }
+
             var snapshot = mapper.Map(artifact, envelope, facade);
+
+            if (snapshot == null)
+            {
+                return VisualizationResult.Failure("Failed to map MemoryGraph to HeapSnapshotData");
+            }
 
             var viewKind = view.ToLowerInvariant() switch
             {
