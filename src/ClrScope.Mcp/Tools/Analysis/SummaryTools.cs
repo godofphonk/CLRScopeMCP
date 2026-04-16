@@ -1759,7 +1759,10 @@ private static string TruncateCallSite(string callSite, int maxLength)
         return $"{size:0.##} {sizes[order]}";
     }
 
-    [McpServerTool(Name = "visualize_nettrace_heap"), Description("Visualize a .nettrace EventPipe heap snapshot. For partial heap data (common), only type_distribution is supported. For full heap graph, all views are supported.")]
+    // TODO: Re-enable after fixing MemoryGraph traversal NullReferenceException issues
+    // The vendored EventPipeDotNetHeapDumper library has issues constructing MemoryGraph from EventPipe events
+    // For now, use .gcdump files instead: mcp1_collect_gcdump + mcp1_visualize_heap_snapshot
+    // [McpServerTool(Name = "visualize_nettrace_heap"), Description("Visualize a .nettrace EventPipe heap snapshot. For partial heap data (common), only type_distribution is supported. For full heap graph, all views are supported.")]
     public static async Task<VisualizationResult> VisualizeNettraceHeap(
         string artifactId,
         McpServer server,
