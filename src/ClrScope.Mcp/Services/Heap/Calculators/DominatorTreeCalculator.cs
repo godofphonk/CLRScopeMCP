@@ -78,19 +78,30 @@ public sealed class DominatorTreeCalculator
         adjacencyList[SuperRootNodeId] = new List<long>();
 
         // Add edges from super-root to all root nodes
-        foreach (var node in graph.Nodes.Values.Where(n => n.IsRoot))
+        var rootNodes = graph.Nodes.Values.Where(n => n.IsRoot).ToList();
+        foreach (var node in rootNodes)
         {
             adjacencyList[SuperRootNodeId].Add(node.NodeId);
         }
 
         // Build original adjacency list from edges
+        var weakEdgeCount = 0;
+        int filteredEdges = 0;
         foreach (var edge in graph.Edges)
         {
+            // Filter dangling references (toNodeId not in adjacencyList)
+            if (!adjacencyList.ContainsKey(edge.ToNodeId))
+            {
+                filteredEdges++;
+                continue;
+            }
+
             if (!adjacencyList.ContainsKey(edge.FromNodeId))
             {
                 adjacencyList[edge.FromNodeId] = new List<long>();
             }
             adjacencyList[edge.FromNodeId].Add(edge.ToNodeId);
+            if (edge.IsWeak) weakEdgeCount++;
         }
 
         return adjacencyList;
@@ -326,31 +337,54 @@ public sealed class DominatorTreeCalculator
             }
         }
 
-        // Post-order traversal (bottom-up) to aggregate retained size
-        void PostOrderAggregate(long nodeId, HashSet<long> visited)
-        {
-            if (visited.Contains(nodeId)) return;
-            visited.Add(nodeId);
-
-            if (!nodes.ContainsKey(nodeId)) return;
-
-            var node = nodes[nodeId];
-            node.RetainedSizeBytes = node.ShallowSizeBytes;
-
-            foreach (var childId in children.GetValueOrDefault(nodeId, new List<long>()))
-            {
-                PostOrderAggregate(childId, visited);
-                if (nodes.ContainsKey(childId))
-                {
-                    node.RetainedSizeBytes += nodes[childId].RetainedSizeBytes;
-                }
-            }
-        }
-
+        // Post-order traversal (bottom-up) to aggregate retained size - iterative to prevent StackOverflow
         var visited = new HashSet<long>();
         foreach (var nodeId in nodes.Keys)
         {
-            PostOrderAggregate(nodeId, visited);
+            if (visited.Contains(nodeId)) continue;
+
+            // Iterative post-order DFS using explicit stack
+            var stack = new Stack<(long node, int state)>();
+            stack.Push((nodeId, 0)); // state 0 = visit children, state 1 = aggregate
+
+            while (stack.Count > 0)
+            {
+                var (currentNode, state) = stack.Pop();
+
+                if (state == 0)
+                {
+                    if (visited.Contains(currentNode)) continue;
+                    visited.Add(currentNode);
+
+                    if (!nodes.ContainsKey(currentNode)) continue;
+
+                    // Push aggregation phase
+                    stack.Push((currentNode, 1));
+
+                    // Push children in reverse order to process them in order
+                    var childList = children.GetValueOrDefault(currentNode, new List<long>());
+                    for (int i = childList.Count - 1; i >= 0; i--)
+                    {
+                        stack.Push((childList[i], 0));
+                    }
+                }
+                else
+                {
+                    // Aggregation phase
+                    if (!nodes.ContainsKey(currentNode)) continue;
+
+                    var node = nodes[currentNode];
+                    node.RetainedSizeBytes = node.ShallowSizeBytes;
+
+                    foreach (var childId in children.GetValueOrDefault(currentNode, new List<long>()))
+                    {
+                        if (nodes.ContainsKey(childId))
+                        {
+                            node.RetainedSizeBytes += nodes[childId].RetainedSizeBytes;
+                        }
+                    }
+                }
+            }
         }
     }
 

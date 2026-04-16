@@ -94,14 +94,17 @@ class Program
             for (NodeIndex idx = 0; (long)idx < (long)graph.NodeIndexLimit; idx++)
             {
                 var node = graph.GetNode(idx, nodeStorage);
+                var nodeType = graph.GetType(node.TypeIndex, typeStorage);
+
+                // Include ALL nodes in graph, even size=0 (category nodes for connectivity)
                 if (node.Size == 0)
                 {
                     nodesWithoutSize++;
-                    continue;
                 }
-
-                nodesWithSize++;
-                var nodeType = graph.GetType(node.TypeIndex, typeStorage);
+                else
+                {
+                    nodesWithSize++;
+                }
 
                 nodes[(long)idx] = new MemoryNodeData
                 {
@@ -125,51 +128,35 @@ class Program
                 var node = graph.GetNode(idx, nodeStorage);
                 var fromNodeId = (long)idx;
 
-                // Only if fromNode exists in nodes
-                if (!nodes.ContainsKey(fromNodeId))
-                    continue;
-
+                // Build edges for ALL nodes (including size=0 category nodes)
                 for (NodeIndex childIdx = node.GetFirstChildIndex();
                      childIdx != NodeIndex.Invalid;
                      childIdx = node.GetNextChildIndex())
                 {
-                    // Only if toNode exists in nodes
-                    if (nodes.ContainsKey((long)childIdx))
+                    edges.Add(new MemoryEdgeData
                     {
-                        edges.Add(new MemoryEdgeData
-                        {
-                            FromNodeId = fromNodeId,
-                            ToNodeId = (long)childIdx,
-                            EdgeKind = "reference",
-                            IsWeak = false
-                        });
-                    }
+                        FromNodeId = fromNodeId,
+                        ToNodeId = (long)childIdx,
+                        EdgeKind = "reference",
+                        IsWeak = false
+                    });
                 }
             }
 
-            var rootNode = graph.GetNode(graph.RootIndex, nodeStorage);
-            for (NodeIndex childIdx = rootNode.GetFirstChildIndex();
-                 childIdx != NodeIndex.Invalid;
-                 childIdx = rootNode.GetNextChildIndex())
+            // Mark graph.RootIndex as the single root node
+            var rootIndex = (long)graph.RootIndex;
+            if (nodes.ContainsKey(rootIndex))
             {
-                var childNode = graph.GetNode(childIdx, nodeStorage);
-                var childType = graph.GetType(childNode.TypeIndex, typeStorage);
-
-                string rootKind = MapTypeNameToRootKind(childType.Name);
+                nodes[rootIndex].IsRoot = true;
+                nodes[rootIndex].RootKind = "GCRoot";
 
                 roots.Add(new RootGroupData
                 {
-                    RootKind = rootKind,
+                    RootKind = "GCRoot",
                     RootCount = 1,
                     ReachableBytes = 0,
                     RetainedBytes = 0
                 });
-
-                if (nodes.TryGetValue((long)childIdx, out var nodeData))
-                {
-                    nodeData.IsRoot = true;
-                    nodeData.RootKind = rootKind;
-                }
             }
 
             return new HeapGraphData

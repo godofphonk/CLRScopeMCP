@@ -332,4 +332,73 @@ public class DominatorTreeCalculatorTests
         // Should not find any path because only weak edge connects to B
         Assert.Empty(paths);
     }
+
+    [Fact]
+    public void IsolatedRootNodes_WithoutConnectivity_RetainedSizeEqualsShallowSize()
+    {
+        // Graph: Root1 (isolated, no edges), A -> B -> C
+        // This simulates the gcdump issue where root nodes have no outgoing edges
+        // Expected: All nodes have retained = shallow (no dominator tree connectivity)
+
+        var graph = new HeapGraphData
+        {
+            Nodes = new Dictionary<long, MemoryNodeData>
+            {
+                [1] = new MemoryNodeData { NodeId = 1, TypeName = "Root1", Namespace = "Test", AssemblyName = "TestAssembly", ShallowSizeBytes = 0, RetainedSizeBytes = 0, Count = 1, Generation = "0", IsRoot = true, RootKind = "Static" },
+                [2] = new MemoryNodeData { NodeId = 2, TypeName = "A", Namespace = "Test", AssemblyName = "TestAssembly", ShallowSizeBytes = 100, RetainedSizeBytes = 0, Count = 1, Generation = "0", IsRoot = false },
+                [3] = new MemoryNodeData { NodeId = 3, TypeName = "B", Namespace = "Test", AssemblyName = "TestAssembly", ShallowSizeBytes = 100, RetainedSizeBytes = 0, Count = 1, Generation = "0", IsRoot = false },
+                [4] = new MemoryNodeData { NodeId = 4, TypeName = "C", Namespace = "Test", AssemblyName = "TestAssembly", ShallowSizeBytes = 100, RetainedSizeBytes = 0, Count = 1, Generation = "0", IsRoot = false }
+            },
+            Edges = new List<MemoryEdgeData>
+            {
+                // Root1 has no outgoing edges (simulating gcdump structure)
+                new MemoryEdgeData { FromNodeId = 2, ToNodeId = 3, EdgeKind = "Reference", IsWeak = false },
+                new MemoryEdgeData { FromNodeId = 3, ToNodeId = 4, EdgeKind = "Reference", IsWeak = false }
+            },
+            Roots = new List<RootGroupData>()
+        };
+
+        _calculator.CalculateRetainedSize(graph);
+
+        // With isolated root, A/B/C are unreachable from super-root
+        // They should have retained = shallow
+        Assert.Equal(0, graph.Nodes[1].RetainedSizeBytes); // Root1 has size=0
+        Assert.Equal(100, graph.Nodes[2].RetainedSizeBytes); // A retains only itself
+        Assert.Equal(100, graph.Nodes[3].RetainedSizeBytes); // B retains only itself
+        Assert.Equal(100, graph.Nodes[4].RetainedSizeBytes); // C retains only itself
+    }
+
+    [Fact]
+    public void IsolatedRootNodes_WithConnectivity_RetainedSizeCorrect()
+    {
+        // Graph: Root1 -> A -> B -> C
+        // Root1 has outgoing edges (proper connectivity)
+        // Expected: Dominator tree works correctly
+
+        var graph = new HeapGraphData
+        {
+            Nodes = new Dictionary<long, MemoryNodeData>
+            {
+                [1] = new MemoryNodeData { NodeId = 1, TypeName = "Root1", Namespace = "Test", AssemblyName = "TestAssembly", ShallowSizeBytes = 0, RetainedSizeBytes = 0, Count = 1, Generation = "0", IsRoot = true, RootKind = "Static" },
+                [2] = new MemoryNodeData { NodeId = 2, TypeName = "A", Namespace = "Test", AssemblyName = "TestAssembly", ShallowSizeBytes = 100, RetainedSizeBytes = 0, Count = 1, Generation = "0", IsRoot = false },
+                [3] = new MemoryNodeData { NodeId = 3, TypeName = "B", Namespace = "Test", AssemblyName = "TestAssembly", ShallowSizeBytes = 100, RetainedSizeBytes = 0, Count = 1, Generation = "0", IsRoot = false },
+                [4] = new MemoryNodeData { NodeId = 4, TypeName = "C", Namespace = "Test", AssemblyName = "TestAssembly", ShallowSizeBytes = 100, RetainedSizeBytes = 0, Count = 1, Generation = "0", IsRoot = false }
+            },
+            Edges = new List<MemoryEdgeData>
+            {
+                new MemoryEdgeData { FromNodeId = 1, ToNodeId = 2, EdgeKind = "Reference", IsWeak = false },
+                new MemoryEdgeData { FromNodeId = 2, ToNodeId = 3, EdgeKind = "Reference", IsWeak = false },
+                new MemoryEdgeData { FromNodeId = 3, ToNodeId = 4, EdgeKind = "Reference", IsWeak = false }
+            },
+            Roots = new List<RootGroupData>()
+        };
+
+        _calculator.CalculateRetainedSize(graph);
+
+        // With proper connectivity, dominator tree should work
+        Assert.Equal(300, graph.Nodes[1].RetainedSizeBytes); // Root1 retains A+B+C (size=0 but dominates others)
+        Assert.Equal(300, graph.Nodes[2].RetainedSizeBytes); // A retains B+C+A
+        Assert.Equal(200, graph.Nodes[3].RetainedSizeBytes); // B retains C+B
+        Assert.Equal(100, graph.Nodes[4].RetainedSizeBytes); // C retains only itself
+    }
 }
