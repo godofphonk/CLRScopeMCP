@@ -36,7 +36,7 @@ public sealed class HeapSnapshotCache : IHeapSnapshotCache
 
     public void Set(string cacheKey, HeapSnapshotData snapshot)
     {
-        _cache.TryAdd(cacheKey, snapshot);
+        _cache[cacheKey] = snapshot;
     }
 
     public void Clear()
