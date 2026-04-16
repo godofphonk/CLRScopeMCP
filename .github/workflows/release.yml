@@ -101,8 +101,6 @@ jobs:
 
   publish-nuget:
     needs: [build-nuget]
-    permissions:
-      id-token: write
     runs-on: ubuntu-latest
     steps:
       - name: Download artifact
@@ -116,10 +114,5 @@ jobs:
         with:
           dotnet-version: '10.0.100'
 
-      - name: Login to NuGet with trusted publishing
-        uses: NuGet/login@v1
-        with:
-          audience: https://nuget.org
-
       - name: Publish to NuGet
-        run: dotnet nuget push artifacts/*.nupkg --source https://api.nuget.org/v3/index.json --skip-duplicate
+        run: dotnet nuget push artifacts/*.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }} --skip-duplicate
