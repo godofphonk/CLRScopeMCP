@@ -1,6 +1,7 @@
 using ClrScope.Mcp.Infrastructure;
 using ClrScope.Mcp.Options;
 using ClrScope.Mcp.Services;
+using ClrScope.Mcp.Services.Health;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;

@@ -125,17 +125,25 @@ class Program
                 var node = graph.GetNode(idx, nodeStorage);
                 var fromNodeId = (long)idx;
 
+                // Only if fromNode exists in nodes
+                if (!nodes.ContainsKey(fromNodeId))
+                    continue;
+
                 for (NodeIndex childIdx = node.GetFirstChildIndex();
                      childIdx != NodeIndex.Invalid;
                      childIdx = node.GetNextChildIndex())
                 {
-                    edges.Add(new MemoryEdgeData
+                    // Only if toNode exists in nodes
+                    if (nodes.ContainsKey((long)childIdx))
                     {
-                        FromNodeId = fromNodeId,
-                        ToNodeId = (long)childIdx,
-                        EdgeKind = "reference",
-                        IsWeak = false
-                    });
+                        edges.Add(new MemoryEdgeData
+                        {
+                            FromNodeId = fromNodeId,
+                            ToNodeId = (long)childIdx,
+                            EdgeKind = "reference",
+                            IsWeak = false
+                        });
+                    }
                 }
             }
 

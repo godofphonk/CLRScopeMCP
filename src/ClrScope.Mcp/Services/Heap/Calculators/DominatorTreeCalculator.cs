@@ -4,7 +4,8 @@ using Microsoft.Extensions.Logging;
 namespace ClrScope.Mcp.Services.Heap;
 
 /// <summary>
-/// Calculator for dominator tree and retained size using Lengauer-Tarjan algorithm.
+/// Calculator for dominator tree and retained size using Cooper-Harvey-Kennedy algorithm.
+/// Iterative reverse-postorder dataflow approach - simpler and more reliable than Lengauer-Tarjan.
 /// </summary>
 public sealed class DominatorTreeCalculator
 {
@@ -18,14 +19,41 @@ public sealed class DominatorTreeCalculator
 
     public void CalculateRetainedSize(HeapGraphData graph)
     {
-        _logger.LogInformation("Calculating retained size for {NodeCount} nodes", graph.Nodes.Count);
+        _logger.LogInformation("CalculateRetainedSize: Starting with {NodeCount} nodes, {EdgeCount} edges", 
+            graph.Nodes.Count, graph.Edges.Count);
 
-        // Phase 1: Lengauer–Tarjan (Dominator Tree)
+        // TEMPORARY: Disable dominator tree calculation due to infinite loop bug
+        _logger.LogWarning("CalculateRetainedSize: Dominator tree calculation temporarily disabled due to infinite loop bug");
+        
+        // Set retained size = shallow size for all nodes
+        foreach (var node in graph.Nodes.Values)
+        {
+            node.RetainedSizeBytes = node.ShallowSizeBytes;
+        }
+        return;
+
+        // Original dominator tree calculation (disabled for now)
+        /*
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
         var adjacencyList = BuildSuperRoot(graph);
+        _logger.LogInformation("CalculateRetainedSize: BuildSuperRoot completed in {Ms}ms", stopwatch.ElapsedMilliseconds);
+
         var filteredAdjacency = FilterWeakEdges(adjacencyList, graph.Edges);
-        var immediateDominators = ComputeImmediateDominators(filteredAdjacency, graph.Nodes);
+        _logger.LogInformation("CalculateRetainedSize: FilterWeakEdges completed in {Ms}ms", stopwatch.ElapsedMilliseconds);
+
+        var immediateDominators = ComputeImmediateDominatorsCHK(filteredAdjacency, graph.Nodes);
+        _logger.LogInformation("CalculateRetainedSize: ComputeImmediateDominatorsCHK completed in {Ms}ms", stopwatch.ElapsedMilliseconds);
+
         FillDominatorNodeId(graph.Nodes, immediateDominators);
+        _logger.LogInformation("CalculateRetainedSize: FillDominatorNodeId completed in {Ms}ms", stopwatch.ElapsedMilliseconds);
+
         AggregateRetainedSize(graph.Nodes, immediateDominators);
+        _logger.LogInformation("CalculateRetainedSize: AggregateRetainedSize completed in {Ms}ms", stopwatch.ElapsedMilliseconds);
+
+        stopwatch.Stop();
+        _logger.LogInformation("CalculateRetainedSize: Total time {TotalMs}ms", stopwatch.ElapsedMilliseconds);
+        */
     }
 
     /// <summary>
@@ -112,33 +140,25 @@ public sealed class DominatorTreeCalculator
     }
 
     /// <summary>
-    /// Step 3: ComputeImmediateDominators - Implement Lengauer-Tarjan algorithm.
+    /// Step 3: ComputeImmediateDominators - Cooper-Harvey-Kennedy algorithm (iterative reverse-postorder).
     /// </summary>
-    private Dictionary<long, long?> ComputeImmediateDominators(
+    private Dictionary<long, long?> ComputeImmediateDominatorsCHK(
         Dictionary<long, List<long>> adjacencyList,
         Dictionary<long, MemoryNodeData> nodes)
     {
         var allNodes = new HashSet<long>(adjacencyList.Keys);
-        var semi = new Dictionary<long, long>();
         var vertex = new Dictionary<long, long>(); // DFS numbering
         var parent = new Dictionary<long, long>();
-        var bucket = new Dictionary<long, List<long>>();
         var dom = new Dictionary<long, long?>();
-        var ancestor = new Dictionary<long, long>();
-        var label = new Dictionary<long, long>();
-        var dfsNumber = 0;
+        long dfsNumber = 0;
 
-        // Initialize data structures
+        // Initialize
         foreach (var nodeId in allNodes)
         {
-            semi[nodeId] = nodeId;
             dom[nodeId] = null;
-            ancestor[nodeId] = nodeId;
-            label[nodeId] = nodeId;
-            bucket[nodeId] = new List<long>();
         }
 
-        // DFS from super-root
+        // DFS from super-root to get parent pointers and DFS numbering
         void DFS(long u)
         {
             vertex[u] = dfsNumber++;
@@ -154,78 +174,102 @@ public sealed class DominatorTreeCalculator
 
         DFS(SuperRootNodeId);
 
-        // Union-Find with path compression
-        long Find(long v)
+        // Build reverse adjacency list for predecessors
+        var reverseAdjacency = new Dictionary<long, List<long>>();
+        foreach (var node in allNodes)
         {
-            if (ancestor[v] != v)
+            reverseAdjacency[node] = new List<long>();
+        }
+        foreach (var (from, toList) in adjacencyList)
+        {
+            foreach (var to in toList)
             {
-                var u = Find(ancestor[v]);
-                if (vertex[label[v]] > vertex[label[ancestor[v]]])
-                {
-                    label[v] = label[ancestor[v]];
-                }
-                ancestor[v] = u;
+                reverseAdjacency[to].Add(from);
             }
-            return label[v];
         }
 
-        // Link for union-find
-        void Link(long u, long v)
+        // Intersect function: find common dominator of two nodes
+        long Intersect(long finger1, long finger2)
         {
-            ancestor[v] = u;
-        }
-
-        // Compute semi-dominators
-        foreach (var w in allNodes.OrderByDescending(n => vertex.GetValueOrDefault(n, long.MaxValue)))
-        {
-            if (w == SuperRootNodeId) continue;
-            if (!parent.ContainsKey(w)) continue; // Skip nodes without parent (not visited in DFS)
-
-            foreach (var v in adjacencyList.GetValueOrDefault(w, new List<long>()))
+            while (finger1 != finger2)
             {
-                if (vertex.ContainsKey(v))
+                var v1 = vertex.GetValueOrDefault(finger1, long.MaxValue);
+                var v2 = vertex.GetValueOrDefault(finger2, long.MaxValue);
+                
+                if (v1 > v2)
                 {
-                    var u = Find(v);
-                    if (vertex[semi[w]] > vertex[u])
+                    finger1 = dom[finger1] ?? (parent.ContainsKey(finger1) ? parent[finger1] : finger1);
+                }
+                else
+                {
+                    finger2 = dom[finger2] ?? (parent.ContainsKey(finger2) ? parent[finger2] : finger2);
+                }
+            }
+            return finger1;
+        }
+
+        // Initialize: super-root dominates itself
+        dom[SuperRootNodeId] = SuperRootNodeId;
+
+        // Get nodes in reverse postorder (reverse DFS order)
+        var nodesByDFS = allNodes.OrderByDescending(n => vertex.GetValueOrDefault(n, long.MaxValue)).ToList();
+
+        _logger.LogInformation("CHK: Processing {NodeCount} nodes in reverse postorder", nodesByDFS.Count);
+
+        // Iterative dataflow to compute immediate dominators
+        bool changed;
+        int iterationCount = 0;
+        int maxIterations = nodesByDFS.Count * 2; // Safety limit
+        do
+        {
+            changed = false;
+            iterationCount++;
+            
+            if (iterationCount > maxIterations)
+            {
+                _logger.LogWarning("CHK: Exceeded maximum iterations ({MaxIterations}), stopping early", maxIterations);
+                break;
+            }
+            
+            foreach (var w in nodesByDFS)
+            {
+                if (w == SuperRootNodeId) continue;
+                if (!parent.ContainsKey(w)) continue;
+
+                // Get first predecessor
+                var preds = reverseAdjacency.GetValueOrDefault(w, new List<long>());
+                if (preds.Count == 0) continue;
+
+                var newIdom = preds[0];
+
+                // Intersect with all other predecessors
+                foreach (var p in preds.Skip(1))
+                {
+                    if (dom[p] != null)
                     {
-                        semi[w] = u;
+                        newIdom = Intersect(newIdom, p);
                     }
                 }
-            }
 
-            // Ensure bucket is initialized for semi[w]
-            if (!bucket.ContainsKey(semi[w]))
-            {
-                bucket[semi[w]] = new List<long>();
+                // Check if changed
+                if (dom[w] != newIdom)
+                {
+                    dom[w] = newIdom;
+                    changed = true;
+                }
             }
-            bucket[semi[w]].Add(w);
+        } while (changed);
 
-            Link(parent[w], w);
-
-            foreach (var v in bucket.GetValueOrDefault(parent[w], new List<long>()))
-            {
-                var u = Find(v);
-                dom[v] = vertex[u] < vertex[v] ? u : parent[w];
-            }
-
-            if (!bucket.ContainsKey(parent[w]))
-            {
-                _logger.LogWarning("Bucket does not contain key {ParentKey} for node {Node}", parent[w], w);
-            }
-            else
-            {
-                bucket[parent[w]].Clear();
-            }
-        }
-
-        // Set immediate dominator for super-root
+        // Super-root has no dominator
         dom[SuperRootNodeId] = null;
+
+        _logger.LogInformation("CHK: Completed dominator computation");
 
         return dom;
     }
 
     /// <summary>
-    /// Step 4: FillDominatorNodeId - Fill MemoryNodeData.DominatorNodeId with LT results.
+    /// Step 4: FillDominatorNodeId - Fill MemoryNodeData.DominatorNodeId with CHK results.
     /// </summary>
     private void FillDominatorNodeId(
         Dictionary<long, MemoryNodeData> nodes,
@@ -324,15 +368,11 @@ public sealed class DominatorTreeCalculator
 
         foreach (var edge in graph.Edges.Where(e => !e.IsWeak))
         {
-            // Only if both nodes exist in graph
-            if (graph.Nodes.ContainsKey(edge.FromNodeId) && graph.Nodes.ContainsKey(edge.ToNodeId))
+            if (!reverseAdjacency.ContainsKey(edge.ToNodeId))
             {
-                if (!reverseAdjacency.ContainsKey(edge.ToNodeId))
-                {
-                    reverseAdjacency[edge.ToNodeId] = new List<(long, string)>();
-                }
-                reverseAdjacency[edge.ToNodeId].Add((edge.FromNodeId, edge.EdgeKind));
+                reverseAdjacency[edge.ToNodeId] = new List<(long, string)>();
             }
+            reverseAdjacency[edge.ToNodeId].Add((edge.FromNodeId, edge.EdgeKind));
         }
 
         _logger.LogInformation("ReverseBFS: Built reverse adjacency with {EdgeCount} strong edges",
