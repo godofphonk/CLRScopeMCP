@@ -26,11 +26,19 @@ public sealed class GcDumpGraphAdapter : IGcDumpGraphAdapter
         {
             try
             {
+                cancellationToken.ThrowIfCancellationRequested();
+                
                 _logger.LogInformation("Step 1: Creating GCHeapDump from file");
                 var gcHeapDump = new GCHeapDump(gcdumpPath);
+                
+                cancellationToken.ThrowIfCancellationRequested();
+                
                 _logger.LogInformation("Step 2: GCHeapDump created successfully");
                 _logger.LogInformation("Step 3: Starting conversion to HeapGraphData");
-                var result = ConvertToHeapGraphData(gcHeapDump);
+                var result = ConvertToHeapGraphData(gcHeapDump, cancellationToken);
+                
+                cancellationToken.ThrowIfCancellationRequested();
+                
                 _logger.LogInformation("Step 4: Conversion completed successfully");
                 return result;
             }
@@ -48,13 +56,16 @@ public sealed class GcDumpGraphAdapter : IGcDumpGraphAdapter
 
         return await Task.Run(() =>
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var gcHeapDump = new GCHeapDump(gcdumpStream, "stream");
-            return ConvertToHeapGraphData(gcHeapDump);
+            return ConvertToHeapGraphData(gcHeapDump, cancellationToken);
         }, cancellationToken);
     }
 
-    private HeapGraphData ConvertToHeapGraphData(GCHeapDump gcHeapDump)
+    private HeapGraphData ConvertToHeapGraphData(GCHeapDump gcHeapDump, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        
         _logger.LogInformation("Step 3.1: Getting MemoryGraph from GCHeapDump");
         var graph = gcHeapDump.MemoryGraph;
         _logger.LogInformation("Step 3.2: MemoryGraph obtained, NodeIndexLimit: {NodeIndexLimit}", graph.NodeIndexLimit);
@@ -74,6 +85,8 @@ public sealed class GcDumpGraphAdapter : IGcDumpGraphAdapter
         _logger.LogInformation("Step 3.4: Starting node iteration");
         for (NodeIndex idx = 0; (long)idx < (long)graph.NodeIndexLimit; idx++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            
             nodesTotal++;
             var node = graph.GetNode(idx, nodeStorage);
             if (node.Size == 0)
@@ -105,9 +118,13 @@ public sealed class GcDumpGraphAdapter : IGcDumpGraphAdapter
         _logger.LogInformation("Step 3.5: Node iteration completed. Total: {Total}, WithSize: {WithSize}, WithoutSize: {WithoutSize}",
             nodesTotal, nodesWithSize, nodesWithoutSize);
 
+        cancellationToken.ThrowIfCancellationRequested();
+        
         _logger.LogInformation("Step 3.6: Starting edge iteration");
         for (NodeIndex idx = 0; (long)idx < (long)graph.NodeIndexLimit; idx++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            
             var node = graph.GetNode(idx, nodeStorage);
             var fromNodeId = (long)idx;
 
@@ -126,12 +143,16 @@ public sealed class GcDumpGraphAdapter : IGcDumpGraphAdapter
         }
         _logger.LogInformation("Step 3.7: Edge iteration completed, {EdgeCount} edges", edges.Count);
 
+        cancellationToken.ThrowIfCancellationRequested();
+        
         _logger.LogInformation("Step 3.8: Starting root iteration");
         var rootNode = graph.GetNode(graph.RootIndex, nodeStorage);
         for (NodeIndex childIdx = rootNode.GetFirstChildIndex();
              childIdx != NodeIndex.Invalid;
              childIdx = rootNode.GetNextChildIndex())
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            
             var childNode = graph.GetNode(childIdx, nodeStorage);
             var childType = graph.GetType(childNode.TypeIndex, typeStorage);
 

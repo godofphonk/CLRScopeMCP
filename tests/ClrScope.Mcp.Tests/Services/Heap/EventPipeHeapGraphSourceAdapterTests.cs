@@ -143,4 +143,29 @@ public class EventPipeHeapGraphSourceAdapterTests
         using var stream = File.OpenRead(nettracePath);
         Assert.NotNull(stream);
     }
+
+    [Fact]
+    public async Task ReadAsync_WithCancelledCancellationToken_ThrowsOperationCanceledException()
+    {
+        // Arrange
+        var nettracePath = "/home/gospodin/Desktop/homeProjects/CLRScopeMCP/test-data/test-data.nettrace";
+        var cts = new CancellationTokenSource();
+        cts.Cancel(); // Cancel immediately
+
+        // Act & Assert
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => _adapter.ReadAsync(nettracePath, cts.Token));
+    }
+
+    [Fact]
+    public async Task ReadAsync_WithShortTimeout_ThrowsOperationCanceledException()
+    {
+        // Arrange
+        var nettracePath = "/home/gospodin/Desktop/homeProjects/CLRScopeMCP/test-data/test-data.nettrace";
+        var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(1)); // Very short timeout
+
+        // Act & Assert
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => _adapter.ReadAsync(nettracePath, cts.Token));
+    }
 }

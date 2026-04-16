@@ -63,12 +63,16 @@ public sealed class EventPipeHeapGraphSourceAdapter : IHeapGraphSourceAdapter
 
         await Task.Run(() =>
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            
             using var logWriter = new StringWriter();
             var success = EventPipeDotNetHeapDumper.DumpFromEventPipeFile(
                 filePath,
                 memoryGraph,
                 logWriter,
                 dotNetHeapInfo);
+
+            cancellationToken.ThrowIfCancellationRequested();
 
             if (!success)
             {
@@ -78,6 +82,8 @@ public sealed class EventPipeHeapGraphSourceAdapter : IHeapGraphSourceAdapter
                     "Failed to parse EventPipe trace. The trace file may not contain GC heap events. " +
                     "Ensure the trace was collected with the gc-heap profile (e.g., dotnet-trace collect --providers Microsoft-Windows-DotNETRuntime:0xFFFFFFFFFFFFFFFF:5).");
             }
+
+            cancellationToken.ThrowIfCancellationRequested();
 
             // Check if graph has any nodes
             if (memoryGraph.NodeIndexLimit == 0)
