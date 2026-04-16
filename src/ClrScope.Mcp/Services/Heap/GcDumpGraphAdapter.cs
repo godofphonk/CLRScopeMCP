@@ -24,8 +24,21 @@ public sealed class GcDumpGraphAdapter : IGcDumpGraphAdapter
 
         return await Task.Run(() =>
         {
-            var gcHeapDump = new GCHeapDump(gcdumpPath);
-            return ConvertToHeapGraphData(gcHeapDump);
+            try
+            {
+                _logger.LogInformation("Step 1: Creating GCHeapDump from file");
+                var gcHeapDump = new GCHeapDump(gcdumpPath);
+                _logger.LogInformation("Step 2: GCHeapDump created successfully");
+                _logger.LogInformation("Step 3: Starting conversion to HeapGraphData");
+                var result = ConvertToHeapGraphData(gcHeapDump);
+                _logger.LogInformation("Step 4: Conversion completed successfully");
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to load heap graph from {GcDumpPath}", gcdumpPath);
+                throw;
+            }
         }, cancellationToken);
     }
 
@@ -42,21 +55,26 @@ public sealed class GcDumpGraphAdapter : IGcDumpGraphAdapter
 
     private HeapGraphData ConvertToHeapGraphData(GCHeapDump gcHeapDump)
     {
+        _logger.LogInformation("Step 3.1: Getting MemoryGraph from GCHeapDump");
         var graph = gcHeapDump.MemoryGraph;
+        _logger.LogInformation("Step 3.2: MemoryGraph obtained, NodeIndexLimit: {NodeIndexLimit}", graph.NodeIndexLimit);
+
         var nodes = new Dictionary<long, MemoryNodeData>();
         var edges = new List<MemoryEdgeData>();
         var roots = new List<RootGroupData>();
 
-        _logger.LogInformation("Graph NodeIndexLimit: {NodeIndexLimit}", graph.NodeIndexLimit);
-
+        _logger.LogInformation("Step 3.3: Allocating node and type storage");
         var nodeStorage = graph.AllocNodeStorage();
         var typeStorage = graph.AllocTypeNodeStorage();
 
         int nodesWithSize = 0;
         int nodesWithoutSize = 0;
+        int nodesTotal = 0;
 
+        _logger.LogInformation("Step 3.4: Starting node iteration");
         for (NodeIndex idx = 0; (long)idx < (long)graph.NodeIndexLimit; idx++)
         {
+            nodesTotal++;
             var node = graph.GetNode(idx, nodeStorage);
             if (node.Size == 0)
             {
@@ -84,6 +102,10 @@ public sealed class GcDumpGraphAdapter : IGcDumpGraphAdapter
             };
         }
 
+        _logger.LogInformation("Step 3.5: Node iteration completed. Total: {Total}, WithSize: {WithSize}, WithoutSize: {WithoutSize}",
+            nodesTotal, nodesWithSize, nodesWithoutSize);
+
+        _logger.LogInformation("Step 3.6: Starting edge iteration");
         for (NodeIndex idx = 0; (long)idx < (long)graph.NodeIndexLimit; idx++)
         {
             var node = graph.GetNode(idx, nodeStorage);
@@ -102,7 +124,9 @@ public sealed class GcDumpGraphAdapter : IGcDumpGraphAdapter
                 });
             }
         }
+        _logger.LogInformation("Step 3.7: Edge iteration completed, {EdgeCount} edges", edges.Count);
 
+        _logger.LogInformation("Step 3.8: Starting root iteration");
         var rootNode = graph.GetNode(graph.RootIndex, nodeStorage);
         for (NodeIndex childIdx = rootNode.GetFirstChildIndex();
              childIdx != NodeIndex.Invalid;
@@ -127,8 +151,9 @@ public sealed class GcDumpGraphAdapter : IGcDumpGraphAdapter
                 nodeData.RootKind = rootKind;
             }
         }
+        _logger.LogInformation("Step 3.9: Root iteration completed, {RootCount} roots", roots.Count);
 
-        _logger.LogInformation("Parsed {NodeCount} nodes with size, {NodesWithoutSize} nodes without size, {EdgeCount} edges, {RootCount} roots",
+        _logger.LogInformation("Step 3.10: Parsed {NodeCount} nodes with size, {NodesWithoutSize} nodes without size, {EdgeCount} edges, {RootCount} roots",
             nodesWithSize, nodesWithoutSize, edges.Count, roots.Count);
 
         return new HeapGraphData
