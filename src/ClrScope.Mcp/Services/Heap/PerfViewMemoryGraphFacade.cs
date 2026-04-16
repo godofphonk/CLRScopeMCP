@@ -32,6 +32,12 @@ public sealed class PerfViewMemoryGraphFacade : IMemoryGraphFacade
         for (NodeIndex idx = 0; (long)idx < (long)graph.NodeIndexLimit; idx++)
         {
             var node = graph.GetNode(idx, nodeStorage);
+            if (node == null)
+            {
+                _logger.LogWarning("PerfViewMemoryGraphFacade.GetNodes: node is null for NodeIndex {NodeIndex}", idx);
+                continue;
+            }
+
             if (node.Size == 0)
                 continue;
 
@@ -70,6 +76,12 @@ public sealed class PerfViewMemoryGraphFacade : IMemoryGraphFacade
         for (NodeIndex idx = 0; (long)idx < (long)graph.NodeIndexLimit; idx++)
         {
             var node = graph.GetNode(idx, nodeStorage);
+            if (node == null)
+            {
+                _logger.LogWarning("PerfViewMemoryGraphFacade.GetEdges: node is null for NodeIndex {NodeIndex}", idx);
+                continue;
+            }
+
             var fromNodeId = (long)idx;
 
             for (NodeIndex childIdx = node.GetFirstChildIndex();
