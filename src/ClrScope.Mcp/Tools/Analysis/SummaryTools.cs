@@ -1831,10 +1831,14 @@ private static string TruncateCallSite(string callSite, int maxLength)
         var facade = server.Services!.GetRequiredService<IMemoryGraphFacade>();
         var mapper = server.Services!.GetRequiredService<IHeapSnapshotMapper>();
 
+        // Add 30-second timeout to prevent hanging
+        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+
         try
         {
             logger.LogInformation("Step 1: Getting artifact {ArtifactId}", artifactId);
-            var artifact = await artifactStore.GetAsync(new ArtifactId(artifactId), cancellationToken);
+            var artifact = await artifactStore.GetAsync(new ArtifactId(artifactId), linkedCts.Token);
             if (artifact == null)
             {
                 return VisualizationResult.Failure($"Artifact not found: {artifactId}");
@@ -1848,7 +1852,7 @@ private static string TruncateCallSite(string callSite, int maxLength)
 
             logger.LogInformation("Step 3: Reading EventPipe heap graph from artifact {ArtifactId}", artifactId);
 
-            var envelope = await eventPipeAdapter.ReadAsync(artifact.FilePath, cancellationToken, null);
+            var envelope = await eventPipeAdapter.ReadAsync(artifact.FilePath, linkedCts.Token, null);
             logger.LogInformation("Step 4: EventPipeAdapter.ReadAsync completed, envelope is null: {IsNull}", envelope == null);
 
             if (envelope == null || envelope.MemoryGraph == null)
@@ -1901,7 +1905,7 @@ private static string TruncateCallSite(string callSite, int maxLength)
             {
                 logger.LogInformation("Step 8: Loading heap graph for retained flame");
                 var graphAdapter = server.Services!.GetRequiredService<IGcDumpGraphAdapter>();
-                var heapGraph = await graphAdapter.LoadGraphAsync(artifact.FilePath, cancellationToken);
+                var heapGraph = await graphAdapter.LoadGraphAsync(artifact.FilePath, linkedCts.Token);
                 logger.LogInformation("Step 9: Heap graph loaded");
                 var flameRenderer = new HeapRetainedFlameRenderer();
                 content = flameRenderer.RenderHtml(heapGraph, metricKind);
@@ -1914,6 +1918,16 @@ private static string TruncateCallSite(string callSite, int maxLength)
 
             logger.LogInformation("Step 10: Rendering completed successfully");
             return VisualizationResult.Success(content, format);
+        }
+        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+        {
+            logger.LogError("VisualizeNettraceHeap timed out after 30 seconds for artifact {ArtifactId}", artifactId);
+            return VisualizationResult.Failure("VisualizeNettraceHeap timed out after 30 seconds - the operation may be hanging");
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            logger.LogInformation("VisualizeNettraceHeap was cancelled for artifact {ArtifactId}", artifactId);
+            return VisualizationResult.Failure("VisualizeNettraceHeap was cancelled");
         }
         catch (Exception ex)
         {
@@ -1940,9 +1954,13 @@ private static string TruncateCallSite(string callSite, int maxLength)
         var logger = server.Services!.GetRequiredService<ILogger<SummaryTools>>();
         var preparer = server.Services!.GetRequiredService<IHeapSnapshotPreparer>();
 
+        // Add 30-second timeout to prevent hanging
+        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+
         try
         {
-            var artifact = await artifactStore.GetAsync(new ArtifactId(artifactId), cancellationToken);
+            var artifact = await artifactStore.GetAsync(new ArtifactId(artifactId), linkedCts.Token);
             if (artifact == null)
             {
                 return VisualizationResult.Failure($"Artifact not found: {artifactId}");
@@ -1993,7 +2011,7 @@ private static string TruncateCallSite(string callSite, int maxLength)
                     return VisualizationResult.Failure("baselineArtifactId is required for diff view");
                 }
 
-                var baselineArtifact = await artifactStore.GetAsync(new ArtifactId(baselineArtifactId), cancellationToken);
+                var baselineArtifact = await artifactStore.GetAsync(new ArtifactId(baselineArtifactId), linkedCts.Token);
                 if (baselineArtifact == null)
                 {
                     return VisualizationResult.Failure($"Baseline artifact not found: {baselineArtifactId}");
@@ -2020,8 +2038,8 @@ private static string TruncateCallSite(string callSite, int maxLength)
                     MaxTypes = maxTypes
                 };
 
-                var baselinePrepared = await preparer.PrepareAsync(baselineArtifact, baselineOptions, cancellationToken);
-                var targetPrepared = await preparer.PrepareAsync(artifact, targetOptions, cancellationToken);
+                var baselinePrepared = await preparer.PrepareAsync(baselineArtifact, baselineOptions, linkedCts.Token);
+                var targetPrepared = await preparer.PrepareAsync(artifact, targetOptions, linkedCts.Token);
 
                 var differLogger = server.Services!.GetRequiredService<ILogger<HeapSnapshotDiffer>>();
                 var differ = new HeapSnapshotDiffer(differLogger);
@@ -2044,7 +2062,7 @@ private static string TruncateCallSite(string callSite, int maxLength)
                 var graphAdapter = server.Services!.GetRequiredService<IGcDumpGraphAdapter>();
                 var retainerBuilder = server.Services!.GetRequiredService<HeapRetainerPathsBuilder>();
 
-                var graph = await graphAdapter.LoadGraphAsync(artifact.FilePath, cancellationToken);
+                var graph = await graphAdapter.LoadGraphAsync(artifact.FilePath, linkedCts.Token);
                 var paths = retainerBuilder.BuildRetainerPaths(graph, targetObjectId);
                 var pathsRenderer = new HeapRetainerPathsRenderer();
                 content = pathsRenderer.RenderHtml(paths);
@@ -2052,7 +2070,7 @@ private static string TruncateCallSite(string callSite, int maxLength)
             else if (viewKind == HeapViewKind.RetainedFlame)
             {
                 var graphAdapter = server.Services!.GetRequiredService<IGcDumpGraphAdapter>();
-                var graph = await graphAdapter.LoadGraphAsync(artifact.FilePath, cancellationToken);
+                var graph = await graphAdapter.LoadGraphAsync(artifact.FilePath, linkedCts.Token);
                 var flameRenderer = new HeapRetainedFlameRenderer();
                 content = flameRenderer.RenderHtml(graph, metricKind);
             }
@@ -2067,7 +2085,7 @@ private static string TruncateCallSite(string callSite, int maxLength)
                 };
 
                 logger.LogInformation("Preparing heap snapshot for artifact {ArtifactId}", artifactId);
-                var prepared = await preparer.PrepareAsync(artifact, options, cancellationToken);
+                var prepared = await preparer.PrepareAsync(artifact, options, linkedCts.Token);
 
                 // Include GcDumpGraphAdapter debug info for debugging
                 var debugInfo = new System.Text.StringBuilder();
@@ -2106,6 +2124,16 @@ private static string TruncateCallSite(string callSite, int maxLength)
             }
 
             return VisualizationResult.Success(content, format);
+        }
+        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+        {
+            logger.LogError("VisualizeHeapSnapshot timed out after 30 seconds for artifact {ArtifactId}", artifactId);
+            return VisualizationResult.Failure("VisualizeHeapSnapshot timed out after 30 seconds - the operation may be hanging");
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            logger.LogInformation("VisualizeHeapSnapshot was cancelled for artifact {ArtifactId}", artifactId);
+            return VisualizationResult.Failure("VisualizeHeapSnapshot was cancelled");
         }
         catch (Exception ex)
         {
