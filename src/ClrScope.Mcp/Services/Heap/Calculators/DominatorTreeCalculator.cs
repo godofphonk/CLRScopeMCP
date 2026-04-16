@@ -22,18 +22,6 @@ public sealed class DominatorTreeCalculator
         _logger.LogInformation("CalculateRetainedSize: Starting with {NodeCount} nodes, {EdgeCount} edges", 
             graph.Nodes.Count, graph.Edges.Count);
 
-        // TEMPORARY: Disable dominator tree calculation due to infinite loop bug
-        _logger.LogWarning("CalculateRetainedSize: Dominator tree calculation temporarily disabled due to infinite loop bug");
-        
-        // Set retained size = shallow size for all nodes
-        foreach (var node in graph.Nodes.Values)
-        {
-            node.RetainedSizeBytes = node.ShallowSizeBytes;
-        }
-        return;
-
-        // Original dominator tree calculation (disabled for now)
-        /*
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
         var adjacencyList = BuildSuperRoot(graph);
@@ -53,7 +41,6 @@ public sealed class DominatorTreeCalculator
 
         stopwatch.Stop();
         _logger.LogInformation("CalculateRetainedSize: Total time {TotalMs}ms", stopwatch.ElapsedMilliseconds);
-        */
     }
 
     /// <summary>
@@ -141,129 +128,161 @@ public sealed class DominatorTreeCalculator
 
     /// <summary>
     /// Step 3: ComputeImmediateDominators - Cooper-Harvey-Kennedy algorithm (iterative reverse-postorder).
+    /// Based on "A Simple, Fast Dominance Algorithm" by Cooper, Harvey, Kennedy (2001).
     /// </summary>
     private Dictionary<long, long?> ComputeImmediateDominatorsCHK(
         Dictionary<long, List<long>> adjacencyList,
         Dictionary<long, MemoryNodeData> nodes)
     {
-        var allNodes = new HashSet<long>(adjacencyList.Keys);
-        var vertex = new Dictionary<long, long>(); // DFS numbering
-        var parent = new Dictionary<long, long>();
-        var dom = new Dictionary<long, long?>();
-        long dfsNumber = 0;
+        // Step 3a: Postorder DFS numbering from super-root
+        var postorder = new Dictionary<long, long>();
+        var postorderList = new List<long>(); // nodes in postorder
+        var visited = new HashSet<long>();
+        long postNum = 0;
 
-        // Initialize
-        foreach (var nodeId in allNodes)
+        void PostorderDFS(long u)
         {
-            dom[nodeId] = null;
-        }
+            var stack = new Stack<(long node, int childIndex)>();
+            visited.Add(u);
+            stack.Push((u, 0));
 
-        // DFS from super-root to get parent pointers and DFS numbering
-        void DFS(long u)
-        {
-            vertex[u] = dfsNumber++;
-            foreach (var v in adjacencyList.GetValueOrDefault(u, new List<long>()))
+            while (stack.Count > 0)
             {
-                if (!vertex.ContainsKey(v))
+                var (node, childIdx) = stack.Pop();
+                var children = adjacencyList.GetValueOrDefault(node, new List<long>());
+
+                if (childIdx < children.Count)
                 {
-                    parent[v] = u;
-                    DFS(v);
+                    stack.Push((node, childIdx + 1));
+                    var child = children[childIdx];
+                    if (!visited.Contains(child))
+                    {
+                        visited.Add(child);
+                        stack.Push((child, 0));
+                    }
+                }
+                else
+                {
+                    postorder[node] = postNum++;
+                    postorderList.Add(node);
                 }
             }
         }
 
-        DFS(SuperRootNodeId);
+        PostorderDFS(SuperRootNodeId);
 
-        // Build reverse adjacency list for predecessors
+        _logger.LogInformation("CHK: DFS visited {VisitedCount} nodes out of {TotalCount} adjacency entries",
+            visited.Count, adjacencyList.Count);
+
+        // Build reverse adjacency list (predecessors) - only for visited nodes
         var reverseAdjacency = new Dictionary<long, List<long>>();
-        foreach (var node in allNodes)
+        foreach (var nodeId in visited)
         {
-            reverseAdjacency[node] = new List<long>();
+            reverseAdjacency[nodeId] = new List<long>();
         }
         foreach (var (from, toList) in adjacencyList)
         {
+            if (!visited.Contains(from)) continue;
             foreach (var to in toList)
             {
+                if (!visited.Contains(to)) continue;
                 reverseAdjacency[to].Add(from);
             }
         }
 
-        // Intersect function: find common dominator of two nodes
-        long Intersect(long finger1, long finger2)
+        // Initialize dom array
+        var dom = new Dictionary<long, long?>();
+        foreach (var nodeId in visited)
         {
-            while (finger1 != finger2)
+            dom[nodeId] = null;
+        }
+        dom[SuperRootNodeId] = SuperRootNodeId;
+
+        // Intersect function using postorder numbering
+        // Lower postorder number = further from root, walk UP to idom (higher number)
+        long Intersect(long b1, long b2)
+        {
+            var finger1 = b1;
+            var finger2 = b2;
+            int safety = visited.Count + 1;
+            while (finger1 != finger2 && safety-- > 0)
             {
-                var v1 = vertex.GetValueOrDefault(finger1, long.MaxValue);
-                var v2 = vertex.GetValueOrDefault(finger2, long.MaxValue);
-                
-                if (v1 > v2)
+                while (postorder[finger1] < postorder[finger2] && safety-- > 0)
                 {
-                    finger1 = dom[finger1] ?? (parent.ContainsKey(finger1) ? parent[finger1] : finger1);
+                    finger1 = dom[finger1]!.Value;
                 }
-                else
+                while (postorder[finger2] < postorder[finger1] && safety-- > 0)
                 {
-                    finger2 = dom[finger2] ?? (parent.ContainsKey(finger2) ? parent[finger2] : finger2);
+                    finger2 = dom[finger2]!.Value;
                 }
             }
             return finger1;
         }
 
-        // Initialize: super-root dominates itself
-        dom[SuperRootNodeId] = SuperRootNodeId;
+        // Process nodes in reverse postorder (highest postorder first, skip super-root)
+        var reversePostorder = new List<long>(postorderList);
+        reversePostorder.Reverse();
 
-        // Get nodes in reverse postorder (reverse DFS order)
-        var nodesByDFS = allNodes.OrderByDescending(n => vertex.GetValueOrDefault(n, long.MaxValue)).ToList();
+        _logger.LogInformation("CHK: Processing {NodeCount} nodes in reverse postorder", reversePostorder.Count);
 
-        _logger.LogInformation("CHK: Processing {NodeCount} nodes in reverse postorder", nodesByDFS.Count);
-
-        // Iterative dataflow to compute immediate dominators
         bool changed;
-        int iterationCount = 0;
-        int maxIterations = nodesByDFS.Count * 2; // Safety limit
+        int iteration = 0;
         do
         {
             changed = false;
-            iterationCount++;
-            
-            if (iterationCount > maxIterations)
-            {
-                _logger.LogWarning("CHK: Exceeded maximum iterations ({MaxIterations}), stopping early", maxIterations);
-                break;
-            }
-            
-            foreach (var w in nodesByDFS)
-            {
-                if (w == SuperRootNodeId) continue;
-                if (!parent.ContainsKey(w)) continue;
+            iteration++;
 
-                // Get first predecessor
-                var preds = reverseAdjacency.GetValueOrDefault(w, new List<long>());
+            foreach (var b in reversePostorder)
+            {
+                if (b == SuperRootNodeId) continue;
+
+                var preds = reverseAdjacency.GetValueOrDefault(b, new List<long>());
                 if (preds.Count == 0) continue;
 
-                var newIdom = preds[0];
-
-                // Intersect with all other predecessors
-                foreach (var p in preds.Skip(1))
+                // Pick first processed predecessor (one with dom != null)
+                long newIdom = -2; // sentinel
+                int startIdx = 0;
+                for (int i = 0; i < preds.Count; i++)
                 {
-                    if (dom[p] != null)
+                    if (dom[preds[i]] != null)
                     {
-                        newIdom = Intersect(newIdom, p);
+                        newIdom = preds[i];
+                        startIdx = i + 1;
+                        break;
+                    }
+                }
+                if (newIdom == -2) continue; // no processed predecessor yet
+
+                // Intersect with remaining processed predecessors
+                for (int i = startIdx; i < preds.Count; i++)
+                {
+                    if (dom[preds[i]] != null)
+                    {
+                        newIdom = Intersect(preds[i], newIdom);
                     }
                 }
 
-                // Check if changed
-                if (dom[w] != newIdom)
+                if (dom[b] != newIdom)
                 {
-                    dom[w] = newIdom;
+                    dom[b] = newIdom;
                     changed = true;
                 }
             }
         } while (changed);
 
-        // Super-root has no dominator
+        _logger.LogInformation("CHK: Completed dominator computation in {Iterations} iterations", iteration);
+
+        // Super-root has no dominator (clear it for external use)
         dom[SuperRootNodeId] = null;
 
-        _logger.LogInformation("CHK: Completed dominator computation");
+        // Also add entries for unreachable nodes
+        foreach (var nodeId in adjacencyList.Keys)
+        {
+            if (!dom.ContainsKey(nodeId))
+            {
+                dom[nodeId] = null;
+            }
+        }
 
         return dom;
     }
