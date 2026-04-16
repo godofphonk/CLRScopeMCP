@@ -36,6 +36,11 @@ public sealed class PerfViewMemoryGraphFacade : IMemoryGraphFacade
                 continue;
 
             var nodeType = graph.GetType(node.TypeIndex, typeStorage);
+            if (nodeType == null)
+            {
+                _logger.LogWarning("PerfViewMemoryGraphFacade.GetNodes: nodeType is null for NodeIndex {NodeIndex}", idx);
+                continue;
+            }
 
             nodes.Add(new GraphNodeRecord
             {
@@ -98,6 +103,11 @@ public sealed class PerfViewMemoryGraphFacade : IMemoryGraphFacade
 
         // MemoryGraph has a synthetic root at graph.RootIndex
         var rootNode = graph.GetNode(graph.RootIndex, nodeStorage);
+        if (rootNode == null)
+        {
+            _logger.LogWarning("PerfViewMemoryGraphFacade.GetRoots: rootNode is null");
+            return roots;
+        }
 
         // Iterate children of root to get root set
         for (NodeIndex childIdx = rootNode.GetFirstChildIndex();
@@ -105,7 +115,18 @@ public sealed class PerfViewMemoryGraphFacade : IMemoryGraphFacade
              childIdx = rootNode.GetNextChildIndex())
         {
             var childNode = graph.GetNode(childIdx, nodeStorage);
+            if (childNode == null)
+            {
+                _logger.LogWarning("PerfViewMemoryGraphFacade.GetRoots: childNode is null for NodeIndex {ChildIndex}", childIdx);
+                continue;
+            }
+
             var childType = graph.GetType(childNode.TypeIndex, typeStorage);
+            if (childType == null)
+            {
+                _logger.LogWarning("PerfViewMemoryGraphFacade.GetRoots: childType is null for NodeIndex {ChildIndex}", childIdx);
+                continue;
+            }
 
             // Determine root kind based on type name
             string rootKind = MapTypeNameToRootKind(childType.Name);

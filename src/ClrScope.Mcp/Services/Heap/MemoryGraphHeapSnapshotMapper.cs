@@ -36,9 +36,18 @@ public sealed class MemoryGraphHeapSnapshotMapper : IHeapSnapshotMapper
         ArgumentNullException.ThrowIfNull(envelope);
         ArgumentNullException.ThrowIfNull(facade);
 
-        var nodes = facade.GetNodes(envelope.MemoryGraph);
-        var edges = facade.GetEdges(envelope.MemoryGraph);
-        var roots = facade.GetRoots(envelope.MemoryGraph);
+        if (envelope.MemoryGraph == null)
+        {
+            _logger.LogError("MemoryGraphHeapSnapshotMapper.Map: envelope.MemoryGraph is null");
+            throw new ArgumentNullException(nameof(envelope.MemoryGraph), "MemoryGraph is null in envelope");
+        }
+
+        var nodes = facade.GetNodes(envelope.MemoryGraph) ?? new List<GraphNodeRecord>();
+        var edges = facade.GetEdges(envelope.MemoryGraph) ?? new List<GraphEdgeRecord>();
+        var roots = facade.GetRoots(envelope.MemoryGraph) ?? new List<GraphRootRecord>();
+
+        _logger.LogInformation("MemoryGraphHeapSnapshotMapper.Map: {NodeCount} nodes, {EdgeCount} edges, {RootCount} roots",
+            nodes.Count, edges.Count, roots.Count);
 
         var rootNodeIds = roots.Select(r => r.RootNodeId).ToHashSet();
         var rootKindByNodeId = roots
@@ -97,6 +106,9 @@ public sealed class MemoryGraphHeapSnapshotMapper : IHeapSnapshotMapper
             .OrderByDescending(x => x.RootCount)
             .ToArray();
 
+        var heapInfo = envelope.HeapInfo;
+        var segments = heapInfo?.Segments ?? new List<HeapSegmentInfo>();
+
         return new HeapSnapshotData
         {
             Artifact = artifact,
@@ -107,7 +119,7 @@ public sealed class MemoryGraphHeapSnapshotMapper : IHeapSnapshotMapper
                 TotalHeapBytes = memoryNodes.Sum(n => n.ShallowSizeBytes),
                 TotalObjectCount = memoryNodes.Sum(n => (long)n.Count),
                 RootCount = rootStats.Sum(r => r.RootCount),
-                SegmentCount = envelope.HeapInfo.Segments.Count,
+                SegmentCount = segments.Count,
                 IsPartial = envelope.Metadata.IsPartial,
                 Warning = envelope.Metadata.Warning
             },
@@ -133,6 +145,9 @@ public sealed class MemoryGraphHeapSnapshotMapper : IHeapSnapshotMapper
     private static string ResolveGeneration(ulong? address, DotNetHeapInfoAdapter heapInfo)
     {
         if (address is null)
+            return "unknown";
+
+        if (heapInfo?.Segments == null)
             return "unknown";
 
         foreach (var segment in heapInfo.Segments)
