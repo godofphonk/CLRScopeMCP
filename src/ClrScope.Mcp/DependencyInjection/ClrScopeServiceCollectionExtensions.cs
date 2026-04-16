@@ -67,7 +67,7 @@ public static class ClrScopeServiceCollectionExtensions
         services.AddSingleton<ISosAnalyzer, DotnetDumpAnalyzer>();
         services.AddSingleton<IHeapSnapshotPreparer, HeapSnapshotPreparer>();
         services.AddSingleton<IHeapSnapshotCache, HeapSnapshotCache>();
-        services.AddSingleton<IGcDumpGraphAdapter, GcDumpGraphAdapter>();
+        services.AddSingleton<IGcDumpGraphAdapter, GcDumpProcessAdapter>();
         services.AddSingleton<DominatorTreeCalculator>();
         services.AddSingleton<HeapRetainerPathsBuilder>();
         services.AddSingleton<IHeapGraphSourceAdapter, EventPipeHeapGraphSourceAdapter>();

@@ -2,6 +2,7 @@ using ClrScope.Mcp.Domain.Heap;
 using ClrScope.Mcp.Domain.Artifacts;
 using ClrScope.Mcp.Infrastructure;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
 
 namespace ClrScope.Mcp.Services.Heap;
 
@@ -229,75 +230,92 @@ public sealed class HeapSnapshotPreparer : IHeapSnapshotPreparer
         string gcdumpPath,
         CancellationToken cancellationToken)
     {
+        // Use ClrScope.HeapParser instead of dotnet-gcdump for proper timeout handling
+        var heapParserPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ClrScope.HeapParser.dll");
+        
+        if (!File.Exists(heapParserPath))
+        {
+            throw new FileNotFoundException($"Heap parser not found at: {heapParserPath}");
+        }
+
         var args = new[]
         {
-            "report",
+            heapParserPath,
+            "gcdump",
             gcdumpPath
         };
 
-        _logger.LogInformation("Executing: dotnet-gcdump {Args}", string.Join(" ", args));
-        var result = await _cliRunner.ExecuteAsync("dotnet-gcdump", args, cancellationToken);
+        _logger.LogInformation("Executing: dotnet {Args}", string.Join(" ", args));
+        var result = await _cliRunner.ExecuteAsync("dotnet", args, cancellationToken);
 
         if (!result.Success || result.ExitCode != 0)
         {
             var error = !string.IsNullOrEmpty(result.StandardError) ? result.StandardError : result.StandardOutput;
-            _logger.LogError("dotnet-gcdump report failed: {Error}", error);
-            throw new InvalidOperationException($"dotnet-gcdump report failed: {error}");
+            _logger.LogError("HeapParser failed: {Error}", error);
+            throw new InvalidOperationException($"HeapParser failed: {error}");
         }
 
-        // Parse the output
-        return ParseGcDumpReportOutput(result.StandardOutput);
+        // Parse JSON output from HeapParser
+        return ParseHeapParserJsonOutput(result.StandardOutput);
     }
 
-    private List<TypeStatData> ParseGcDumpReportOutput(string output)
+    private List<TypeStatData> ParseHeapParserJsonOutput(string output)
     {
-        var typeStats = new List<TypeStatData>();
-        var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-
-        // dotnet-gcdump report output format:
-        // Type Name, Count, Total Size, Average Size
-        // Example:
-        // System.String 1000 24000 24
-        // System.Collections.Generic.List`1 500 12000 24
-
-        foreach (var line in lines)
+        try
         {
-            var trimmed = line.Trim();
-            
-            // Skip header lines and non-data lines
-            if (trimmed.StartsWith("Type") || 
-                trimmed.StartsWith("----") ||
-                trimmed.StartsWith("Total") ||
-                string.IsNullOrWhiteSpace(trimmed) ||
-                trimmed.Length < 10)
+            var graphData = JsonSerializer.Deserialize<HeapGraphData>(output, new JsonSerializerOptions
             {
-                continue;
+                PropertyNameCaseInsensitive = true
+            });
+
+            if (graphData == null || graphData.Nodes.Count == 0)
+            {
+                _logger.LogWarning("HeapParser returned empty graph data");
+                return new List<TypeStatData>();
             }
 
-            // Try to parse the line
-            var parts = trimmed.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length >= 3)
+            // Aggregate nodes by type name to create TypeStatData
+            var typeStats = new Dictionary<string, TypeStatData>();
+
+            foreach (var node in graphData.Nodes.Values)
             {
-                var typeName = parts[0];
-                
-                if (int.TryParse(parts[1], out var count) &&
-                    long.TryParse(parts[2], out var totalSize))
+                if (!typeStats.TryGetValue(node.TypeName, out var stat))
                 {
-                    typeStats.Add(new TypeStatData
+                    stat = new TypeStatData
                     {
-                        TypeName = typeName,
-                        Namespace = ExtractNamespace(typeName),
-                        AssemblyName = ExtractAssembly(typeName),
-                        Generation = "mixed",
-                        Count = count,
-                        ShallowSizeBytes = totalSize,
-                        RetainedSizeBytes = 0 // Not available in heapstat mode
-                    });
+                        TypeName = node.TypeName,
+                        Namespace = ExtractNamespace(node.TypeName),
+                        AssemblyName = node.AssemblyName,
+                        Generation = node.Generation,
+                        Count = node.Count,
+                        ShallowSizeBytes = node.ShallowSizeBytes,
+                        RetainedSizeBytes = node.RetainedSizeBytes
+                    };
+                    typeStats[node.TypeName] = stat;
+                }
+                else
+                {
+                    // Create new object with aggregated values
+                    typeStats[node.TypeName] = new TypeStatData
+                    {
+                        TypeName = stat.TypeName,
+                        Namespace = stat.Namespace,
+                        AssemblyName = stat.AssemblyName,
+                        Generation = stat.Generation,
+                        Count = stat.Count + node.Count,
+                        ShallowSizeBytes = stat.ShallowSizeBytes + node.ShallowSizeBytes,
+                        RetainedSizeBytes = stat.RetainedSizeBytes + node.RetainedSizeBytes
+                    };
                 }
             }
-        }
 
-        return typeStats;
+            return typeStats.Values.ToList();
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "Failed to parse HeapParser JSON output");
+            throw new InvalidOperationException("Failed to parse HeapParser JSON output", ex);
+        }
     }
 
     private List<TypeStatData> FilterAndAggregate(

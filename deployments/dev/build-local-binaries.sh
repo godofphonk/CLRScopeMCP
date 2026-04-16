@@ -14,12 +14,17 @@ set -e
 VERSION=${1:-"0.1.0"}
 OUTPUT_DIR="../DEV/releases/$VERSION"
 PROJECT="../../src/ClrScope.Mcp/ClrScope.Mcp.csproj"
+HEAP_PARSER_PROJECT="../../src/ClrScope.HeapParser/ClrScope.HeapParser.csproj"
 
 echo "Building CLRScope MCP v$VERSION (Linux x64 only)..."
 
 # Clean and create output directory
 rm -rf "$OUTPUT_DIR"
 mkdir -p "$OUTPUT_DIR"
+
+# Build HeapParser as a dependency
+echo "Building HeapParser..."
+dotnet build "$HEAP_PARSER_PROJECT" -c Release -r linux-x64 --self-contained false
 
 # Linux x64
 echo "Building linux-x64..."
@@ -30,6 +35,17 @@ dotnet publish "$PROJECT" \
   -p:DebugSymbols=false \
   -p:DebugType=None \
   -o "$OUTPUT_DIR"
+
+# Copy HeapParser to output directory
+echo "Copying HeapParser to output..."
+HEAP_PARSER_BUILD_DIR="../../src/ClrScope.HeapParser/bin/Release/net10.0/linux-x64"
+cp "$HEAP_PARSER_BUILD_DIR/ClrScope.HeapParser.dll" "$OUTPUT_DIR/"
+cp "$HEAP_PARSER_BUILD_DIR/ClrScope.HeapParser.runtimeconfig.json" "$OUTPUT_DIR/"
+cp "$HEAP_PARSER_BUILD_DIR/ClrScope.HeapParser.deps.json" "$OUTPUT_DIR/"
+
+# Copy HeapParser dependencies (DotNetHeapDump, etc.)
+cp "$HEAP_PARSER_BUILD_DIR/ClrScope.ThirdParty.DotNetHeapDump.dll" "$OUTPUT_DIR/" 2>/dev/null || true
+cp "$HEAP_PARSER_BUILD_DIR/Microsoft.Diagnostics.FastSerialization.dll" "$OUTPUT_DIR/" 2>/dev/null || true
 
 # Rename binary to standard naming
 mv "$OUTPUT_DIR/ClrScope.Mcp" "$OUTPUT_DIR/clrscope-mcp"
