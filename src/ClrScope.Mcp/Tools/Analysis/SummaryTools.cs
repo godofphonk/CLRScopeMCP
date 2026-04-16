@@ -318,6 +318,7 @@ public sealed class SummaryTools
         [Description("Auto-analyze artifact: 'true' (default) for Dump/Trace preprocessing, 'false' for pre-processed data")] string autoAnalyze = "true",
         [Description("Analysis mode: 'auto' (default), 'reuse' (cache only), 'force' (re-analyze)")] string analysisMode = "auto",
         [Description("Flame graph kind: 'auto' (default), 'cpu' (CPU sampling), 'snapshot' (process snapshot for Dump), 'allocation' (memory allocation)")] string flameKind = "auto",
+        [Description("Optional filename to save visualization. If provided, file will be saved and opened in default browser")] string filename = "",
         CancellationToken cancellationToken = default)
     {
         var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
@@ -361,6 +362,13 @@ public sealed class SummaryTools
             if (artifact.Kind == ArtifactKind.Stacks)
             {
                 var stacksFlameGraph = GenerateFlameGraph(artifact, format.ToLowerInvariant(), kind);
+                
+                // Save to file if filename is provided
+                if (!string.IsNullOrEmpty(filename))
+                {
+                    await SaveAndOpenVisualizationAsync(stacksFlameGraph, filename, format.ToLowerInvariant(), logger, cancellationToken);
+                }
+                
                 return VisualizationResult.Success(stacksFlameGraph, format.ToLowerInvariant());
             }
 
@@ -399,12 +407,42 @@ public sealed class SummaryTools
             var renderer = new FlameGraphRenderer();
             var flameGraph = renderer.Render(preparedData, artifact, format.ToLowerInvariant(), kind);
 
+            // Save to file if filename is provided
+            if (!string.IsNullOrEmpty(filename))
+            {
+                await SaveAndOpenVisualizationAsync(flameGraph, filename, format.ToLowerInvariant(), logger, cancellationToken);
+            }
+
             return VisualizationResult.Success(flameGraph, format.ToLowerInvariant());
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Flame graph visualization failed for artifact {ArtifactId}", artifactId);
             return VisualizationResult.Failure($"Flame graph visualization failed: {ex.Message}");
+        }
+    }
+
+    private static async Task SaveAndOpenVisualizationAsync(string content, string filename, string format, ILogger logger, CancellationToken cancellationToken)
+    {
+        try
+        {
+            // Save to file
+            await System.IO.File.WriteAllTextAsync(filename, content, cancellationToken);
+            logger.LogInformation("Visualization saved to {Filename}", filename);
+
+            // Open in default browser
+            var startInfo = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = filename,
+                UseShellExecute = true
+            };
+            System.Diagnostics.Process.Start(startInfo);
+            logger.LogInformation("Visualization opened in default browser");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to save or open visualization file {Filename}", filename);
+            throw new InvalidOperationException($"Failed to save or open visualization: {ex.Message}", ex);
         }
     }
 
@@ -727,9 +765,11 @@ private static string GenerateFlameGraph(Artifact artifact, string format, strin
     private static string GenerateSvgFlameGraph(List<StackFrameData> frames, Artifact artifact, string flameKind = "snapshot")
     {
         var svg = new System.Text.StringBuilder();
+        var colors = new[] { "#ff6b6b", "#4ecdc4", "#45b7d1", "#96ceb4", "#ffeaa7", "#dfe6e9", "#fd79a8", "#a29bfe" };
+
+        // Use compact width for better readability
         var width = 1200;
         var height = Math.Min(600, frames.Count * 25 + 100);
-        var colors = new[] { "#ff6b6b", "#4ecdc4", "#45b7d1", "#96ceb4", "#ffeaa7", "#dfe6e9", "#fd79a8", "#a29bfe" };
 
         svg.AppendLine("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
         svg.AppendLine("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"" + width + "\" height=\"" + height + "\">");
@@ -747,41 +787,51 @@ private static string GenerateFlameGraph(Artifact artifact, string format, strin
         {
             var threadFrames = threadGroup.ToList();
 
-            // Count frequency of each call site
-            var callSiteFrequency = threadFrames
+            // Get unique call sites sorted by frequency
+            var uniqueCallSites = threadFrames
                 .GroupBy(f => f.CallSite)
-                .ToDictionary(g => g.Key, g => g.Count());
-
-            var totalFrequency = callSiteFrequency.Values.Sum();
-            var x = 10;
-
-            // Sort by frequency (hotter methods first)
-            var sortedFrames = threadFrames
-                .GroupBy(f => f.CallSite)
-                .OrderByDescending(g => g.Count())
-                .SelectMany(g => g)
+                .Select(g => new { CallSite = g.Key, Count = g.Count() })
+                .OrderByDescending(g => g.Count)
                 .ToList();
 
-            foreach (var frame in sortedFrames)
+            var x = 10;
+            var frameWidth = 200; // Fixed width for each frame
+
+            foreach (var callSite in uniqueCallSites)
             {
-                var color = colors[frame.ThreadId % colors.Length];
-                var frequency = callSiteFrequency[frame.CallSite];
-                var frameWidth = Math.Max(1, ((width - 20.0) * frequency / totalFrequency));
-                var maxLength = Math.Max(4, (int)(frameWidth / 6));
-                var displayText = TruncateCallSite(frame.CallSite, maxLength);
-                var rectWidth = Math.Max(1, frameWidth - 1);
+                var color = colors[threadGroup.Key % colors.Length];
+                var displayText = TruncateCallSite(callSite.CallSite, 30);
 
-                svg.AppendLine("  <rect x=\"" + x + "\" y=\"" + y + "\" width=\"" + rectWidth + "\" height=\"" + frameHeight + "\" fill=\"" + color + "\" rx=\"2\"/>");
-                svg.AppendLine("  <text x=\"" + (x + 5) + "\" y=\"" + (y + 14) + "\" font-family=\"Arial\" font-size=\"10\" fill=\"white\">" + displayText + "</text>");
+                svg.AppendLine("  <rect x=\"" + x + "\" y=\"" + y + "\" width=\"" + frameWidth + "\" height=\"" + frameHeight + "\" fill=\"" + color + "\" rx=\"2\"/>");
+                svg.AppendLine("  <text x=\"" + (x + 5) + "\" y=\"" + (y + 14) + "\" font-family=\"Arial\" font-size=\"10\" fill=\"white\">" + EscapeXml(displayText) + "</text>");
 
-                x += (int)frameWidth;
+                x += frameWidth + 10;
+
+                // Wrap to next line if too wide
+                if (x + frameWidth > width)
+                {
+                    x = 10;
+                    y += frameHeight + 5;
+                }
             }
 
-            y += frameHeight + 5;
+            y += frameHeight + 15;
         }
 
         svg.AppendLine("</svg>");
         return svg.ToString();
+    }
+
+    private static string EscapeXml(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return text;
+        return text
+            .Replace("&", "&amp;")
+            .Replace("<", "&lt;")
+            .Replace(">", "&gt;")
+            .Replace("\"", "&quot;")
+            .Replace("'", "&apos;");
     }
 
     private static string GenerateHtmlFlameGraph(List<StackFrameData> frames, Artifact artifact, string flameKind = "snapshot")
@@ -1930,6 +1980,7 @@ private static string TruncateCallSite(string callSite, int maxLength)
         [Description("Maximum types to render")] int maxTypes = 200,
         [Description("Baseline artifact ID for diff view")] string? baselineArtifactId = null,
         [Description("Target object ID for retainer_paths view")] string? targetObjectId = null,
+        [Description("Optional filename to save visualization. If provided, file will be saved and opened in default browser")] string filename = "",
         CancellationToken cancellationToken = default)
     {
         var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
@@ -2103,6 +2154,12 @@ private static string TruncateCallSite(string callSite, int maxLength)
                 {
                     content = debugInfo.ToString() + content;
                 }
+            }
+
+            // Save to file if filename is provided
+            if (!string.IsNullOrEmpty(filename))
+            {
+                await SaveAndOpenVisualizationAsync(content, filename, format.ToLowerInvariant(), logger, linkedCts.Token);
             }
 
             return VisualizationResult.Success(content, format);
