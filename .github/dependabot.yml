@@ -1,0 +1,22 @@
+version: 2
+updates:
+  - package-ecosystem: "nuget"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      microsoft-extensions:
+        patterns:
+          - "Microsoft.Extensions.*"
+      microsoft-diagnostics:
+        patterns:
+          - "Microsoft.Diagnostics.*"
+    ignore:
+      # Ignore preview versions
+      - dependency-name: "*"
+        update-types: ["version-update:prerelease"]
+    labels:
+      - "dependencies"
+      - "dependabot"
