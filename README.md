@@ -11,9 +11,11 @@
 CLRScope MCP provides AI-powered diagnostic capabilities for .NET applications through the Model Context Protocol. It enables LLM agents to perform deep analysis of .NET processes including performance profiling, memory leak detection, thread analysis, and automated pattern detection.
 
 **v1.2.0 Highlights:**
-- Heap analysis with type statistics (top N types) and diff comparison between gcdumps (JSON/text output)
+- Heap analysis with dominator tree (Cooper-Harvey-Kennedy algorithm) for accurate retained size calculation
+- Retainer path analysis: trace object retention chains from GC roots to any target node
+- Type statistics (top N types) and diff comparison between gcdumps
 - Preflight validation for .nettrace heap snapshots to detect partial/incomplete data
-- Process-based heap parsing via ClrScope.HeapParser with 5-minute timeout for reliability
+- Process-based heap parsing via ClrScope.HeapParser with 5-minute timeout
 - Import existing .gcdump and .nettrace files for analysis
 - Automated workflow bundles for common diagnostic scenarios
 
@@ -37,7 +39,7 @@ The AI agent will automatically select and execute the appropriate CLRScope tool
 |---------|-------------|
 | 🎯 **Runtime Detection** | Discover and inspect attachable .NET processes |
 | 📊 **Performance Counters** | Real-time CPU, memory, GC, and thread pool metrics |
-| 🧠 **Heap Analysis** | Heap snapshot analysis with type statistics and diff comparison (JSON/text output) |
+| 🧠 **Heap Analysis** | Dominator tree, retained size, type statistics, diff comparison, and retainer path tracing |
 | 📁 **Artifact Import** | Import existing .gcdump and .nettrace files for offline analysis |
 | 💾 **Memory Dump Analysis** | Full memory dump collection with optional compression |
 | 🔍 **SOS Commands** | Sequential SOS command execution for deep .NET runtime analysis |
@@ -150,7 +152,8 @@ See [Full Requirements](docs/requirements.md) for installation instructions and 
 | `detect_patterns` | Pattern detection: memory leaks, deadlocks, thread pool starvation, high CPU |
 | `analyze_dump_sos` | SOS commands on dump files (threads, clrstack, dumpheap, etc.) |
 | `symbols_resolve` | Load symbols via dotnet-symbol |
-| `analyze_heap` | Heap analysis: type statistics (top N types) or diff comparison between two gcdumps (JSON/text output only) |
+| `analyze_heap` | Heap analysis with dominator tree and retained size: type statistics (top N) or diff between two gcdumps |
+| `find_retainer_paths` | Trace object retention chains from GC roots to a target node |
 | `session_analyze` | Session analysis with optional baseline comparison |
 
 ### Runtime
@@ -166,6 +169,10 @@ See [Full Requirements](docs/requirements.md) for installation instructions and 
 | `workflow_automated_memory_leak_bundle` | gcdump + counters + trace (gc-heap) |
 | `workflow_automated_hang_bundle` | dump + stacks + counters |
 | `workflow_automated_baseline_bundle` | counters + trace + gcdump + stacks |
+| `workflow_capture_high_cpu_bundle` | Step-by-step instructions for high CPU diagnostics |
+| `workflow_capture_memory_leak_bundle` | Step-by-step instructions for memory leak diagnostics |
+| `workflow_capture_hang_bundle` | Step-by-step instructions for hang/deadlock diagnostics |
+| `workflow_capture_baseline_bundle` | Step-by-step instructions for baseline collection |
 
 ### Management
 | Tool | Description |
