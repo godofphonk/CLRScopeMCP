@@ -61,9 +61,26 @@ jobs:
           echo "NuGet package created successfully"
         shell: bash
 
-      - name: Extract NuGet package to verify contents
+      - name: Extract NuGet package to verify contents (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          $package = Get-ChildItem 'src/ClrScope.Mcp/bin/Release/*.nupkg' | Select-Object -First 1
+          if (-not $package) {
+            Write-Error "NuGet package not found"
+            exit 1
+          }
+          $destination = 'src/ClrScope.Mcp/bin/Release/temp_extract'
+          if (Test-Path $destination) {
+            Remove-Item $destination -Recurse -Force
+          }
+          Expand-Archive -Path $package.FullName -DestinationPath $destination -Force
+        shell: pwsh
+
+      - name: Extract NuGet package to verify contents (Non-Windows)
+        if: matrix.os != 'windows-latest'
         run: |
           cd src/ClrScope.Mcp/bin/Release
+          rm -rf temp_extract
           unzip -q *.nupkg -d temp_extract
         shell: bash
 
