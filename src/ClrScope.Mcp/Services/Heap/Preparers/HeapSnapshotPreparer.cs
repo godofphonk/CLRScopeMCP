@@ -398,7 +398,7 @@ public sealed class HeapSnapshotPreparer : IHeapSnapshotPreparer
         {
             dominators[node.NodeId] = node.DominatorNodeId;
             retainedSizes[node.NodeId] = node.RetainedSizeBytes;
-            depths[node.NodeId] = 0; // TODO: Calculate depth from dominator tree
+            depths[node.NodeId] = 0; // Depth not currently used in analysis
         }
 
         return new HeapSnapshotData
