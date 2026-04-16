@@ -11,7 +11,7 @@
 CLRScope MCP provides AI-powered diagnostic capabilities for .NET applications through the Model Context Protocol. It enables LLM agents to perform deep analysis of .NET processes including performance profiling, memory leak detection, thread analysis, and automated pattern detection.
 
 **v1.2.0 Highlights:**
-- Advanced heap visualization with type distribution, treemap, diff views, and retainer paths
+- Heap analysis with type statistics (top N types) and diff comparison between gcdumps (JSON/text output)
 - Preflight validation for .nettrace heap snapshots to detect partial/incomplete data
 - Process-based heap parsing via ClrScope.HeapParser with 5-minute timeout for reliability
 - Import existing .gcdump and .nettrace files for analysis
@@ -37,7 +37,7 @@ The AI agent will automatically select and execute the appropriate CLRScope tool
 |---------|-------------|
 | 🎯 **Runtime Detection** | Discover and inspect attachable .NET processes |
 | 📊 **Performance Counters** | Real-time CPU, memory, GC, and thread pool metrics |
-| 🧠 **Heap Visualization** | Heap snapshot analysis with type distribution, treemap, diff views, and retainer paths |
+| 🧠 **Heap Analysis** | Heap snapshot analysis with type statistics and diff comparison (JSON/text output) |
 | 📁 **Artifact Import** | Import existing .gcdump and .nettrace files for offline analysis |
 | 💾 **Memory Dump Analysis** | Full memory dump collection with optional compression |
 | 🔍 **SOS Commands** | Sequential SOS command execution for deep .NET runtime analysis |
@@ -150,7 +150,7 @@ See [Full Requirements](docs/requirements.md) for installation instructions and 
 | `detect_patterns` | Pattern detection: memory leaks, deadlocks, thread pool starvation, high CPU |
 | `analyze_dump_sos` | SOS commands on dump files (threads, clrstack, dumpheap, etc.) |
 | `symbols_resolve` | Load symbols via dotnet-symbol |
-| `visualize_heap_snapshot` | Heap visualization: type distribution, treemap, diff, retainer paths |
+| `analyze_heap` | Heap analysis: type statistics (top N types) or diff comparison between two gcdumps (JSON/text output only) |
 | `session_analyze` | Session analysis with optional baseline comparison |
 
 ### Runtime

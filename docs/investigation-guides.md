@@ -45,16 +45,14 @@ For granular control or when automated workflows are not suitable.
 1. `runtime_list_targets` — find the .NET process with high memory
 2. `collect_gcdump` — capture GC heap snapshot (baseline)
 3. Wait for memory to grow, then `collect_gcdump` again (issue snapshot)
-4. `visualize_heap_snapshot` — type distribution analysis
-5. `visualize_heap_snapshot` with `view: diff` and `baselineArtifactId` — compare baseline vs issue
-6. `visualize_heap_snapshot` with `view: retainer_paths` — find what holds objects in memory
-7. `collect_counters` with `System.Runtime` — GC metrics, allocation rate
-8. `detect_patterns` with `patternTypes: memory_leaks` — automated leak detection
+4. `analyze_heap` — type statistics analysis (top N types)
+5. `analyze_heap` with `analysisType: diff` and `baselineArtifactId` — compare baseline vs issue
+6. `collect_counters` with `System.Runtime` — GC metrics, allocation rate
+7. `detect_patterns` with `patternTypes: memory_leaks` — automated leak detection
 
 **Quick alternative:** `workflow_automated_memory_leak_bundle`
 
-**Tip:** Use `.gcdump` files for heap visualization (reliable). `.nettrace` files are unreliable for heap data.
-
+**Tip:** Use `.gcdump` files for heap analysis (reliable). `.nettrace` files are unreliable for heap data.
 ---
 
 ### Hang/Deadlock Investigation
@@ -91,5 +89,5 @@ After collecting artifacts (manually or via workflow):
 1. **`artifact_summarize`** — start here for automated high-level analysis
 2. **`detect_patterns`** — check for known problem patterns
 3. **`visualize_heap_snapshot`** — for memory issues (gcdump artifacts)
-4. **`analyze_dump_sos`** — for deep .NET runtime analysis (dump artifacts)
+4. **`ynazy_dump_sor deep .NET runtime analysis (dump artif, JSON/text outputacts)
 5. **`session_analyze`** — compare sessions, especially with baseline

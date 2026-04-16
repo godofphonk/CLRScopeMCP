@@ -96,7 +96,7 @@ This prevents wasting time on non-.NET processes or processes that have already 
 - **Memory Leak Investigation**: Faster than full dump, focuses on heap
 - **Object Analysis**: Identify large objects, type distribution
 - **GC Behavior**: Analyze generation distribution, collection patterns
-- **Heap Visualization**: Advanced analysis with type distribution, treemap, diff views, retainer paths
+- **Heap VisusuizationatioAdvancidovnalycdvnwilhdwilhiysstr,butiar,,ar,iiae, diff vieww,wrnrainer sahs
 
 **When Not to Use:**
 - **Thread Analysis**: Use stacks or dump instead
@@ -165,10 +165,10 @@ This prevents wasting time on non-.NET processes or processes that have already 
 - **Cross-Session**: Compare artifacts collected at different times
 
 **Best Practices (v1.2.0):**
-- Use `import_gcdump` for heap visualization (reliable)
+- Use `import_gcdump` for heap analysis (reliable)
 - Use `import_trace` for CPU profiling, performance counters, trace analysis
 - Note: .nettrace heap snapshots are unreliable even with correct keywords
-- For heap visualization, prefer .gcdump over .nettrace
+- For heap analysis, prefer .gcdump over .nettrace
 
 ## Artifact-Specific Best Practices
 
@@ -235,18 +235,18 @@ mcp1_session_analyze --session_id <problem_session> --baseline_session_id <basel
 
 Identifies deviations from normal behavior.
 
-### 4. Use Heap Visualization for Memory Analysis
+### 4. Use Heap Analysis for Memory Analysis
 
-For GcDump artifacts, use heap visualization to understand memory distribution:
+For GcDump artifacts, use heap analysis to understand memory distribution:
 
 ```bash
-mcp1_visualize_heap_snapshot --artifact_id <id> --view type_distribution
+mcp1_analyze_heap --artifact_id <id> --analysis_type type_stats
 ```
 
-Compare baseline vs issue snapshots with diff view:
+Compare baseline vs issue snapshots with diff analysis:
 
 ```bash
-mcp1_visualize_heap_snapshot --artifact_id <issue_id> --view diff --baselineArtifactId <baseline_id>
+mcp1_analyze_heap --artifact_id <issue_id> --analysis_type diff --baselineArtifactId <baseline_id>
 ```
 
 ## Performance Optimization
@@ -341,10 +341,9 @@ dotnet-symbol set-symbol-server https://msdl.microsoft.com/download/symbols
 1. Collect baseline gcdump from healthy state
 2. Wait for issue to manifest (5–10 minutes)
 3. Collect gcdump during issue
-4. Use `visualize_heap_snapshot` with `view: diff` to compare baseline vs issue
-5. Use `visualize_heap_snapshot` with `view: retainer_paths` for retention chains
-6. Use `artifact_summarize` with `focus: memory`
-7. Identify growing object types
+4. Use `analyze_heap` with `analysis_type: diff` to compare baseline vs issue
+5. Use `artifact_summarize` with `focus: memory`
+6. Identify growing object types
 
 ### Hang/Deadlock Investigation
 

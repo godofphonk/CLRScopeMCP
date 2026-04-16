@@ -966,133 +966,24 @@ public sealed class SummaryTools
 
     // TODO: Re-enable after fixing MemoryGraph traversal NullReferenceException issues
     // The vendored EventPipeDotNetHeapDumper library has issues constructing MemoryGraph from EventPipe events
-    // For now, use .gcdump files instead: mcp1_collect_gcdump + mcp1_visualize_heap_snapshot
-    // [McpServerTool(Name = "visualize_nettrace_heap"), Description("Visualize a .nettrace EventPipe heap snapshot. For partial heap data (common), only type_distribution is supported. For full heap graph, all views are supported.")]
-    public static async Task<VisualizationResult> VisualizeNettraceHeap(
+    // For now, use .gcdump files instead: mcp1_collect_gcdump + mcp1_analyze_heap
+
+    [McpServerTool(Name = "analyze_heap"), Description("Analyze a .gcdump heap snapshot: type statistics (top N types) or diff comparison between two gcdumps. Returns JSON/text output only.")]
+    public static async Task<HeapAnalysisResult> AnalyzeHeap(
         string artifactId,
         McpServer server,
-        [Description("View kind: 'type_distribution' (default), 'treemap', 'retained_flame'")] string view = "type_distribution",
-        [Description("Metric: 'shallow_size' (default), 'count', 'retained_size'")] string metric = "shallow_size",
-        [Description("Output format: 'html' (default), 'json'")] string format = "html",
-        [Description("Grouping: 'type' (default), 'namespace', 'assembly'")] string groupBy = "type",
-        [Description("Maximum types to render")] int maxTypes = 200,
-        CancellationToken cancellationToken = default)
-    {
-        var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
-        var logger = server.Services!.GetRequiredService<ILogger<SummaryTools>>();
-        var preflight = server.Services!.GetRequiredService<NettracePreflight>();
-
-        try
-        {
-            logger.LogInformation("Step 1: Getting artifact {ArtifactId}", artifactId);
-            var artifact = await artifactStore.GetAsync(new ArtifactId(artifactId), cancellationToken);
-            if (artifact == null)
-            {
-                return VisualizationResult.Failure($"Artifact not found: {artifactId}");
-            }
-
-            logger.LogInformation("Step 2: Artifact found, Kind: {Kind}", artifact.Kind);
-            if (artifact.Kind != ArtifactKind.Trace)
-            {
-                return VisualizationResult.Failure($"Artifact {artifactId} is not a Trace (.nettrace file).");
-            }
-
-            logger.LogInformation("Step 3: Running preflight check");
-            var preflightResult = await preflight.CheckAsync(artifact.FilePath, cancellationToken);
-            
-            if (preflightResult.IsError)
-            {
-                logger.LogError("Preflight check failed: {Message}", preflightResult.Message);
-                return VisualizationResult.Failure($"Preflight check failed: {preflightResult.Message}");
-            }
-
-            // No heap data at all
-            if (preflightResult.Mode == "no-heap-data")
-            {
-                logger.LogWarning("Trace contains no heap data: {Message}", preflightResult.Message);
-                return VisualizationResult.Failure(
-                    $"This .nettrace does not contain GC heap snapshot events. {preflightResult.Message}\n\n" +
-                    "For heap-capable .nettrace, use the documented GCHeapSnapshot keyword set:\n" +
-                    "  dotnet-trace collect -p <PID> --providers Microsoft-Windows-DotNETRuntime:0x1980001:5 -o heap.nettrace\n\n" +
-                    "0x1980001 = GCHeapSnapshot (gc+type+gcheapdump+managedheapcollect+gcheapandtypenames)\n" +
-                    "Use hex mask instead of aliases for reliability across dotnet-trace versions.\n\n" +
-                    "However, even with correct keywords, .nettrace heap snapshots are often partial " +
-                    "and unreliable. For reliable heap visualization, use dotnet-gcdump collect:\n" +
-                    "  dotnet-gcdump collect -p <PID> -o heap.gcdump\n\n" +
-                    "dotnet-gcdump is the official tool for heap snapshots and triggers special events " +
-                    "(GC trigger, sample-profiler flush) to reconstruct the heap graph reliably.");
-            }
-
-            // Partial heap data - only type_distribution is supported
-            if (preflightResult.Mode == "partial-heap-data")
-            {
-                logger.LogWarning("Trace contains partial heap data: {Message}", preflightResult.Message);
-                
-                if (view != "type_distribution")
-                {
-                    return VisualizationResult.Failure(
-                        $"This .nettrace contains partial heap data and does not support '{view}' view.\n\n" +
-                        $"{preflightResult.Message}\n\n" +
-                        $"Supported views: {string.Join(", ", preflightResult.RecommendedViews)}");
-                }
-
-                // For partial data, we can only provide limited type distribution from reader logs
-                // Cannot traverse MemoryGraph due to NRE from partial data
-                return VisualizationResult.Failure(
-                    $"This .nettrace contains partial heap data and cannot be visualized.\n\n" +
-                    $"{preflightResult.Message}\n\n" +
-                    "Partial heap data (inconsistent BulkNodeEventCount vs NodeIndexLimit) indicates " +
-                    "the trace does not contain complete heap snapshot events. The MemoryGraph " +
-                    "is built incorrectly and cannot be traversed safely.\n\n" +
-                    "For heap visualization, please use .gcdump files instead:\n" +
-                    "  - Use mcp1_collect_gcdump to collect heap snapshots\n" +
-                    "  - Use mcp1_visualize_heap_snapshot to visualize .gcdump files\n\n" +
-                    ".nettrace files can still be used for:\n" +
-                    "  - CPU flame graphs (mcp1_visualize_flame_graph)\n" +
-                    "  - Performance counters (mcp1_collect_counters)\n" +
-                    "  - Trace analysis (mcp1_artifact_summarize)");
-            }
-
-            // Full heap graph - should work but currently disabled due to NRE
-            logger.LogWarning("Full heap graph detected but currently disabled due to MemoryGraph traversal issues");
-            return VisualizationResult.Failure(
-                $"This .nettrace contains full heap snapshot data according to preflight ({preflightResult.Message}).\n\n" +
-                "However, MemoryGraph traversal still encounters NullReferenceException issues even for full heap data.\n\n" +
-                "This appears to be a deeper issue with the vendored EventPipeDotNetHeapDumper library " +
-                "or how it constructs MemoryGraph from EventPipe events.\n\n" +
-                "For heap visualization, please use .gcdump files instead:\n" +
-                "  - Use mcp1_collect_gcdump to collect heap snapshots\n" +
-                "  - Use mcp1_visualize_heap_snapshot to visualize .gcdump files");
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Nettrace heap visualization failed");
-            return VisualizationResult.Failure($"Nettrace heap visualization failed: {ex.Message}");
-        }
-    }
-
-    [McpServerTool(Name = "visualize_heap_snapshot"), Description("Visualize a .gcdump heap snapshot as type distribution, treemap, retained flame, diff, or retainer paths")]
-    public static async Task<VisualizationResult> VisualizeHeapSnapshot(
-        string artifactId,
-        McpServer server,
-        [Description("View kind: 'type_distribution' (default), 'treemap', 'retained_flame', 'diff', 'retainer_paths'")] string view = "type_distribution",
-        [Description("Metric: 'shallow_size' (default), 'count', 'retained_size'")] string metric = "shallow_size",
-        [Description("Output format: 'html' (default), 'json'")] string format = "html",
-        [Description("Grouping: 'type' (default), 'namespace', 'assembly'")] string groupBy = "type",
+        [Description("Analysis type: 'type_stats' (default) for top N types, 'diff' for comparison between two snapshots")] string analysisType = "type_stats",
+        [Description("Metric: 'shallow_size' (default), 'count'")] string metric = "shallow_size",
         [Description("Analysis mode: 'auto' (default), 'reuse' (cache only), 'force' (re-analyze)")] string analysisMode = "auto",
-        [Description("Maximum types to render")] int maxTypes = 200,
-        [Description("Baseline artifact ID for diff view")] string? baselineArtifactId = null,
-        [Description("Target object ID for retainer_paths view")] string? targetObjectId = null,
-        [Description("Optional filename to save visualization. If provided, file will be saved and opened in default browser")] string filename = "",
+        [Description("Maximum types to include in type_stats output")] int maxTypes = 50,
+        [Description("Baseline artifact ID for diff comparison")] string? baselineArtifactId = null,
         CancellationToken cancellationToken = default)
     {
         var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
         var logger = server.Services!.GetRequiredService<ILogger<SummaryTools>>();
         var preparer = server.Services!.GetRequiredService<IHeapSnapshotPreparer>();
-        var clrScopeOptions = server.Services!.GetRequiredService<Microsoft.Extensions.Options.IOptions<ClrScopeOptions>>();
-        var artifactRoot = clrScopeOptions.Value.GetArtifactRoot();
 
-        // Add 5-minute timeout to prevent hanging (sync operations don't respect cancellation)
+        // Add 5-minute timeout to prevent hanging
         using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
 
@@ -1101,36 +992,18 @@ public sealed class SummaryTools
             var artifact = await artifactStore.GetAsync(new ArtifactId(artifactId), linkedCts.Token);
             if (artifact == null)
             {
-                return VisualizationResult.Failure($"Artifact not found: {artifactId}");
+                return HeapAnalysisResult.Failure($"Artifact not found: {artifactId}");
             }
 
             if (artifact.Kind != ArtifactKind.GcDump)
             {
-                return VisualizationResult.Failure($"Artifact {artifactId} is not a GcDump.");
+                return HeapAnalysisResult.Failure($"Artifact {artifactId} is not a GcDump.");
             }
-
-            // Parse parameters
-            var viewKind = view.ToLowerInvariant() switch
-            {
-                "treemap" => HeapViewKind.Treemap,
-                "retained_flame" => HeapViewKind.RetainedFlame,
-                "diff" => HeapViewKind.Diff,
-                "retainer_paths" => HeapViewKind.RetainerPaths,
-                _ => HeapViewKind.TypeDistribution
-            };
 
             var metricKind = metric.ToLowerInvariant() switch
             {
                 "count" => HeapMetricKind.Count,
-                "retained_size" => HeapMetricKind.RetainedSize,
                 _ => HeapMetricKind.ShallowSize
-            };
-
-            var groupByKind = groupBy.ToLowerInvariant() switch
-            {
-                "namespace" => HeapGroupBy.Namespace,
-                "assembly" => HeapGroupBy.Assembly,
-                _ => HeapGroupBy.Type
             };
 
             var analysisModeKind = analysisMode.ToLowerInvariant() switch
@@ -1140,176 +1013,110 @@ public sealed class SummaryTools
                 _ => HeapAnalysisMode.Auto
             };
 
-            // Handle different view kinds
-            string content;
-            if (viewKind == HeapViewKind.Diff)
+            var options = new HeapPreparationOptions
+            {
+                Metric = metricKind,
+                AnalysisMode = analysisModeKind,
+                GroupBy = HeapGroupBy.Type,
+                MaxTypes = maxTypes
+            };
+
+            if (analysisType.ToLowerInvariant() == "diff")
             {
                 if (string.IsNullOrEmpty(baselineArtifactId))
                 {
-                    return VisualizationResult.Failure("baselineArtifactId is required for diff view");
+                    return HeapAnalysisResult.Failure("baselineArtifactId is required for diff analysis");
                 }
 
                 var baselineArtifact = await artifactStore.GetAsync(new ArtifactId(baselineArtifactId), linkedCts.Token);
                 if (baselineArtifact == null)
                 {
-                    return VisualizationResult.Failure($"Baseline artifact not found: {baselineArtifactId}");
+                    return HeapAnalysisResult.Failure($"Baseline artifact not found: {baselineArtifactId}");
                 }
 
                 if (baselineArtifact.Kind != ArtifactKind.GcDump)
                 {
-                    return VisualizationResult.Failure($"Baseline artifact {baselineArtifactId} is not a GcDump.");
+                    return HeapAnalysisResult.Failure($"Baseline artifact {baselineArtifactId} is not a GcDump.");
                 }
 
-                var baselineOptions = new HeapPreparationOptions
-                {
-                    Metric = metricKind,
-                    AnalysisMode = analysisModeKind,
-                    GroupBy = groupByKind,
-                    MaxTypes = maxTypes
-                };
-
-                var targetOptions = new HeapPreparationOptions
-                {
-                    Metric = metricKind,
-                    AnalysisMode = analysisModeKind,
-                    GroupBy = groupByKind,
-                    MaxTypes = maxTypes
-                };
-
-                var baselinePrepared = await preparer.PrepareAsync(baselineArtifact, baselineOptions, linkedCts.Token);
-                var targetPrepared = await preparer.PrepareAsync(artifact, targetOptions, linkedCts.Token);
+                var baselinePrepared = await preparer.PrepareAsync(baselineArtifact, options, linkedCts.Token);
+                var targetPrepared = await preparer.PrepareAsync(artifact, options, linkedCts.Token);
 
                 var differLogger = server.Services!.GetRequiredService<ILogger<HeapSnapshotDiffer>>();
                 var differ = new HeapSnapshotDiffer(differLogger);
                 var diff = differ.Diff(baselinePrepared.Snapshot, targetPrepared.Snapshot);
-                var diffRenderer = new HeapDiffRenderer();
-                content = diffRenderer.RenderHtml(diff, metricKind);
-            }
-            else if (viewKind == HeapViewKind.RetainerPaths)
-            {
-                if (string.IsNullOrEmpty(targetObjectId))
+
+                var diffData = new HeapDiffAnalysisData
                 {
-                    return VisualizationResult.Failure("targetObjectId is required for retainer_paths view");
-                }
+                    BaselineArtifactId = baselineArtifactId,
+                    TargetArtifactId = artifactId,
+                    Metric = metric.ToLowerInvariant(),
+                    TotalHeapBytesBaseline = baselinePrepared.Snapshot.Metadata.TotalHeapBytes,
+                    TotalHeapBytesTarget = targetPrepared.Snapshot.Metadata.TotalHeapBytes,
+                    TotalObjectCountBaseline = baselinePrepared.Snapshot.Metadata.TotalObjectCount,
+                    TotalObjectCountTarget = targetPrepared.Snapshot.Metadata.TotalObjectCount,
+                    TypeDiffs = diff.TypeDiffs.Take(maxTypes).Select(td => new TypeDiffData
+                    {
+                        TypeName = td.TypeName,
+                        Namespace = td.Namespace,
+                        Status = td.Status.ToString(),
+                        BaselineCount = td.BaselineCount,
+                        TargetCount = td.TargetCount,
+                        CountDelta = td.CountDelta,
+                        BaselineShallowSize = td.BaselineShallowSize,
+                        TargetShallowSize = td.TargetShallowSize,
+                        ShallowSizeDelta = td.ShallowSizeDelta,
+                        ShallowSizePercentChange = td.ShallowSizePercentChange
+                    }).ToList()
+                };
 
-                if (!long.TryParse(targetObjectId, out var parsedTargetId))
+                return HeapAnalysisResult.Success(JsonSerializer.Serialize(diffData, new JsonSerializerOptions
                 {
-                    return VisualizationResult.Failure($"targetObjectId '{targetObjectId}' is not a valid numeric ID");
-                }
-
-                var graphAdapter = server.Services!.GetRequiredService<IGcDumpGraphAdapter>();
-                var retainerBuilder = server.Services!.GetRequiredService<HeapRetainerPathsBuilder>();
-
-                var graph = await graphAdapter.LoadGraphAsync(artifact.FilePath, linkedCts.Token);
-                var paths = retainerBuilder.BuildRetainerPaths(graph, targetObjectId);
-                var pathsRenderer = new HeapRetainerPathsRenderer();
-                content = pathsRenderer.RenderHtml(paths);
-            }
-            else if (viewKind == HeapViewKind.RetainedFlame)
-            {
-                var graphAdapter = server.Services!.GetRequiredService<IGcDumpGraphAdapter>();
-                var graph = await graphAdapter.LoadGraphAsync(artifact.FilePath, linkedCts.Token);
-                var flameRenderer = new HeapRetainedFlameRenderer();
-                content = flameRenderer.RenderHtml(graph, metricKind);
+                    WriteIndented = true,
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                }));
             }
             else
             {
-                var options = new HeapPreparationOptions
-                {
-                    Metric = metricKind,
-                    AnalysisMode = analysisModeKind,
-                    GroupBy = groupByKind,
-                    MaxTypes = maxTypes
-                };
-
                 logger.LogInformation("Preparing heap snapshot for artifact {ArtifactId}", artifactId);
                 var prepared = await preparer.PrepareAsync(artifact, options, linkedCts.Token);
 
-                // Include GcDumpGraphAdapter debug info for debugging
-                var debugInfo = new System.Text.StringBuilder();
-                debugInfo.AppendLine("<!-- GcDumpGraphAdapter Debug Info:");
-                debugInfo.AppendLine($"  NodeIndexLimit={prepared.Snapshot.Metadata.SegmentCount}");
-                debugInfo.AppendLine($"  TotalHeapBytes={prepared.Snapshot.Metadata.TotalHeapBytes}");
-                debugInfo.AppendLine($"  TotalObjectCount={prepared.Snapshot.Metadata.TotalObjectCount}");
-                debugInfo.AppendLine($"  RootCount={prepared.Snapshot.Metadata.RootCount}");
-                debugInfo.AppendLine($"  TypeStats Count={prepared.Snapshot.TypeStats?.Count ?? 0}");
-                debugInfo.AppendLine("  Check console logs for Step-by-step GcDumpGraphAdapter logging (Step 1-10) -->");
-
-                if (format.ToLowerInvariant() == "json")
+                var typeStatsData = new HeapTypeStatsData
                 {
-                    content = JsonSerializer.Serialize(prepared.Snapshot, new JsonSerializerOptions
+                    ArtifactId = artifactId,
+                    Metric = metric.ToLowerInvariant(),
+                    TotalHeapBytes = prepared.Snapshot.Metadata.TotalHeapBytes,
+                    TotalObjectCount = prepared.Snapshot.Metadata.TotalObjectCount,
+                    TypeStats = prepared.Snapshot.TypeStats.Take(maxTypes).Select(ts => new TypeStatData
                     {
-                        WriteIndented = true,
-                        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-                    });
-                }
-                else if (viewKind == HeapViewKind.Treemap)
-                {
-                    var renderer = new HeapTreemapRenderer();
-                    content = renderer.RenderHtml(prepared.Snapshot, metricKind);
-                }
-                else
-                {
-                    var renderer = new HeapTypeDistributionRenderer();
-                    content = renderer.RenderHtml(prepared.Snapshot, metricKind);
-                }
+                        TypeName = ts.TypeName,
+                        Namespace = ts.Namespace,
+                        Count = ts.Count,
+                        ShallowSizeBytes = ts.ShallowSizeBytes
+                    }).ToList()
+                };
 
-                // Prepend debug info to HTML content
-                if (format.ToLowerInvariant() == "html")
+                return HeapAnalysisResult.Success(JsonSerializer.Serialize(typeStatsData, new JsonSerializerOptions
                 {
-                    content = debugInfo.ToString() + content;
-                }
+                    WriteIndented = true,
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                }));
             }
-
-            // Save to file if filename is provided
-            if (!string.IsNullOrEmpty(filename))
-            {
-                await SaveAndOpenVisualizationAsync(content, filename, format.ToLowerInvariant(), logger, artifactRoot, linkedCts.Token);
-            }
-
-            return VisualizationResult.Success(content, format);
         }
         catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
         {
-            logger.LogError("VisualizeHeapSnapshot timed out after 5 minutes for artifact {ArtifactId}", artifactId);
-            return VisualizationResult.Failure("VisualizeHeapSnapshot timed out after 5 minutes - the operation may be hanging");
+            logger.LogError("AnalyzeHeap timed out after 5 minutes for artifact {ArtifactId}", artifactId);
+            return HeapAnalysisResult.Failure("AnalyzeHeap timed out after 5 minutes - the operation may be hanging");
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            logger.LogInformation("VisualizeHeapSnapshot was cancelled for artifact {ArtifactId}", artifactId);
-            return VisualizationResult.Failure("VisualizeHeapSnapshot was cancelled");
+            logger.LogInformation("AnalyzeHeap was cancelled for artifact {ArtifactId}", artifactId);
+            return HeapAnalysisResult.Failure("AnalyzeHeap was cancelled");
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Heap snapshot visualization failed for artifact {ArtifactId}", artifactId);
-            return VisualizationResult.Failure($"Heap snapshot visualization failed: {ex.Message}");
-        }
-    }
-
-    private static async Task SaveAndOpenVisualizationAsync(string content, string filename, string format, ILogger logger, string artifactRoot, CancellationToken cancellationToken)
-    {
-        try
-        {
-            // Validate filename is within artifact root to prevent arbitrary file writes
-            PathSecurity.EnsurePathWithinDirectory(filename, artifactRoot);
-
-            // Save to file
-            await System.IO.File.WriteAllTextAsync(filename, content, cancellationToken);
-            logger.LogInformation("Visualization saved to {Filename}", filename);
-
-            // Open in default browser
-            var startInfo = new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = filename,
-                UseShellExecute = true
-            };
-            System.Diagnostics.Process.Start(startInfo);
-            logger.LogInformation("Visualization opened in default browser");
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to save or open visualization file {Filename}", filename);
-            throw new InvalidOperationException($"Failed to save or open visualization: {ex.Message}", ex);
+            logger.LogError(ex, "Heap analysis failed for artifact {ArtifactId}", artifactId);
+            return HeapAnalysisResult.Failure($"Heap analysis failed: {ex.Message}");
         }
     }
 }
@@ -1360,18 +1167,52 @@ public record DetectedPattern(
     string Recommendation
 );
 
-public record VisualizationResult(
+public record HeapAnalysisResult(
     bool IsSuccess,
     string Content,
-    string Format,
     string? Error
 )
 {
-    public static VisualizationResult Success(string content, string format) =>
-        new(true, content, format, null);
+    public static HeapAnalysisResult Success(string content) =>
+        new(true, content, null);
 
-    public static VisualizationResult Failure(string error) =>
-        new(false, string.Empty, "none", error);
+    public static HeapAnalysisResult Failure(string error) =>
+        new(false, string.Empty, error);
+}
+
+public record HeapTypeStatsData
+{
+    public string ArtifactId { get; init; } = string.Empty;
+    public string Metric { get; init; } = string.Empty;
+    public long TotalHeapBytes { get; init; }
+    public long TotalObjectCount { get; init; }
+    public List<TypeStatData> TypeStats { get; init; } = new();
+}
+
+public record HeapDiffAnalysisData
+{
+    public string BaselineArtifactId { get; init; } = string.Empty;
+    public string TargetArtifactId { get; init; } = string.Empty;
+    public string Metric { get; init; } = string.Empty;
+    public long TotalHeapBytesBaseline { get; init; }
+    public long TotalHeapBytesTarget { get; init; }
+    public long TotalObjectCountBaseline { get; init; }
+    public long TotalObjectCountTarget { get; init; }
+    public List<TypeDiffData> TypeDiffs { get; init; } = new();
+}
+
+public record TypeDiffData
+{
+    public string TypeName { get; init; } = string.Empty;
+    public string Namespace { get; init; } = string.Empty;
+    public string Status { get; init; } = string.Empty;
+    public long BaselineCount { get; init; }
+    public long TargetCount { get; init; }
+    public long CountDelta { get; init; }
+    public long BaselineShallowSize { get; init; }
+    public long TargetShallowSize { get; init; }
+    public long ShallowSizeDelta { get; init; }
+    public double ShallowSizePercentChange { get; init; }
 }
 
 public record StackFrameData
