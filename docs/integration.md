@@ -47,7 +47,7 @@ dotnet tool install -g dotnet-dump
 
 **Purpose:** Collect GC heap snapshots
 
-**Used in:** `collect_gcdump`, `analyze_heap` (v1.2.0), `import_gcdump` (v1.2.0)
+**Used in:** `collect_gcdump`, `analyze_heap` (v1.2.0), `find_retainer_paths` (v1.2.0), `import_gcdump` (v1.2.0)
 
 **Install:**
 ```bash
@@ -56,7 +56,7 @@ dotnet tool install -g dotnet-gcdump
 
 **Without this tool:** GC heap snapshots not collected (use full memory dump instead), heap analysis not available
 
-**Note (v1.2.0):** For heap analysis, use .gcdump files (reliable) instead of .nettrace (unreliable for heap data). Process-based parsing via ClrScope.HeapParser with 5-minute timeout for reliability.
+**Note (v1.2.0):** For heap analysis, use .gcdump files (reliable) instead of .nettrace (unreliable for heap data). Heap analysis includes dominator tree calculation (Cooper-Harvey-Kennedy algorithm) for retained size and retainer path tracing.
 
 ---
 
@@ -116,11 +116,11 @@ dotnet-symbol set-symbol-server https://msdl.microsoft.com/download/symbols
 - dotnet-dump (or gcore on Linux)
 
 **Recommended:**
+- dotnet-gcdump (heap analysis with dominator tree and retainer paths)
 - dotnet-stack (thread analysis)
 - dotnet-counters (performance monitoring)
 
 **Optional:**
-- dotnet-gcdump (fast GC heap analysis)
 - dotnet-symbol (improved stack traces)
 
 ## .NET Version Compatibility
