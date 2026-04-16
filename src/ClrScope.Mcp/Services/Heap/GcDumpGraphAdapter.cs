@@ -47,15 +47,24 @@ public sealed class GcDumpGraphAdapter : IGcDumpGraphAdapter
         var edges = new List<MemoryEdgeData>();
         var roots = new List<RootGroupData>();
 
+        _logger.LogInformation("Graph NodeIndexLimit: {NodeIndexLimit}", graph.NodeIndexLimit);
+
         var nodeStorage = graph.AllocNodeStorage();
         var typeStorage = graph.AllocTypeNodeStorage();
+
+        int nodesWithSize = 0;
+        int nodesWithoutSize = 0;
 
         for (NodeIndex idx = 0; (long)idx < (long)graph.NodeIndexLimit; idx++)
         {
             var node = graph.GetNode(idx, nodeStorage);
             if (node.Size == 0)
+            {
+                nodesWithoutSize++;
                 continue;
+            }
 
+            nodesWithSize++;
             var nodeType = graph.GetType(node.TypeIndex, typeStorage);
 
             nodes[(long)idx] = new MemoryNodeData
@@ -118,6 +127,9 @@ public sealed class GcDumpGraphAdapter : IGcDumpGraphAdapter
                 nodeData.RootKind = rootKind;
             }
         }
+
+        _logger.LogInformation("Parsed {NodeCount} nodes with size, {NodesWithoutSize} nodes without size, {EdgeCount} edges, {RootCount} roots",
+            nodesWithSize, nodesWithoutSize, edges.Count, roots.Count);
 
         return new HeapGraphData
         {
