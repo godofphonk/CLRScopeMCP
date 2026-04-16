@@ -103,7 +103,7 @@ This document provides comprehensive requirements for using all CLRScope MCP fea
 
 ### GC Heap Analysis
 - **Required**: dotnet-gcdump
-- **v1.2.0 Heap Visualization**: Process-based parsing via ClrScope.HeapParser with 5-minute timeout for reliability
+- **v1.2.0 Heap Analysis**: Process-based parsing via ClrScope.HeapParser with 5-minute timeout for reliability
 
 ### Pattern Detection (Memory Leaks, Deadlocks, High CPU)
 - **Required**: dotnet-dump or dotnet-gcdump

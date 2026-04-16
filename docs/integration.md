@@ -47,16 +47,16 @@ dotnet tool install -g dotnet-dump
 
 **Purpose:** Collect GC heap snapshots
 
-**Used in:** `collect_gcdump`, `visualize_heap_snapshot` (v1.2.0), `import_gcdump` (v1.2.0)
+**Used in:** `collect_gcdump`, `analyze_heap` (v1.2.0), `import_gcdump` (v1.2.0)
 
 **Install:**
 ```bash
 dotnet tool install -g dotnet-gcdump
 ```
 
-**Without this tool:** GC heap snapshots not collected (use full memory dump instead), heap visualization not available
+**Without this tool:** GC heap snapshots not collected (use full memory dump instead), heap analysis not available
 
-**Note (v1.2.0):** For heap visualization, use .gcdump files (reliable) instead of .nettrace (unreliable for heap data). Process-based parsing via ClrScope.HeapParser with 5-minute timeout for reliability.
+**Note (v1.2.0):** For heap analysis, use .gcdump files (reliable) instead of .nettrace (unreliable for heap data). Process-based parsing via ClrScope.HeapParser with 5-minute timeout for reliability.
 
 ---
 

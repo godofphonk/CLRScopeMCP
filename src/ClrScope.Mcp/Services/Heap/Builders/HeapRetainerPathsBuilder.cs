@@ -19,48 +19,64 @@ public sealed class HeapRetainerPathsBuilder
         _dominatorCalculator = dominatorCalculator;
     }
 
-    public RetainerPathData BuildRetainerPaths(HeapGraphData graph, string targetObjectId)
-    {
-        _logger.LogInformation("Building retainer paths for target object {TargetObjectId}", targetObjectId);
-
-        // Simplified retainer path building
-        // Full implementation would traverse dominator tree from roots to target
-
-        var chains = new List<RetainerChainData>();
-
-        // For now, return empty chains as placeholder
-        // Full implementation would:
-        // 1. Find dominator tree for target object
-        // 2. Trace paths from all roots to target
-        // 3. Build retainer chains with step-by-step information
-
-        MemoryNodeData? targetNode = null;
-        if (long.TryParse(targetObjectId, out var nodeId))
-        {
-            targetNode = graph.Nodes.GetValueOrDefault(nodeId);
-        }
-
-        return new RetainerPathData
-        {
-            TargetObjectId = targetObjectId,
-            TargetTypeName = targetNode?.TypeName ?? "Unknown",
-            RetainerChains = chains
-        };
-    }
-
-    public RetainerPathData BuildRetainerPaths(HeapGraphData graph, string targetObjectId, int maxPaths)
+    public RetainerPathData BuildRetainerPaths(HeapGraphData graph, string targetObjectId, int maxPaths = 10)
     {
         _logger.LogInformation("Building retainer paths for target object {TargetObjectId} (max {MaxPaths} paths)",
             targetObjectId, maxPaths);
 
-        var paths = BuildRetainerPaths(graph, targetObjectId);
-
-        // Limit number of paths
-        if (paths.RetainerChains.Count > maxPaths)
+        // Parse target object ID
+        if (!long.TryParse(targetObjectId, out var targetNodeId))
         {
-            paths.RetainerChains = paths.RetainerChains.Take(maxPaths).ToList();
+            _logger.LogWarning("Invalid target object ID: {TargetObjectId}", targetObjectId);
+            return new RetainerPathData
+            {
+                TargetObjectId = targetObjectId,
+                TargetTypeName = "Unknown",
+                RetainerChains = new List<RetainerChainData>()
+            };
         }
 
-        return paths;
+        // Get target node
+        var targetNode = graph.Nodes.GetValueOrDefault(targetNodeId);
+        if (targetNode == null)
+        {
+            _logger.LogWarning("Target node not found: {TargetNodeId}", targetNodeId);
+            return new RetainerPathData
+            {
+                TargetObjectId = targetObjectId,
+                TargetTypeName = "Unknown",
+                RetainerChains = new List<RetainerChainData>()
+            };
+        }
+
+        // Use DominatorTreeCalculator to find retainer paths
+        var retainerPaths = _dominatorCalculator.FindRetainerPaths(graph, targetNodeId, maxPaths);
+
+        // Convert RetainerPath to RetainerChainData
+        var chains = retainerPaths.Select(rp => new RetainerChainData
+        {
+            RetainedSizeBytes = targetNode.RetainedSizeBytes,
+            Steps = rp.Steps.Select(step =>
+            {
+                var fromNode = graph.Nodes.GetValueOrDefault(step.FromNodeId);
+                return new RetainerStepData
+                {
+                    ObjectId = step.FromNodeId.ToString(),
+                    TypeName = fromNode?.TypeName ?? "Unknown",
+                    Namespace = fromNode?.Namespace ?? string.Empty,
+                    AssemblyName = fromNode?.AssemblyName ?? string.Empty,
+                    FieldName = step.EdgeKind,
+                    ShallowSizeBytes = fromNode?.ShallowSizeBytes ?? 0,
+                    IsRoot = graph.Nodes.GetValueOrDefault(step.FromNodeId)?.IsRoot ?? false
+                };
+            }).ToList()
+        }).ToList();
+
+        return new RetainerPathData
+        {
+            TargetObjectId = targetObjectId,
+            TargetTypeName = targetNode.TypeName,
+            RetainerChains = chains
+        };
     }
 }

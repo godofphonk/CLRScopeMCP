@@ -1092,7 +1092,8 @@ public sealed class SummaryTools
                         TypeName = ts.TypeName,
                         Namespace = ts.Namespace,
                         Count = ts.Count,
-                        ShallowSizeBytes = ts.ShallowSizeBytes
+                        ShallowSizeBytes = ts.ShallowSizeBytes,
+                        RetainedSizeBytes = ts.RetainedSizeBytes
                     }).ToList()
                 };
 
@@ -1115,8 +1116,114 @@ public sealed class SummaryTools
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Heap analysis failed for artifact {ArtifactId}", artifactId);
-            return HeapAnalysisResult.Failure($"Heap analysis failed: {ex.Message}");
+            logger.LogError(ex, "Heap analysis failed for artifact {ArtifactId}. Stack: {StackTrace}", artifactId, ex.StackTrace);
+            return HeapAnalysisResult.Failure($"Heap analysis failed: {ex.Message}\nStack: {ex.StackTrace}");
+        }
+    }
+
+    [McpServerTool(Name = "find_retainer_paths"), Description("Find retainer paths from roots to a target object in heap snapshot. Returns JSON with paths showing object retention chains.")]
+    public static async Task<HeapAnalysisResult> FindRetainerPaths(
+        string artifactId,
+        string targetNodeId,
+        McpServer server,
+        [Description("Maximum number of paths to return (default: 10)")] int maxPaths = 10,
+        CancellationToken cancellationToken = default)
+    {
+        var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
+        var logger = server.Services!.GetRequiredService<ILogger<SummaryTools>>();
+        var preparer = server.Services!.GetRequiredService<IHeapSnapshotPreparer>();
+        var dominatorCalculator = server.Services!.GetRequiredService<DominatorTreeCalculator>();
+
+        // Add 5-minute timeout to prevent hanging
+        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+
+        try
+        {
+            var artifact = await artifactStore.GetAsync(new ArtifactId(artifactId), linkedCts.Token);
+            if (artifact == null)
+            {
+                return HeapAnalysisResult.Failure($"Artifact not found: {artifactId}");
+            }
+
+            if (artifact.Kind != ArtifactKind.GcDump)
+            {
+                return HeapAnalysisResult.Failure($"Artifact {artifactId} is not a GcDump.");
+            }
+
+            // Parse target node ID
+            if (!long.TryParse(targetNodeId, out var targetNodeIdLong))
+            {
+                return HeapAnalysisResult.Failure($"Invalid target node ID: {targetNodeId}");
+            }
+
+            // Prepare heap snapshot
+            var options = new HeapPreparationOptions
+            {
+                Metric = HeapMetricKind.ShallowSize,
+                AnalysisMode = HeapAnalysisMode.Auto,
+                GroupBy = HeapGroupBy.Type,
+                MaxTypes = 100
+            };
+
+            logger.LogInformation("Preparing heap snapshot for artifact {ArtifactId}", artifactId);
+            var prepared = await preparer.PrepareAsync(artifact, options, linkedCts.Token);
+
+            // Build graph from snapshot
+            var graph = new HeapGraphData
+            {
+                Nodes = prepared.Snapshot.Nodes.ToDictionary(n => n.NodeId),
+                Edges = prepared.Snapshot.Edges.ToList(),
+                Roots = prepared.Snapshot.Roots.ToList()
+            };
+
+            // Find retainer paths using DominatorTreeCalculator
+            logger.LogInformation("Finding retainer paths for target node {TargetNodeId}", targetNodeId);
+            var retainerPaths = dominatorCalculator.FindRetainerPaths(graph, targetNodeIdLong, maxPaths);
+
+            // Convert to JSON
+            var pathsData = retainerPaths.Select(rp => new RetainerPathData
+            {
+                RootNodeId = rp.RootNodeId,
+                RootKind = rp.RootKind,
+                TotalSteps = rp.TotalSteps,
+                Steps = rp.Steps.Select(s => new RetainerPathStepData
+                {
+                    FromNodeId = s.FromNodeId,
+                    ToNodeId = s.ToNodeId,
+                    EdgeKind = s.EdgeKind,
+                    IsWeak = s.IsWeak
+                }).ToList()
+            }).ToList();
+
+            var result = new RetainerPathsResult
+            {
+                TargetNodeId = targetNodeId,
+                PathCount = pathsData.Count,
+                MaxPaths = maxPaths,
+                Paths = pathsData
+            };
+
+            return HeapAnalysisResult.Success(JsonSerializer.Serialize(result, new JsonSerializerOptions
+            {
+                WriteIndented = true,
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            }));
+        }
+        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+        {
+            logger.LogError("FindRetainerPaths timed out after 5 minutes for artifact {ArtifactId}", artifactId);
+            return HeapAnalysisResult.Failure("FindRetainerPaths timed out after 5 minutes - the operation may be hanging");
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            logger.LogInformation("FindRetainerPaths was cancelled for artifact {ArtifactId}", artifactId);
+            return HeapAnalysisResult.Failure("FindRetainerPaths was cancelled");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Find retainer paths failed for artifact {ArtifactId}", artifactId);
+            return HeapAnalysisResult.Failure($"Find retainer paths failed: {ex.Message}");
         }
     }
 }
@@ -1227,3 +1334,31 @@ public record StackFrame(string ChildSP, string IP, string CallSite);
 public record ThreadStack(int ThreadId, string? ThreadName, StackFrame[] Frames);
 
 public record StacksOutput(int Pid, DateTime Timestamp, ThreadStack[] Threads);
+
+// Retainer paths result for MCP tool
+public record RetainerPathsResult
+{
+    public string TargetNodeId { get; init; } = string.Empty;
+    public int PathCount { get; init; }
+    public int MaxPaths { get; init; }
+    public required List<RetainerPathData> Paths { get; init; }
+}
+
+// Retainer path data for MCP tool
+public record RetainerPathData
+{
+    public long RootNodeId { get; init; }
+    public string RootKind { get; init; } = string.Empty;
+    public int TotalSteps { get; init; }
+    public required List<RetainerPathStepData> Steps { get; init; }
+}
+
+// Retainer path step data for MCP tool
+public record RetainerPathStepData
+{
+    public long FromNodeId { get; init; }
+    public long ToNodeId { get; init; }
+    public string EdgeKind { get; init; } = string.Empty;
+    public bool IsWeak { get; init; }
+}
+

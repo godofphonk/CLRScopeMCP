@@ -141,27 +141,25 @@ This document provides solutions to common issues when using CLRScope MCP.
 - Use `artifact_summarize` for general analysis
 - Patterns may not be present in collected data
 
-### Heap Visualization Fails
+### Heap Analysis Fails
 
-**Problem:** `visualize_heap_snapshot` fails with error.
+**Problem:** `analyze_heap` fails with error.
 
 **Solutions:**
-- For .gcdump: Verify file is valid gcdump format
-- For .nettrace: Check preflight validation results for partial/incomplete data
-- .nettrace heap snapshots are unreliable even with correct keywords
-- Use .gcdump files for heap visualization instead of .nettrace
+- Verify artifact is a valid .gcdump file (not .nettrace)
+- .nettrace heap snapshots are unreliable — use .gcdump instead
 - Check process-based parsing timeout (5 minutes for reliability)
 - Verify ClrScope.HeapParser.dll is in correct location
 
-### Heap Visualization Shows Partial Data
+### Heap Analysis Shows Partial Data
 
-**Problem:** Heap visualization returns error about partial heap data.
+**Problem:** `analyze_heap` returns incomplete or empty type statistics.
 
 **Solutions:**
-- Use `.gcdump` files for reliable heap visualization (recommended)
+- Use `.gcdump` files for reliable heap analysis (recommended)
 - `.nettrace` heap snapshots are unreliable even with correct keywords
 - Use `dotnet-gcdump collect` instead of `dotnet-trace collect` for heap snapshots
-- `.nettrace` files are suitable for CPU profiling and trace analysis, not heap visualization
+- `.nettrace` files are suitable for CPU profiling and trace analysis, not heap analysis
 
 ## Session Issues
 

@@ -109,10 +109,10 @@ This prevents wasting time on non-.NET processes or processes that have already 
 - Not suitable for real-time monitoring
 
 **Best Practices (v1.2.0):**
-- Use `visualize_heap_snapshot` for type distribution, treemap, diff views, retainer paths
+- Use `analyze_heap` for type statistics and diff comparison (JSON/text output)
 - Process-based parsing via ClrScope.HeapParser with 5-minute timeout for reliability
-- Compare baseline vs issue gcdumps using diff view to identify growing objects
-- Use .gcdump files for heap visualization (reliable) vs .nettrace (unreliable for heap data)
+- Compare baseline vs issue gcdumps using diff analysis to identify growing objects
+- Use .gcdump files for heap analysis (reliable) vs .nettrace (unreliable for heap data)
 
 ### Thread Stacks (collect_stacks)
 

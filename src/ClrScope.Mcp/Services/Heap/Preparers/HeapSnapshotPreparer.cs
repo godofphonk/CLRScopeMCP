@@ -17,15 +17,18 @@ public sealed class HeapSnapshotPreparer : IHeapSnapshotPreparer
     private readonly ICliCommandRunner _cliRunner;
     private readonly ILogger<HeapSnapshotPreparer> _logger;
     private readonly IHeapSnapshotCache _cache;
+    private readonly DominatorTreeCalculator _dominatorCalculator;
 
     public HeapSnapshotPreparer(
         ICliCommandRunner cliRunner,
         ILogger<HeapSnapshotPreparer> logger,
-        IHeapSnapshotCache cache)
+        IHeapSnapshotCache cache,
+        DominatorTreeCalculator dominatorCalculator)
     {
         _cliRunner = cliRunner ?? throw new ArgumentNullException(nameof(cliRunner));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _cache = cache ?? throw new ArgumentNullException(nameof(cache));
+        _dominatorCalculator = dominatorCalculator ?? throw new ArgumentNullException(nameof(dominatorCalculator));
     }
 
     public async Task<PreparedHeapVisualizationData> PrepareAsync(
@@ -111,7 +114,7 @@ public sealed class HeapSnapshotPreparer : IHeapSnapshotPreparer
                 Message = "Running dotnet-gcdump report (force)..."
             });
 
-            var typeStats = await RunGcDumpReportAsync(artifact.FilePath, cancellationToken);
+            var (typeStats, graphData) = await RunGcDumpReportAsync(artifact.FilePath, cancellationToken);
 
             progress?.Report(new HeapPreparationProgress
             {
@@ -131,7 +134,7 @@ public sealed class HeapSnapshotPreparer : IHeapSnapshotPreparer
                 Message = "Caching results..."
             });
 
-            var snapshot = BuildSnapshot(artifact, filteredStats);
+            var snapshot = BuildSnapshot(artifact, filteredStats, graphData);
             _cache.Set(cacheKey, snapshot);
 
             progress?.Report(new HeapPreparationProgress
@@ -188,7 +191,7 @@ public sealed class HeapSnapshotPreparer : IHeapSnapshotPreparer
             Message = "Running dotnet-gcdump report..."
         });
 
-        var autoTypeStats = await RunGcDumpReportAsync(artifact.FilePath, cancellationToken);
+        var (autoTypeStats, autoGraphData) = await RunGcDumpReportAsync(artifact.FilePath, cancellationToken);
 
         progress?.Report(new HeapPreparationProgress
         {
@@ -208,7 +211,7 @@ public sealed class HeapSnapshotPreparer : IHeapSnapshotPreparer
             Message = "Caching results..."
         });
 
-        var autoSnapshot = BuildSnapshot(artifact, autoFilteredStats);
+        var autoSnapshot = BuildSnapshot(artifact, autoFilteredStats, autoGraphData);
         _cache.Set(cacheKey, autoSnapshot);
 
         progress?.Report(new HeapPreparationProgress
@@ -228,7 +231,7 @@ public sealed class HeapSnapshotPreparer : IHeapSnapshotPreparer
         };
     }
 
-    private async Task<List<TypeStatData>> RunGcDumpReportAsync(
+    private async Task<(List<TypeStatData> TypeStats, HeapGraphData GraphData)> RunGcDumpReportAsync(
         string gcdumpPath,
         CancellationToken cancellationToken)
     {
@@ -261,7 +264,7 @@ public sealed class HeapSnapshotPreparer : IHeapSnapshotPreparer
         return ParseHeapParserJsonOutput(result.StandardOutput);
     }
 
-    private List<TypeStatData> ParseHeapParserJsonOutput(string output)
+    private (List<TypeStatData> TypeStats, HeapGraphData GraphData) ParseHeapParserJsonOutput(string output)
     {
         try
         {
@@ -273,8 +276,17 @@ public sealed class HeapSnapshotPreparer : IHeapSnapshotPreparer
             if (graphData == null || graphData.Nodes.Count == 0)
             {
                 _logger.LogWarning("HeapParser returned empty graph data");
-                return new List<TypeStatData>();
+                return (new List<TypeStatData>(), graphData ?? new HeapGraphData
+                {
+                    Nodes = new Dictionary<long, MemoryNodeData>(),
+                    Edges = new List<MemoryEdgeData>(),
+                    Roots = new List<RootGroupData>()
+                });
             }
+
+            // Phase 1: Calculate retained size using dominator tree
+            _logger.LogInformation("Calculating retained size for {NodeCount} nodes using dominator tree", graphData.Nodes.Count);
+            _dominatorCalculator.CalculateRetainedSize(graphData);
 
             // Aggregate nodes by type name to create TypeStatData
             var typeStats = new Dictionary<string, TypeStatData>();
@@ -311,7 +323,7 @@ public sealed class HeapSnapshotPreparer : IHeapSnapshotPreparer
                 }
             }
 
-            return typeStats.Values.ToList();
+            return (typeStats.Values.ToList(), graphData);
         }
         catch (JsonException ex)
         {
@@ -324,15 +336,21 @@ public sealed class HeapSnapshotPreparer : IHeapSnapshotPreparer
         List<TypeStatData> typeStats,
         HeapPreparationOptions options)
     {
+        _logger.LogInformation("FilterAndAggregate: TypeStats count = {Count}", typeStats.Count);
+        foreach (var ts in typeStats.Take(10))
+        {
+            _logger.LogInformation("Type: {TypeName}, Namespace: {Namespace}", ts.TypeName, ts.Namespace);
+        }
+
         var query = typeStats.AsQueryable();
 
         // Group by
         if (options.GroupBy == HeapGroupBy.Namespace)
         {
-            query = query.GroupBy(t => t.Namespace)
+            query = query.GroupBy(t => t.Namespace ?? string.Empty)
                 .Select(g => new TypeStatData
                 {
-                    TypeName = g.Key ?? "<global>",
+                    TypeName = string.IsNullOrEmpty(g.Key) ? "<global>" : g.Key,
                     Namespace = g.Key ?? string.Empty,
                     AssemblyName = string.Empty,
                     Generation = "mixed",
@@ -343,10 +361,10 @@ public sealed class HeapSnapshotPreparer : IHeapSnapshotPreparer
         }
         else if (options.GroupBy == HeapGroupBy.Assembly)
         {
-            query = query.GroupBy(t => t.AssemblyName)
+            query = query.GroupBy(t => t.AssemblyName ?? string.Empty)
                 .Select(g => new TypeStatData
                 {
-                    TypeName = g.Key ?? "<unknown>",
+                    TypeName = string.IsNullOrEmpty(g.Key) ? "<unknown>" : g.Key,
                     Namespace = string.Empty,
                     AssemblyName = g.Key ?? string.Empty,
                     Generation = "mixed",
@@ -369,8 +387,20 @@ public sealed class HeapSnapshotPreparer : IHeapSnapshotPreparer
         return filtered;
     }
 
-    private static HeapSnapshotData BuildSnapshot(Artifact artifact, List<TypeStatData> filteredStats)
+    private static HeapSnapshotData BuildSnapshot(Artifact artifact, List<TypeStatData> filteredStats, HeapGraphData graphData)
     {
+        // Cache dominator tree results from graph
+        var dominators = new Dictionary<long, long?>();
+        var retainedSizes = new Dictionary<long, long>();
+        var depths = new Dictionary<long, int>();
+
+        foreach (var node in graphData.Nodes.Values)
+        {
+            dominators[node.NodeId] = node.DominatorNodeId;
+            retainedSizes[node.NodeId] = node.RetainedSizeBytes;
+            depths[node.NodeId] = 0; // TODO: Calculate depth from dominator tree
+        }
+
         return new HeapSnapshotData
         {
             Artifact = artifact,
@@ -380,18 +410,18 @@ public sealed class HeapSnapshotPreparer : IHeapSnapshotPreparer
                 ToolVersion = string.Empty,
                 TotalHeapBytes = filteredStats.Sum(t => t.ShallowSizeBytes),
                 TotalObjectCount = filteredStats.Sum(t => t.Count),
-                RootCount = 0,
+                RootCount = graphData.Roots.Count,
                 SegmentCount = 0,
                 IsPartial = false,
                 Warning = null
             },
-            Nodes = new List<MemoryNodeData>(),
-            Edges = new List<MemoryEdgeData>(),
-            Roots = new List<RootGroupData>(),
+            Nodes = graphData.Nodes.Values.ToList(),
+            Edges = graphData.Edges,
+            Roots = graphData.Roots,
             TypeStats = filteredStats,
-            Dominators = new Dictionary<long, long?>(),
-            RetainedSizes = new Dictionary<long, long>(),
-            Depths = new Dictionary<long, int>()
+            Dominators = dominators,
+            RetainedSizes = retainedSizes,
+            Depths = depths
         };
     }
 
