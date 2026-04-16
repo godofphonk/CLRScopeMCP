@@ -1,8 +1,11 @@
 using ClrScope.Mcp.Domain.Artifacts;
 using ClrScope.Mcp.Domain.Sessions;
+using ClrScope.Mcp.Infrastructure;
+using ClrScope.Mcp.Options;
 using ClrScope.Mcp.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using ModelContextProtocol.Server;
 using System.ComponentModel;
 using System.Globalization;
@@ -172,6 +175,196 @@ public sealed class CollectCountersTools
         }
     }
 
+    [McpServerTool(Name = "import_gcdump", Title = "Import GC Heap Snapshot File", ReadOnly = false, Idempotent = false), Description("Import existing .gcdump file as artifact for analysis")]
+    public static async Task<ImportArtifactResult> ImportGcDump(
+        [Description("Path to .gcdump file to import")] string filePath,
+        McpServer server,
+        CancellationToken cancellationToken = default)
+    {
+        var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
+        var sessionStore = server.Services!.GetRequiredService<ISqliteSessionStore>();
+        var options = server.Services!.GetRequiredService<IOptions<ClrScopeOptions>>();
+        var logger = server.Services!.GetRequiredService<ILogger<CollectCountersTools>>();
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(filePath))
+            {
+                return new ImportArtifactResult(
+                    Success: false,
+                    ArtifactId: null,
+                    Error: "File path is required"
+                );
+            }
+
+            if (!File.Exists(filePath))
+            {
+                return new ImportArtifactResult(
+                    Success: false,
+                    ArtifactId: null,
+                    Error: $"File not found: {filePath}"
+                );
+            }
+
+            if (!filePath.EndsWith(".gcdump", StringComparison.OrdinalIgnoreCase))
+            {
+                return new ImportArtifactResult(
+                    Success: false,
+                    ArtifactId: null,
+                    Error: "File must have .gcdump extension"
+                );
+            }
+
+            var fileInfo = new FileInfo(filePath);
+            if (fileInfo.Length == 0)
+            {
+                return new ImportArtifactResult(
+                    Success: false,
+                    ArtifactId: null,
+                    Error: "File is empty"
+                );
+            }
+
+            var artifactRoot = options.Value.GetArtifactRoot();
+            var gcdumpsDir = Path.Combine(artifactRoot, "gcdumps");
+            Directory.CreateDirectory(gcdumpsDir);
+
+            // Create session for import
+            var session = await sessionStore.CreateAsync(SessionKind.GcDump, 0, "import", cancellationToken);
+
+            var artifactId = ArtifactId.New();
+            var fileName = $"gcdump_{artifactId.Value}.gcdump";
+            var destPath = Path.Combine(gcdumpsDir, fileName);
+
+            File.Copy(filePath, destPath, overwrite: true);
+            logger.LogInformation("Imported .gcdump file from {SourcePath} to {DestPath}", filePath, destPath);
+
+            var artifact = await artifactStore.CreateAsync(
+                ArtifactKind.GcDump,
+                destPath,
+                fileInfo.Length,
+                0, // No PID for imported files
+                session.SessionId,
+                cancellationToken
+            );
+
+            var diagUri = $"clrscope://artifact/{artifact.ArtifactId.Value}";
+            var fileUri = new Uri(destPath).AbsoluteUri;
+            artifact = artifact with { DiagUri = diagUri, FileUri = fileUri, Status = ArtifactStatus.Completed };
+            await artifactStore.UpdateAsync(artifact, cancellationToken);
+
+            return new ImportArtifactResult(
+                Success: true,
+                ArtifactId: artifact.ArtifactId.Value,
+                Error: null
+            );
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Import .gcdump file failed for {FilePath}", filePath);
+            return new ImportArtifactResult(
+                Success: false,
+                ArtifactId: null,
+                Error: $"Import failed: {ex.Message}"
+            );
+        }
+    }
+
+    [McpServerTool(Name = "import_trace", Title = "Import EventPipe Trace File", ReadOnly = false, Idempotent = false), Description("Import existing .nettrace file as artifact for analysis")]
+    public static async Task<ImportArtifactResult> ImportTrace(
+        [Description("Path to .nettrace file to import")] string filePath,
+        McpServer server,
+        CancellationToken cancellationToken = default)
+    {
+        var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
+        var sessionStore = server.Services!.GetRequiredService<ISqliteSessionStore>();
+        var options = server.Services!.GetRequiredService<IOptions<ClrScopeOptions>>();
+        var logger = server.Services!.GetRequiredService<ILogger<CollectCountersTools>>();
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(filePath))
+            {
+                return new ImportArtifactResult(
+                    Success: false,
+                    ArtifactId: null,
+                    Error: "File path is required"
+                );
+            }
+
+            if (!File.Exists(filePath))
+            {
+                return new ImportArtifactResult(
+                    Success: false,
+                    ArtifactId: null,
+                    Error: $"File not found: {filePath}"
+                );
+            }
+
+            if (!filePath.EndsWith(".nettrace", StringComparison.OrdinalIgnoreCase))
+            {
+                return new ImportArtifactResult(
+                    Success: false,
+                    ArtifactId: null,
+                    Error: "File must have .nettrace extension"
+                );
+            }
+
+            var fileInfo = new FileInfo(filePath);
+            if (fileInfo.Length == 0)
+            {
+                return new ImportArtifactResult(
+                    Success: false,
+                    ArtifactId: null,
+                    Error: "File is empty"
+                );
+            }
+
+            var artifactRoot = options.Value.GetArtifactRoot();
+            var tracesDir = Path.Combine(artifactRoot, "traces");
+            Directory.CreateDirectory(tracesDir);
+
+            // Create session for import
+            var session = await sessionStore.CreateAsync(SessionKind.Trace, 0, "import", cancellationToken);
+
+            var artifactId = ArtifactId.New();
+            var fileName = $"trace_{artifactId.Value}.nettrace";
+            var destPath = Path.Combine(tracesDir, fileName);
+
+            File.Copy(filePath, destPath, overwrite: true);
+            logger.LogInformation("Imported .nettrace file from {SourcePath} to {DestPath}", filePath, destPath);
+
+            var artifact = await artifactStore.CreateAsync(
+                ArtifactKind.Trace,
+                destPath,
+                fileInfo.Length,
+                0, // No PID for imported files
+                session.SessionId,
+                cancellationToken
+            );
+
+            var diagUri = $"clrscope://artifact/{artifact.ArtifactId.Value}";
+            var fileUri = new Uri(destPath).AbsoluteUri;
+            artifact = artifact with { DiagUri = diagUri, FileUri = fileUri, Status = ArtifactStatus.Completed };
+            await artifactStore.UpdateAsync(artifact, cancellationToken);
+
+            return new ImportArtifactResult(
+                Success: true,
+                ArtifactId: artifact.ArtifactId.Value,
+                Error: null
+            );
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Import .nettrace file failed for {FilePath}", filePath);
+            return new ImportArtifactResult(
+                Success: false,
+                ArtifactId: null,
+                Error: $"Import failed: {ex.Message}"
+            );
+        }
+    }
+
     [McpServerTool(Name = "collect_stacks", Title = "Collect Managed Stacks", ReadOnly = false, Idempotent = false), Description("Collect managed stacks via dotnet-stack CLI. Output format: text (plain text) or json (structured JSON for parsing). For long-running operations, use session_get with the Session ID to track progress via Phase and Status.")]
     public static async Task<CollectStacksResult> CollectStacks(
         [Description("Process ID to collect managed stacks from")] int pid,
@@ -260,4 +453,10 @@ public record CollectStacksResult(
     string Message,
     string? ArtifactId,
     string? SessionId = null
+);
+
+public record ImportArtifactResult(
+    bool Success,
+    string? ArtifactId,
+    string? Error
 );
