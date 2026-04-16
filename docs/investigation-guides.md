@@ -21,6 +21,218 @@ For most scenarios, start with an automated workflow. Each workflow collects all
 
 ---
 
+## Workflow Selection Guide
+
+### Decision Tree for Workflow Selection
+
+```
+Is the issue reproducible?
+├─ Yes
+│  ├─ Is the system responsive?
+│  │  ├─ Yes → Use Baseline + Issue workflow
+│  │  │         1. Collect baseline: workflow_automated_baseline_bundle
+│  │  │         2. Reproduce issue
+│  │  │         3. Collect issue: appropriate workflow (CPU/Memory/Hang)
+│  │  │         4. Compare: session_analyze with baseline
+│  │  └─ No (frozen) → Use Hang workflow immediately
+│  │         workflow_automated_hang_bundle
+│  └─ No (intermittent)
+│     └─ Use Baseline + Monitoring workflow
+│        1. Collect baseline: workflow_automated_baseline_bundle
+│        2. Set up continuous monitoring
+│        3. Trigger collection on issue occurrence
+└─ No (production issue, can't reproduce)
+   └─ Use existing artifacts if available
+      1. artifact_list to find relevant artifacts
+      2. artifact_summarize for quick analysis
+      3. session_analyze for comparison
+```
+
+### Scenario-Based Workflow Recommendations
+
+#### High CPU (>80% sustained)
+
+**Symptoms:**
+- Process CPU consistently above 80%
+- Slow response times
+- High thread pool queue length
+
+**Recommended Workflow:**
+```
+workflow_automated_high_cpu_bundle
+```
+
+**Parameters:**
+- `duration`: `00:01:00` (1 minute) for sustained issues
+- `duration`: `00:00:30` (30 seconds) for quick checks
+
+**Follow-up Analysis:**
+1. `artifact_summarize` — automated analysis
+2. `detect_patterns` with `patternTypes: high_cpu` — identify hot paths
+3. Review trace data for hot methods
+4. Compare with baseline if available
+
+**When to use manual collection instead:**
+- Need to correlate with specific user actions
+- Need to collect during specific time window
+- Need to collect multiple samples over time
+
+---
+
+#### Memory Leak (Memory Growing Over Time)
+
+**Symptoms:**
+- Process memory grows continuously
+- OutOfMemoryException after extended runtime
+- High GC pause times
+
+**Recommended Workflow:**
+```
+workflow_automated_memory_leak_bundle
+```
+
+**Parameters:**
+- `duration`: `00:01:00` (1 minute) — duration less critical for memory
+- Run at regular intervals (e.g., every hour) to track growth
+
+**Follow-up Analysis:**
+1. `artifact_summarize` — automated analysis
+2. `analyze_heap` with `analysisType: type_stats` — identify top types
+3. `analyze_heap` with `analysisType: diff` — compare baseline vs issue
+4. `analyze_heap` with `analysisType: objects` — get node IDs
+5. `find_retainer_paths` — trace retention chains
+6. `detect_patterns` with `patternTypes: memory_leaks` — automated detection
+
+**Critical:** Always collect baseline before issue occurs for meaningful diff analysis.
+
+---
+
+#### Hang/Deadlock (Application Frozen)
+
+**Symptoms:**
+- Application completely unresponsive
+- Requests timing out
+- UI frozen
+
+**Recommended Workflow:**
+```
+workflow_automated_hang_bundle
+```
+
+**Parameters:**
+- `duration`: `00:00:30` (30 seconds) — quick collection is critical
+- Collect immediately when hang occurs
+
+**Follow-up Analysis:**
+1. `artifact_summarize` — automated analysis
+2. `analyze_dump_sos` with `command: threads` — identify blocked threads
+3. `analyze_dump_sos` with `command: clrstack` — get stack traces
+4. `detect_patterns` with `patternTypes: deadlocks` — detect circular waits
+5. Review thread pool counters
+
+**Critical:** Time-sensitive - must collect dump immediately when hang occurs.
+
+---
+
+#### Baseline Performance Collection
+
+**Purpose:** Collect reference data from healthy system state for future comparison.
+
+**Recommended Workflow:**
+```
+workflow_automated_baseline_bundle
+```
+
+**Parameters:**
+- `duration`: `00:01:00` (1 minute) — sufficient for baseline
+- Run during normal operation (no issues)
+
+**Follow-up:**
+1. `artifact_pin` — pin baseline artifacts to prevent cleanup
+2. Document baseline conditions (load, user count, etc.)
+3. Use `session_analyze` with `baselineSessionId` for future comparisons
+
+**When to collect baseline:**
+- Before deploying new version
+- During normal peak hours
+- Before making configuration changes
+- As part of regular monitoring schedule
+
+---
+
+#### Intermittent Issues
+
+**Symptoms:**
+- Issue occurs sporadically
+- Cannot reproduce on demand
+- Issue happens under specific load conditions
+
+**Recommended Approach:**
+```
+1. Collect baseline: workflow_automated_baseline_bundle
+2. Set up continuous monitoring
+3. Trigger collection when issue occurs
+```
+
+**Manual Collection Strategy:**
+- Use individual tools for flexible collection
+- Collect multiple samples over time
+- Correlate with application logs
+- Use `artifact_summarize` on each sample
+
+**Follow-up:**
+- Compare samples to identify patterns
+- Use `session_analyze` to group related artifacts
+- Look for correlation with specific events
+
+---
+
+#### Production Debugging (No Reproduction)
+
+**Situation:** Issue occurred in production, cannot reproduce locally.
+
+**Recommended Approach:**
+```
+1. artifact_list — find existing artifacts
+2. artifact_summarize — quick analysis
+3. session_analyze — group related artifacts
+4. Manual investigation based on available data
+```
+
+**If artifacts available:**
+- Use appropriate manual investigation guide
+- Compare with baseline if available
+- Focus on what data is available
+
+**If no artifacts available:**
+- Document what happened (logs, metrics)
+- Plan for future artifact collection
+- Set up monitoring to catch next occurrence
+
+---
+
+### Workflow Comparison
+
+| Scenario | Recommended Workflow | Duration | Priority | Baseline Needed? |
+|----------|---------------------|----------|----------|------------------|
+| High CPU | `workflow_automated_high_cpu_bundle` | 1 min | High | Recommended |
+| Memory Leak | `workflow_automated_memory_leak_bundle` | 1 min | High | Required |
+| Hang/Deadlock | `workflow_automated_hang_bundle` | 30 sec | Critical | Optional |
+| Baseline | `workflow_automated_baseline_bundle` | 1 min | High | N/A |
+| Intermittent | Manual tools | Variable | Medium | Required |
+| Production Debug | Existing artifacts | N/A | High | Recommended |
+
+### Common Mistakes to Avoid
+
+1. **Not collecting baseline** — Cannot determine if metrics are abnormal
+2. **Using wrong workflow** — e.g., using CPU workflow for memory issues
+3. **Collecting too late** — especially for hang/deadlock scenarios
+4. **Collecting too short** — insufficient data for analysis
+5. **Not pinning baseline artifacts** — automatic cleanup removes them
+6. **Using manual collection when workflow exists** — increases error risk
+
+---
+
 ## Manual Investigation Guides
 
 For granular control or when automated workflows are not suitable.
