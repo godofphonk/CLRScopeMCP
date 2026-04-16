@@ -86,12 +86,37 @@ Step-by-step guide for hang/deadlock investigation:
 6. Use `analyze_dump_sos` with `threads` command to list all threads
 7. Use `analyze_dump_sos` with `clrstack` command to get stack traces for each thread
 8. Use `visualize_flame_graph` with the dump artifact to generate a snapshot flame graph (v1.2.0)
-9. Look for threads blocked on locks, monitors, or wait handles
-10. Check for deadlock patterns (circular wait chains)
-11. Review thread pool queue length and worker threads
-12. Check for async/await deadlocks or thread pool starvation
+9. Optionally use the `filename` parameter to automatically save and open the visualization in your default browser
+10. Look for threads blocked on locks, monitors, or wait handles
+11. Check for deadlock patterns (circular wait chains)
+12. Review thread pool queue length and worker threads
+13. Check for async/await deadlocks or thread pool starvation
 
 **Alternative**: Use `workflow_automated_hang_bundle` for automated collection.
+
+### Flame Graph Visualization Example
+
+The `visualize_flame_graph` tool generates compact flame graphs showing thread call stacks. Here's an example of a flame graph visualization:
+
+![Flame Graph Example](images/flame-graph.svg)
+
+**Features:**
+- Fixed-width rectangles (200px) for better readability
+- Color-coded by thread ID
+- Unique call sites only (no duplicates)
+- Automatic XML escaping for special characters
+- Optional `filename` parameter for auto-saving and opening in browser
+
+**Usage example:**
+```json
+{
+  "artifactId": "art_8d9461dc58ad4f81a5ec2ce13d831eb6",
+  "autoAnalyze": "true",
+  "flameKind": "snapshot",
+  "format": "svg",
+  "filename": "/tmp/flame-graph.svg"
+}
+```
 
 ## Baseline Performance Collection
 
