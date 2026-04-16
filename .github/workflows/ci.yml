@@ -59,11 +59,13 @@ jobs:
             exit 1
           fi
           echo "NuGet package created successfully"
+        shell: bash
 
       - name: Extract NuGet package to verify contents
         run: |
           cd src/ClrScope.Mcp/bin/Release
           unzip -q *.nupkg -d temp_extract
+        shell: bash
 
       - name: Verify version in package
         run: |
@@ -74,6 +76,7 @@ jobs:
             exit 1
           fi
           echo "Version found: $VERSION"
+        shell: bash
 
       - name: Build binary for validation
         run: |

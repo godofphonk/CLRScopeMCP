@@ -3,6 +3,7 @@ obj/
 .vs/
 .vscode/
 DEV/
+verification/
 *.user
 *.suo
 *.userosscache

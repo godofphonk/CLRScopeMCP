@@ -1,5 +1,6 @@
 using System.Text.Json;
-using ClrScope.Mcp.Domain.Heap;
+using ClrScope.Mcp.Domain.Heap.Adapters;
+using ClrScope.Mcp.Domain.Heap.Data;
 using Graphs;
 using Microsoft.Diagnostics.Tools.GCDump;
 

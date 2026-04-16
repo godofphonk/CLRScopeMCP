@@ -9,7 +9,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ClrScope.Mcp\ClrScope.Mcp.csproj" />
-    <ProjectReference Include="..\third_party\DotNetHeapDump\DotNetHeapDump.csproj" />
+    <ProjectReference Include="..\..\third_party\DotNetHeapDump\DotNetHeapDump.csproj" />
   </ItemGroup>
 
 </Project>
