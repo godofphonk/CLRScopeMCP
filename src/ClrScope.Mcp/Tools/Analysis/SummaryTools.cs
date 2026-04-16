@@ -1814,7 +1814,7 @@ private static string TruncateCallSite(string callSite, int maxLength)
         return $"{size:0.##} {sizes[order]}";
     }
 
-    [McpServerTool(Name = "visualize_nettrace_heap"), Description("Visualize a .nettrace EventPipe heap snapshot as type distribution, treemap, or retained flame")]
+    [McpServerTool(Name = "visualize_nettrace_heap"), Description("Visualize a .nettrace EventPipe heap snapshot. For partial heap data (common), only type_distribution is supported. For full heap graph, all views are supported.")]
     public static async Task<VisualizationResult> VisualizeNettraceHeap(
         string artifactId,
         McpServer server,
@@ -1827,18 +1827,12 @@ private static string TruncateCallSite(string callSite, int maxLength)
     {
         var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
         var logger = server.Services!.GetRequiredService<ILogger<SummaryTools>>();
-        var eventPipeAdapter = server.Services!.GetRequiredService<IHeapGraphSourceAdapter>();
-        var facade = server.Services!.GetRequiredService<IMemoryGraphFacade>();
-        var mapper = server.Services!.GetRequiredService<IHeapSnapshotMapper>();
-
-        // Add 5-minute timeout to prevent hanging (sync operations don't respect cancellation)
-        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
-        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+        var preflight = server.Services!.GetRequiredService<NettracePreflight>();
 
         try
         {
             logger.LogInformation("Step 1: Getting artifact {ArtifactId}", artifactId);
-            var artifact = await artifactStore.GetAsync(new ArtifactId(artifactId), linkedCts.Token);
+            var artifact = await artifactStore.GetAsync(new ArtifactId(artifactId), cancellationToken);
             if (artifact == null)
             {
                 return VisualizationResult.Failure($"Artifact not found: {artifactId}");
@@ -1850,89 +1844,77 @@ private static string TruncateCallSite(string callSite, int maxLength)
                 return VisualizationResult.Failure($"Artifact {artifactId} is not a Trace (.nettrace file).");
             }
 
-            logger.LogInformation("Step 3: Reading EventPipe heap graph from artifact {ArtifactId}", artifactId);
-
-            var envelope = await eventPipeAdapter.ReadAsync(artifact.FilePath, linkedCts.Token, null);
-            logger.LogInformation("Step 4: EventPipeAdapter.ReadAsync completed, envelope is null: {IsNull}", envelope == null);
-
-            if (envelope == null || envelope.MemoryGraph == null)
+            logger.LogInformation("Step 3: Running preflight check");
+            var preflightResult = await preflight.CheckAsync(artifact.FilePath, cancellationToken);
+            
+            if (preflightResult.IsError)
             {
-                var errorMsg = $"Failed to read EventPipe heap graph - MemoryGraph is null (envelope null: {envelope == null})";
-                logger.LogError(errorMsg);
-                return VisualizationResult.Failure(errorMsg);
+                logger.LogError("Preflight check failed: {Message}", preflightResult.Message);
+                return VisualizationResult.Failure($"Preflight check failed: {preflightResult.Message}");
             }
 
-            logger.LogInformation("Step 5: Mapping MemoryGraph to HeapSnapshotData");
-            var snapshot = mapper.Map(artifact, envelope, facade);
-            logger.LogInformation("Step 6: Mapping completed, snapshot is null: {IsNull}", snapshot == null);
-
-            if (snapshot == null)
+            // No heap data at all
+            if (preflightResult.Mode == "no-heap-data")
             {
-                return VisualizationResult.Failure("Failed to map MemoryGraph to HeapSnapshotData");
+                logger.LogWarning("Trace contains no heap data: {Message}", preflightResult.Message);
+                return VisualizationResult.Failure(
+                    $"This .nettrace does not contain GC heap snapshot events. {preflightResult.Message}\n\n" +
+                    "For heap-capable .nettrace, use the documented GCHeapSnapshot keyword set:\n" +
+                    "  dotnet-trace collect -p <PID> --providers Microsoft-Windows-DotNETRuntime:0x1980001:5 -o heap.nettrace\n\n" +
+                    "0x1980001 = GCHeapSnapshot (gc+type+gcheapdump+managedheapcollect+gcheapandtypenames)\n" +
+                    "Use hex mask instead of aliases for reliability across dotnet-trace versions.\n\n" +
+                    "However, even with correct keywords, .nettrace heap snapshots are often partial " +
+                    "and unreliable. For reliable heap visualization, use dotnet-gcdump collect:\n" +
+                    "  dotnet-gcdump collect -p <PID> -o heap.gcdump\n\n" +
+                    "dotnet-gcdump is the official tool for heap snapshots and triggers special events " +
+                    "(GC trigger, sample-profiler flush) to reconstruct the heap graph reliably.");
             }
 
-            var viewKind = view.ToLowerInvariant() switch
+            // Partial heap data - only type_distribution is supported
+            if (preflightResult.Mode == "partial-heap-data")
             {
-                "treemap" => HeapViewKind.Treemap,
-                "retained_flame" => HeapViewKind.RetainedFlame,
-                _ => HeapViewKind.TypeDistribution
-            };
-
-            var metricKind = metric.ToLowerInvariant() switch
-            {
-                "count" => HeapMetricKind.Count,
-                "retained_size" => HeapMetricKind.RetainedSize,
-                _ => HeapMetricKind.ShallowSize
-            };
-
-            logger.LogInformation("Step 7: Rendering view: {ViewKind}, metric: {MetricKind}, format: {Format}", viewKind, metricKind, format);
-
-            string content;
-            if (format.ToLowerInvariant() == "json")
-            {
-                content = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions
+                logger.LogWarning("Trace contains partial heap data: {Message}", preflightResult.Message);
+                
+                if (view != "type_distribution")
                 {
-                    WriteIndented = true,
-                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-                });
-            }
-            else if (viewKind == HeapViewKind.Treemap)
-            {
-                var renderer = new HeapTreemapRenderer();
-                content = renderer.RenderHtml(snapshot, metricKind);
-            }
-            else if (viewKind == HeapViewKind.RetainedFlame)
-            {
-                logger.LogInformation("Step 8: Loading heap graph for retained flame");
-                var graphAdapter = server.Services!.GetRequiredService<IGcDumpGraphAdapter>();
-                var heapGraph = await graphAdapter.LoadGraphAsync(artifact.FilePath, linkedCts.Token);
-                logger.LogInformation("Step 9: Heap graph loaded");
-                var flameRenderer = new HeapRetainedFlameRenderer();
-                content = flameRenderer.RenderHtml(heapGraph, metricKind);
-            }
-            else
-            {
-                var renderer = new HeapTypeDistributionRenderer();
-                content = renderer.RenderHtml(snapshot, metricKind);
+                    return VisualizationResult.Failure(
+                        $"This .nettrace contains partial heap data and does not support '{view}' view.\n\n" +
+                        $"{preflightResult.Message}\n\n" +
+                        $"Supported views: {string.Join(", ", preflightResult.RecommendedViews)}");
+                }
+
+                // For partial data, we can only provide limited type distribution from reader logs
+                // Cannot traverse MemoryGraph due to NRE from partial data
+                return VisualizationResult.Failure(
+                    $"This .nettrace contains partial heap data and cannot be visualized.\n\n" +
+                    $"{preflightResult.Message}\n\n" +
+                    "Partial heap data (inconsistent BulkNodeEventCount vs NodeIndexLimit) indicates " +
+                    "the trace does not contain complete heap snapshot events. The MemoryGraph " +
+                    "is built incorrectly and cannot be traversed safely.\n\n" +
+                    "For heap visualization, please use .gcdump files instead:\n" +
+                    "  - Use mcp1_collect_gcdump to collect heap snapshots\n" +
+                    "  - Use mcp1_visualize_heap_snapshot to visualize .gcdump files\n\n" +
+                    ".nettrace files can still be used for:\n" +
+                    "  - CPU flame graphs (mcp1_visualize_flame_graph)\n" +
+                    "  - Performance counters (mcp1_collect_counters)\n" +
+                    "  - Trace analysis (mcp1_artifact_summarize)");
             }
 
-            logger.LogInformation("Step 10: Rendering completed successfully");
-            return VisualizationResult.Success(content, format);
-        }
-        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
-        {
-            logger.LogError("VisualizeNettraceHeap timed out after 5 minutes for artifact {ArtifactId}", artifactId);
-            return VisualizationResult.Failure("VisualizeNettraceHeap timed out after 5 minutes - the operation may be hanging");
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            logger.LogInformation("VisualizeNettraceHeap was cancelled for artifact {ArtifactId}", artifactId);
-            return VisualizationResult.Failure("VisualizeNettraceHeap was cancelled");
+            // Full heap graph - should work but currently disabled due to NRE
+            logger.LogWarning("Full heap graph detected but currently disabled due to MemoryGraph traversal issues");
+            return VisualizationResult.Failure(
+                $"This .nettrace contains full heap snapshot data according to preflight ({preflightResult.Message}).\n\n" +
+                "However, MemoryGraph traversal still encounters NullReferenceException issues even for full heap data.\n\n" +
+                "This appears to be a deeper issue with the vendored EventPipeDotNetHeapDumper library " +
+                "or how it constructs MemoryGraph from EventPipe events.\n\n" +
+                "For heap visualization, please use .gcdump files instead:\n" +
+                "  - Use mcp1_collect_gcdump to collect heap snapshots\n" +
+                "  - Use mcp1_visualize_heap_snapshot to visualize .gcdump files");
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Nettrace heap visualization failed for artifact {ArtifactId}. Stack trace: {StackTrace}", artifactId, ex.StackTrace);
-            return VisualizationResult.Failure($"Nettrace heap visualization failed: {ex.Message}\nStack trace: {ex.StackTrace}");
+            logger.LogError(ex, "Nettrace heap visualization failed");
+            return VisualizationResult.Failure($"Nettrace heap visualization failed: {ex.Message}");
         }
     }
 

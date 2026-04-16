@@ -73,6 +73,8 @@ public static class ClrScopeServiceCollectionExtensions
         services.AddSingleton<IHeapGraphSourceAdapter, EventPipeHeapGraphSourceAdapter>();
         services.AddSingleton<IMemoryGraphFacade, PerfViewMemoryGraphFacade>();
         services.AddSingleton<IHeapSnapshotMapper, MemoryGraphHeapSnapshotMapper>();
+        services.AddSingleton<NettracePreflight>();
+        // NettraceGraphAdapter and HeapGraphDataConverter disabled due to vendored library bugs
 
         return services;
     }

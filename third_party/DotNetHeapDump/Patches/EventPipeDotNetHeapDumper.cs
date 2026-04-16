@@ -37,6 +37,10 @@ namespace Microsoft.Diagnostics.Tools.GCDump
         /// <returns></returns>
         public static bool DumpFromEventPipeFile(string path, MemoryGraph memoryGraph, TextWriter log, DotNetHeapInfo dotNetInfo)
         {
+            // PATCH: Reset static flags to avoid pollution from repeated calls in server scenario
+            eventPipeDataPresent = false;
+            dumpComplete = false;
+
             DateTime start = DateTime.Now;
             Func<TimeSpan> getElapsed = () => DateTime.Now - start;
 
