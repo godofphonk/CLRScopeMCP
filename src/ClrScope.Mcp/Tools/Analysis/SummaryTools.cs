@@ -1831,8 +1831,8 @@ private static string TruncateCallSite(string callSite, int maxLength)
         var facade = server.Services!.GetRequiredService<IMemoryGraphFacade>();
         var mapper = server.Services!.GetRequiredService<IHeapSnapshotMapper>();
 
-        // Add 30-second timeout to prevent hanging
-        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        // Add 5-minute timeout to prevent hanging (sync operations don't respect cancellation)
+        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
 
         try
@@ -1921,8 +1921,8 @@ private static string TruncateCallSite(string callSite, int maxLength)
         }
         catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
         {
-            logger.LogError("VisualizeNettraceHeap timed out after 30 seconds for artifact {ArtifactId}", artifactId);
-            return VisualizationResult.Failure("VisualizeNettraceHeap timed out after 30 seconds - the operation may be hanging");
+            logger.LogError("VisualizeNettraceHeap timed out after 5 minutes for artifact {ArtifactId}", artifactId);
+            return VisualizationResult.Failure("VisualizeNettraceHeap timed out after 5 minutes - the operation may be hanging");
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -1954,8 +1954,8 @@ private static string TruncateCallSite(string callSite, int maxLength)
         var logger = server.Services!.GetRequiredService<ILogger<SummaryTools>>();
         var preparer = server.Services!.GetRequiredService<IHeapSnapshotPreparer>();
 
-        // Add 30-second timeout to prevent hanging
-        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        // Add 5-minute timeout to prevent hanging (sync operations don't respect cancellation)
+        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
 
         try
@@ -2127,8 +2127,8 @@ private static string TruncateCallSite(string callSite, int maxLength)
         }
         catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
         {
-            logger.LogError("VisualizeHeapSnapshot timed out after 30 seconds for artifact {ArtifactId}", artifactId);
-            return VisualizationResult.Failure("VisualizeHeapSnapshot timed out after 30 seconds - the operation may be hanging");
+            logger.LogError("VisualizeHeapSnapshot timed out after 5 minutes for artifact {ArtifactId}", artifactId);
+            return VisualizationResult.Failure("VisualizeHeapSnapshot timed out after 5 minutes - the operation may be hanging");
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
