@@ -16,7 +16,7 @@ public class EventPipeHeapGraphSourceAdapterTests
     {
         _loggerMock = new Mock<ILogger<EventPipeHeapGraphSourceAdapter>>();
         _adapter = new EventPipeHeapGraphSourceAdapter(_loggerMock.Object);
-        _testDataPath = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "test-data"));
+        _testDataPath = Path.Combine(AppContext.BaseDirectory, "test-data");
     }
 
     private string GetTestDataPath(string fileName) => Path.Combine(_testDataPath, fileName);

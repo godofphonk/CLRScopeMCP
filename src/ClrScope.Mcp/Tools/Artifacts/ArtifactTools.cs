@@ -214,7 +214,7 @@ public sealed class ArtifactTools
         // Validate sessionId format before getting services
         if (!string.IsNullOrWhiteSpace(sessionId))
         {
-            if (!Guid.TryParse(sessionId, out var _))
+            if (!System.Text.RegularExpressions.Regex.IsMatch(sessionId, @"^ses_[0-9a-f]{32}$"))
             {
                 return new ArtifactListResult(
                     Count: 0,
@@ -223,7 +223,7 @@ public sealed class ArtifactTools
                     Limit: limit,
                     HasMore: false,
                     Artifacts: Array.Empty<ArtifactSummary>(),
-                    Error: "SessionId must be a valid GUID"
+                    Error: "SessionId must be in the format 'ses_' followed by 32 lowercase hex characters (e.g. ses_a1b2c3d4e5f6...)"
                 );
             }
         }

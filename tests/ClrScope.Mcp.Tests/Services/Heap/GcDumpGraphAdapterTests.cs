@@ -18,7 +18,7 @@ public class GcDumpGraphAdapterTests
     {
         _loggerMock = new Mock<ILogger<GcDumpGraphAdapter>>();
         _adapter = new GcDumpGraphAdapter(_loggerMock.Object);
-        _testDataPath = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "test-data"));
+        _testDataPath = Path.Combine(AppContext.BaseDirectory, "test-data");
     }
 
     private string GetTestDataPath(string fileName) => Path.Combine(_testDataPath, fileName);
