@@ -27,13 +27,18 @@ public sealed class HeapTypeDistributionRenderer
     .page { padding: 20px; }
     .title { font-size: 24px; font-weight: 700; margin-bottom: 6px; }
     .subtitle { color: #555; margin-bottom: 18px; }
-    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
     th, td { border-bottom: 1px solid #eee; padding: 8px 10px; text-align: left; vertical-align: top; }
     th { background: #f8f8f8; font-weight: 700; }
     tr:hover td { background: #fcfcfc; }
-    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; word-wrap: break-word; overflow-wrap: break-word; word-break: break-word; }
     .right { text-align: right; }
-    .muted { color: #666; }
+    .muted { color: #666; word-wrap: break-word; overflow-wrap: break-word; word-break: break-word; }
+    th:nth-child(1), td:nth-child(1) { width: 30%; }
+    th:nth-child(2), td:nth-child(2) { width: 30%; }
+    th:nth-child(3), td:nth-child(3) { width: 13%; }
+    th:nth-child(4), td:nth-child(4) { width: 13%; }
+    th:nth-child(5), td:nth-child(5) { width: 14%; }
   </style>
 </head>
 <body>
