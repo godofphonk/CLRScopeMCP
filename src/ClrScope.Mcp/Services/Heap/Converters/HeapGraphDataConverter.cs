@@ -4,6 +4,10 @@ using Microsoft.Extensions.Logging;
 
 namespace ClrScope.Mcp.Services.Heap;
 
+// TODO: Future use - disabled due to NettraceGraphAdapter being disabled
+// Not registered in DI - see ClrScopeServiceCollectionExtensions.cs
+// Enable when NettraceGraphAdapter is re-enabled
+
 /// <summary>
 /// Converts HeapGraphData to HeapSnapshotData for rendering.
 /// </summary>

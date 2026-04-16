@@ -8,6 +8,10 @@ using System.Text.Json;
 
 namespace ClrScope.Mcp.Services.Heap;
 
+// TODO: Future use - MemoryGraph reconstruction from HeapGraphData not implemented yet
+// Current implementation returns MemoryGraph = null! which would cause NRE
+// Enable when MemoryGraph reconstruction logic is available
+
 /// <summary>
 /// EventPipe heap graph adapter using separate process for proper timeout handling.
 /// Runs ClrScope.HeapParser.exe in a separate process with timeout support.

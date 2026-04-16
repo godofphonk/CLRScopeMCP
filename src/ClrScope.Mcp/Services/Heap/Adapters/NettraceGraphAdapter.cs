@@ -6,6 +6,10 @@ using System.Text.Json;
 
 namespace ClrScope.Mcp.Services.Heap;
 
+// TODO: Future use - disabled due to vendored library bugs in EventPipeDotNetHeapDumper
+// Enable when vendored library issues are resolved
+// Not registered in DI - see ClrScopeServiceCollectionExtensions.cs
+
 /// <summary>
 /// Nettrace heap graph adapter using separate process for proper timeout handling.
 /// Runs ClrScope.HeapParser.exe in a separate process and returns HeapGraphData directly.

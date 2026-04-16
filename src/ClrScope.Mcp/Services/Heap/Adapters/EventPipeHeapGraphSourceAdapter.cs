@@ -8,6 +8,10 @@ using System.IO;
 
 namespace ClrScope.Mcp.Services.Heap;
 
+// TODO: Future use - not integrated into current pipeline, needs integration or removal
+// Not registered in DI - see ClrScopeServiceCollectionExtensions.cs
+// Enable when EventPipe heap analysis is fully implemented
+
 /// <summary>
 /// Adapter for reading heap graph from EventPipe traces (.nettrace files).
 /// Uses vendored EventPipeDotNetHeapDumper from dotnet/diagnostics.
