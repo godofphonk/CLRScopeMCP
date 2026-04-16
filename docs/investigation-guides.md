@@ -88,6 +88,6 @@ After collecting artifacts (manually or via workflow):
 
 1. **`artifact_summarize`** — start here for automated high-level analysis
 2. **`detect_patterns`** — check for known problem patterns
-3. **`visualize_heap_snapshot`** — for memory issues (gcdump artifacts)
-4. **`ynazy_dump_sor deep .NET runtime analysis (dump artif, JSON/text outputacts)
+3. **`analyze_heap`** — for memory issues (gcdump artifacts)
+4. **`analyze_dump_sos`** — for deep .NET runtime analysis (dump artifacts)
 5. **`session_analyze`** — compare sessions, especially with baseline

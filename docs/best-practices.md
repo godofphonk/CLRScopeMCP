@@ -96,7 +96,7 @@ This prevents wasting time on non-.NET processes or processes that have already 
 - **Memory Leak Investigation**: Faster than full dump, focuses on heap
 - **Object Analysis**: Identify large objects, type distribution
 - **GC Behavior**: Analyze generation distribution, collection patterns
-- **Heap VisusuizationatioAdvancidovnalycdvnwilhdwilhiysstr,butiar,,ar,iiae, diff vieww,wrnrainer sahs
+- **Heap Analysis**: Advanced analysis with type statistics and diff comparison (JSON/text output only)
 
 **When Not to Use:**
 - **Thread Analysis**: Use stacks or dump instead
