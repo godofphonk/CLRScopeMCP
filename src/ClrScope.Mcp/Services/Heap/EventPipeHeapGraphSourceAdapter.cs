@@ -1,11 +1,14 @@
 using ClrScope.Mcp.Domain.Heap;
+using Graphs;
+using Microsoft.Diagnostics.Tools.GCDump;
 using Microsoft.Extensions.Logging;
+using System.IO;
 
 namespace ClrScope.Mcp.Services.Heap;
 
 /// <summary>
 /// Adapter for reading heap graph from EventPipe traces (.nettrace files).
-/// Currently a placeholder - full implementation requires dotnet/diagnostics source reuse.
+/// Uses vendored EventPipeDotNetHeapDumper from dotnet/diagnostics.
 /// </summary>
 public sealed class EventPipeHeapGraphSourceAdapter : IHeapGraphSourceAdapter
 {
@@ -24,38 +27,78 @@ public sealed class EventPipeHeapGraphSourceAdapter : IHeapGraphSourceAdapter
         if (string.IsNullOrWhiteSpace(filePath))
             throw new ArgumentException("filePath is required.", nameof(filePath));
 
+        if (!File.Exists(filePath))
+            throw new FileNotFoundException($"EventPipe trace file not found: {filePath}", filePath);
+
         _logger.LogInformation("Reading EventPipe heap graph from {FilePath}", filePath);
         progress?.Report(new HeapPreparationProgress
         {
             Phase = "Reading",
             CurrentStep = 1,
-            TotalSteps = 1,
-            Message = "Reading EventPipe trace file"
+            TotalSteps = 3,
+            Message = "Initializing MemoryGraph"
         });
 
-        // TODO: Implement full EventPipe trace parsing
-        // This requires:
-        // 1. Proper TraceEvent API usage for EventPipe traces
-        // 2. Parsing GC bulk events (GCBulkType, GCBulkNode, GCBulkEdge, etc.)
-        // 3. Building MemoryGraph from events
-        // For now, return placeholder
+        var memoryGraph = new MemoryGraph(100000);
+        var dotNetHeapInfo = new DotNetHeapInfo();
 
-        await Task.CompletedTask;
+        progress?.Report(new HeapPreparationProgress
+        {
+            Phase = "Reading",
+            CurrentStep = 2,
+            TotalSteps = 3,
+            Message = "Parsing EventPipe trace events"
+        });
+
+        await Task.Run(() =>
+        {
+            using var logWriter = new StringWriter();
+            var success = EventPipeDotNetHeapDumper.DumpFromEventPipeFile(
+                filePath,
+                memoryGraph,
+                logWriter,
+                dotNetHeapInfo);
+
+            if (!success)
+            {
+                _logger.LogWarning("EventPipeDumpFromEventPipeFile returned false for {FilePath}", filePath);
+                _logger.LogDebug("Dump log: {Log}", logWriter.ToString());
+            }
+        }, cancellationToken);
+
+        progress?.Report(new HeapPreparationProgress
+        {
+            Phase = "Reading",
+            CurrentStep = 3,
+            TotalSteps = 3,
+            Message = "Building envelope"
+        });
+
+        var segments = dotNetHeapInfo.Segments.Select(s => new HeapSegmentInfo
+        {
+            Start = s.Start,
+            End = s.End,
+            Gen0End = s.Gen0End,
+            Gen1End = s.Gen1End,
+            Gen2End = s.Gen2End,
+            Gen3End = s.Gen3End,
+            Gen4End = s.Gen4End
+        }).ToList();
 
         return new MemoryGraphEnvelope
         {
-            MemoryGraph = new object(),
+            MemoryGraph = memoryGraph,
             HeapInfo = new DotNetHeapInfoAdapter
             {
-                Segments = new List<HeapSegmentInfo>()
+                Segments = segments
             },
             Metadata = new HeapCollectionMetadata
             {
                 SourceKind = "nettrace",
-                RuntimeVersion = string.Empty,
-                ToolVersion = string.Empty,
-                IsPartial = true,
-                Warning = "EventPipe trace parsing requires dotnet/diagnostics source reuse"
+                RuntimeVersion = "unknown",
+                ToolVersion = "dotnet-gcdump (vendored)",
+                IsPartial = false,
+                Warning = null
             }
         };
     }

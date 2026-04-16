@@ -1,4 +1,5 @@
 using ClrScope.Mcp.Domain.Heap;
+using Graphs;
 using Microsoft.Extensions.Logging;
 
 namespace ClrScope.Mcp.Services.Heap;
@@ -6,7 +7,6 @@ namespace ClrScope.Mcp.Services.Heap;
 /// <summary>
 /// Facade for reading MemoryGraph from PerfView/Graphs API.
 /// This isolates CLRScope from unstable MemoryGraph API details.
-/// Currently adapted to work with TraceEvent data structures.
 /// </summary>
 public sealed class PerfViewMemoryGraphFacade : IMemoryGraphFacade
 {
@@ -19,38 +19,121 @@ public sealed class PerfViewMemoryGraphFacade : IMemoryGraphFacade
 
     public IReadOnlyList<GraphNodeRecord> GetNodes(object memoryGraph)
     {
-        // memoryGraph is currently a placeholder object from EventPipeHeapGraphSourceAdapter
-        // In full implementation with source reuse from dotnet/diagnostics, this would:
-        // 1. Cast memoryGraph to MemoryGraph
-        // 2. Iterate through nodes using MemoryGraph API
-        // 3. Extract node properties (address, type, size, etc.)
+        if (memoryGraph is not Graphs.MemoryGraph graph)
+        {
+            _logger.LogError("PerfViewMemoryGraphFacade.GetNodes: memoryGraph is not MemoryGraph");
+            return new List<GraphNodeRecord>();
+        }
 
-        _logger.LogWarning("PerfViewMemoryGraphFacade.GetNodes returning empty - full implementation requires dotnet/diagnostics source reuse");
+        var nodes = new List<GraphNodeRecord>();
+        var nodeStorage = graph.AllocNodeStorage();
+        var typeStorage = graph.AllocTypeNodeStorage();
 
-        return new List<GraphNodeRecord>();
+        for (NodeIndex idx = 0; (long)idx < (long)graph.NodeIndexLimit; idx++)
+        {
+            var node = graph.GetNode(idx, nodeStorage);
+            if (node.Size == 0)
+                continue;
+
+            var nodeType = graph.GetType(node.TypeIndex, typeStorage);
+
+            nodes.Add(new GraphNodeRecord
+            {
+                NodeId = (long)idx,
+                Address = null, // MemoryGraph doesn't expose addresses directly
+                TypeName = nodeType.Name ?? string.Empty,
+                AssemblyName = nodeType.ModuleName ?? string.Empty,
+                ShallowSizeBytes = node.Size,
+                Count = 1
+            });
+        }
+
+        return nodes;
     }
 
     public IReadOnlyList<GraphEdgeRecord> GetEdges(object memoryGraph)
     {
-        // In full implementation with source reuse from dotnet/diagnostics, this would:
-        // 1. Cast memoryGraph to MemoryGraph
-        // 2. Iterate through edges using MemoryGraph API
-        // 3. Extract edge properties (from, to, weak, kind)
+        if (memoryGraph is not Graphs.MemoryGraph graph)
+        {
+            _logger.LogError("PerfViewMemoryGraphFacade.GetEdges: memoryGraph is not MemoryGraph");
+            return new List<GraphEdgeRecord>();
+        }
 
-        _logger.LogWarning("PerfViewMemoryGraphFacade.GetEdges returning empty - full implementation requires dotnet/diagnostics source reuse");
+        var edges = new List<GraphEdgeRecord>();
+        var nodeStorage = graph.AllocNodeStorage();
 
-        return new List<GraphEdgeRecord>();
+        for (NodeIndex idx = 0; (long)idx < (long)graph.NodeIndexLimit; idx++)
+        {
+            var node = graph.GetNode(idx, nodeStorage);
+            var fromNodeId = (long)idx;
+
+            for (NodeIndex childIdx = node.GetFirstChildIndex();
+                 childIdx != NodeIndex.Invalid;
+                 childIdx = node.GetNextChildIndex())
+            {
+                edges.Add(new GraphEdgeRecord
+                {
+                    FromNodeId = fromNodeId,
+                    ToNodeId = (long)childIdx,
+                    IsWeak = false,
+                    EdgeKind = "reference"
+                });
+            }
+        }
+
+        return edges;
     }
 
     public IReadOnlyList<GraphRootRecord> GetRoots(object memoryGraph)
     {
-        // In full implementation with source reuse from dotnet/diagnostics, this would:
-        // 1. Cast memoryGraph to MemoryGraph
-        // 2. Extract synthetic root hierarchy
-        // 3. Extract root properties (root node, root kind from synthetic root tree)
+        if (memoryGraph is not Graphs.MemoryGraph graph)
+        {
+            _logger.LogError("PerfViewMemoryGraphFacade.GetRoots: memoryGraph is not MemoryGraph");
+            return new List<GraphRootRecord>();
+        }
 
-        _logger.LogWarning("PerfViewMemoryGraphFacade.GetRoots returning empty - full implementation requires dotnet/diagnostics source reuse");
+        var roots = new List<GraphRootRecord>();
+        var nodeStorage = graph.AllocNodeStorage();
+        var typeStorage = graph.AllocTypeNodeStorage();
 
-        return new List<GraphRootRecord>();
+        // MemoryGraph has a synthetic root at graph.RootIndex
+        var rootNode = graph.GetNode(graph.RootIndex, nodeStorage);
+
+        // Iterate children of root to get root set
+        for (NodeIndex childIdx = rootNode.GetFirstChildIndex();
+             childIdx != NodeIndex.Invalid;
+             childIdx = rootNode.GetNextChildIndex())
+        {
+            var childNode = graph.GetNode(childIdx, nodeStorage);
+            var childType = graph.GetType(childNode.TypeIndex, typeStorage);
+
+            // Determine root kind based on type name
+            string rootKind = MapTypeNameToRootKind(childType.Name);
+
+            roots.Add(new GraphRootRecord
+            {
+                RootNodeId = (long)childIdx,
+                RootKind = rootKind
+            });
+        }
+
+        return roots;
+    }
+
+    private static string MapTypeNameToRootKind(string? typeName)
+    {
+        if (string.IsNullOrEmpty(typeName))
+            return "other";
+
+        if (typeName.Contains("Static") || typeName.Contains("StaticVariables"))
+            return "static";
+        if (typeName.Contains("Handle") || typeName.Contains("DependentHandle"))
+            return "handle";
+        if (typeName.Contains("COM"))
+            return "com";
+        if (typeName.Contains("Finalizer") || typeName.Contains("FinalizationQueue"))
+            return "finalizer";
+
+        return "other";
     }
 }

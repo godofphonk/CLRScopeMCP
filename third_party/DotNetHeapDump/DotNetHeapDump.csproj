@@ -1,0 +1,56 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyName>ClrScope.ThirdParty.DotNetHeapDump</AssemblyName>
+    <RootNamespace>ClrScope.ThirdParty.DotNetHeapDump</RootNamespace>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <DefineConstants>$(DefineConstants);FASTSERIALIZATION_PUBLIC;GROWABLEARRAY_PUBLIC</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <DotNetDiagnosticsRoot Condition="'$(DotNetDiagnosticsRoot)' == ''">$(MSBuildThisFileDirectory)..\..\third_party\dotnet-diagnostics\</DotNetDiagnosticsRoot>
+    <DotNetHeapDumpSrc>$(DotNetDiagnosticsRoot)src\Tools\dotnet-gcdump\DotNetHeapDump\</DotNetHeapDumpSrc>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Diagnostics.Tracing.TraceEvent" Version="3.1.3" />
+    <PackageReference Include="Microsoft.Diagnostics.NETCore.Client" Version="0.2.661903" />
+  </ItemGroup>
+
+  <!--
+    Vendored source files from dotnet/diagnostics (MIT License).
+    Source: https://github.com/dotnet/diagnostics/tree/main/src/Tools/dotnet-gcdump/DotNetHeapDump
+    These are read-only copies originally from Microsoft/PerfView.
+    Pinned commit: see THIRD_PARTY_NOTICES.md
+  -->
+  <ItemGroup>
+    <Compile Include="$(DotNetHeapDumpSrc)Graph.cs"                    Link="Vendored\Graph.cs" />
+    <Compile Include="$(DotNetHeapDumpSrc)MemoryGraph.cs"              Link="Vendored\MemoryGraph.cs" />
+    <Compile Include="$(DotNetHeapDumpSrc)GCHeapDump.cs"               Link="Vendored\GCHeapDump.cs" />
+    <Compile Include="$(DotNetHeapDumpSrc)DotNetHeapInfo.cs"           Link="Vendored\DotNetHeapInfo.cs" />
+    <Compile Include="$(DotNetHeapDumpSrc)DotNetHeapDumpGraphReader.cs" Link="Vendored\DotNetHeapDumpGraphReader.cs" />
+    <!-- EventPipeDotNetHeapDumper.cs excluded - using patched version below -->
+    <Compile Include="Patches\EventPipeDotNetHeapDumper.cs" />
+  </ItemGroup>
+
+  <!--
+    Vendored FastSerialization from PerfView (MIT License)
+    Source: https://github.com/microsoft/perfview/tree/main/src/FastSerialization
+    Pinned commit: see THIRD_PARTY_NOTICES.md
+  -->
+  <ItemGroup>
+    <Compile Include="..\FastSerialization\FastSerialization.cs"                Link="Vendored\FastSerialization\FastSerialization.cs" />
+    <Compile Include="..\FastSerialization\FunctorComparer.cs"                  Link="Vendored\FastSerialization\FunctorComparer.cs" />
+    <Compile Include="..\FastSerialization\GrowableArray.cs"                    Link="Vendored\FastSerialization\GrowableArray.cs" />
+    <Compile Include="..\FastSerialization\MemoryMappedFileStreamReader.cs"     Link="Vendored\FastSerialization\MemoryMappedFileStreamReader.cs" />
+    <Compile Include="..\FastSerialization\SegmentedList.cs"                    Link="Vendored\FastSerialization\SegmentedList.cs" />
+    <Compile Include="..\FastSerialization\SegmentedMemoryStreamReader.cs"      Link="Vendored\FastSerialization\SegmentedMemoryStreamReader.cs" />
+    <Compile Include="..\FastSerialization\SegmentedMemoryStreamWriter.cs"      Link="Vendored\FastSerialization\SegmentedMemoryStreamWriter.cs" />
+    <Compile Include="..\FastSerialization\StreamReaderWriter.cs"               Link="Vendored\FastSerialization\StreamReaderWriter.cs" />
+  </ItemGroup>
+
+</Project>

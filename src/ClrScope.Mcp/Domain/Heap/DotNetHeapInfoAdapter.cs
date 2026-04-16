@@ -1,3 +1,5 @@
+using Microsoft.Diagnostics.Tools.GCDump;
+
 namespace ClrScope.Mcp.Domain.Heap;
 
 /// <summary>
@@ -7,26 +9,18 @@ public sealed class DotNetHeapInfoAdapter
 {
     public required IReadOnlyList<HeapSegmentInfo> Segments { get; init; }
 
-    public static DotNetHeapInfoAdapter From(dynamic heapInfo)
+    public static DotNetHeapInfoAdapter From(DotNetHeapInfo heapInfo)
     {
-        var segments = new List<HeapSegmentInfo>();
-
-        if (heapInfo?.Segments != null)
+        var segments = heapInfo.Segments.Select(s => new HeapSegmentInfo
         {
-            foreach (var s in heapInfo.Segments)
-            {
-                segments.Add(new HeapSegmentInfo
-                {
-                    Start = (ulong)s.Start,
-                    End = (ulong)s.End,
-                    Gen0End = (ulong)s.Gen0End,
-                    Gen1End = (ulong)s.Gen1End,
-                    Gen2End = (ulong)s.Gen2End,
-                    Gen3End = (ulong)s.Gen3End,
-                    Gen4End = (ulong)s.Gen4End
-                });
-            }
-        }
+            Start = s.Start,
+            End = s.End,
+            Gen0End = s.Gen0End,
+            Gen1End = s.Gen1End,
+            Gen2End = s.Gen2End,
+            Gen3End = s.Gen3End,
+            Gen4End = s.Gen4End
+        }).ToList();
 
         return new DotNetHeapInfoAdapter
         {
