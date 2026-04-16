@@ -96,6 +96,7 @@ This prevents wasting time on non-.NET processes or processes that have already 
 - **Memory Leak Investigation**: Faster than full dump, focuses on heap
 - **Object Analysis**: Identify large objects, type distribution
 - **GC Behavior**: Analyze generation distribution, collection patterns
+- **Heap Visualization**: Advanced analysis with type distribution, retained flame graphs, diff views, retainer paths (v1.2.0)
 
 **When Not to Use:**
 - **Thread Analysis**: Use stacks or dump instead
@@ -106,6 +107,12 @@ This prevents wasting time on non-.NET processes or processes that have already 
 - Requires process to be in stable state
 - May not capture all objects during collection
 - Not suitable for real-time monitoring
+
+**Best Practices (v1.2.0):**
+- Use `visualize_heap_snapshot` for type distribution, retained flame graphs, diff views, retainer paths
+- Process-based parsing via ClrScope.HeapParser with 5-minute timeout for reliability
+- Compare baseline vs issue gcdumps using diff view to identify growing objects
+- Use .gcdump files for heap visualization (reliable) vs .nettrace (unreliable for heap data)
 
 ### Thread Stacks (collect_stacks)
 
@@ -149,6 +156,19 @@ This prevents wasting time on non-.NET processes or processes that have already 
 - Too many providers (large files, overhead)
 - Very long durations (>5 minutes)
 - Collecting during high load (may impact performance)
+
+### Artifact Import (import_gcdump, import_trace)
+
+**When to Use:**
+- **Existing Files**: Import previously collected .gcdump or .nettrace files for analysis
+- **Offline Analysis**: Analyze artifacts without requiring live process
+- **Cross-Session**: Compare artifacts collected at different times
+
+**Best Practices (v1.2.0):**
+- Use `import_gcdump` for heap visualization (reliable)
+- Use `import_trace` for CPU flame graphs, performance counters, trace analysis
+- Note: .nettrace heap snapshots are unreliable even with correct keywords
+- For heap visualization, prefer .gcdump over .nettrace
 
 ## Artifact-Specific Best Practices
 

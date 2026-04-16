@@ -10,6 +10,13 @@
 
 CLRScope MCP provides AI-powered diagnostic capabilities for .NET applications through the Model Context Protocol. It enables LLM agents to perform deep analysis of .NET processes including performance profiling, memory leak detection, thread analysis, and automated pattern detection.
 
+**v1.2.0 Highlights:**
+- Advanced heap visualization with type distribution, retained flame graphs, diff views, and retainer paths
+- Preflight validation for .nettrace heap snapshots to detect partial/incomplete data
+- Process-based heap parsing via ClrScope.HeapParser with 5-minute timeout for reliability
+- Import existing .gcdump and .nettrace files for analysis
+- Enhanced null checks and logging for robust error handling
+
 ## Features
 
 | Feature | Description |
@@ -17,6 +24,8 @@ CLRScope MCP provides AI-powered diagnostic capabilities for .NET applications t
 | 🎯 **Runtime Detection** | Attachable .NET process detection (host OS only; target architecture currently unavailable) |
 | 📊 **Performance Counters** | Real-time CPU, memory, GC, and thread pool metrics |
 | 🔥 **Flame Graph Visualization** | Enhanced stack trace visualization with Dump/Trace support, caching, and progress reporting (v1.2.0) |
+| 🧠 **Heap Visualization** | Advanced heap snapshot analysis with type distribution, retained flame graphs, diff views, and retainer paths (v1.2.0) |
+| 📁 **Artifact Import** | Import existing .gcdump and .nettrace files for analysis (v1.2.0) |
 | **Memory Dump Analysis** | Compressed dump support with automatic decompression |
 | **SOS Commands** | Sequential SOS command execution for deep analysis |
 | **Pattern Detection** | Automatic detection of memory leaks, deadlocks, high CPU |

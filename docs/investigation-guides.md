@@ -61,14 +61,18 @@ Step-by-step guide for memory leak investigation:
 3. Use `collect_gcdump` to capture GC heap snapshot
 4. Use `collect_counters` with `System.Runtime` provider to get GC metrics
 5. Use `collect_trace` with `gc-heap` profile to capture allocation activity
-6. Open the gcdump in `dotnet-gcdump` or `dotnet-gcdump-analyzer`
-7. Check heap size and generation distribution
-8. Identify top types by size and count
-9. Look for large object arrays or strings
-10. Check GC pause times in counters
-11. Review allocation rate in trace
+6. Use `visualize_heap_snapshot` with the gcdump artifact for type distribution analysis (v1.2.0)
+7. Use `visualize_heap_snapshot` with diff view to compare baseline vs issue gcdumps (v1.2.0)
+8. Use `visualize_heap_snapshot` with retainer paths to identify object retention chains (v1.2.0)
+9. Check heap size and generation distribution
+10. Identify top types by size and count
+11. Look for large object arrays or strings
+12. Check GC pause times in counters
+13. Review allocation rate in trace
 
 **Alternative**: Use `workflow_automated_memory_leak_bundle` for automated collection.
+
+**Note (v1.2.0):** For heap visualization, use .gcdump files (reliable) instead of .nettrace (unreliable for heap data).
 
 ## Hang/Deadlock Investigation
 
@@ -102,5 +106,6 @@ Plan for collecting baseline performance data:
 7. Save the collected artifacts with descriptive names (e.g., `baseline_cpu.trace`, `baseline_counters.json`)
 8. Document the system conditions (CPU, memory, load) during baseline collection
 9. Store baseline artifacts in a dedicated folder for comparison with future collections
+10. Use `import_gcdump` to import baseline gcdumps for later comparison (v1.2.0)
 
 **Alternative**: Use `workflow_automated_baseline_bundle` for automated collection.
