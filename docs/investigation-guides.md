@@ -1,136 +1,95 @@
 # Investigation Guides
 
-This document provides step-by-step guides for common diagnostic scenarios using CLRScope MCP.
+Step-by-step guides for common .NET diagnostic scenarios using CLRScope MCP.
 
-## Automated Workflows
+## Automated Workflows (Recommended)
 
-CLRScope MCP provides automated workflows that execute multiple diagnostic collection steps in sequence, returning structured results with all collected artifacts.
+For most scenarios, start with an automated workflow. Each workflow collects all necessary artifacts in the correct sequence with a single command.
 
-### Available Automated Workflows
+| Workflow | Steps | Use When |
+|----------|-------|----------|
+| `workflow_automated_high_cpu_bundle` | trace → counters → stacks | CPU usage is abnormally high |
+| `workflow_automated_memory_leak_bundle` | gcdump → counters → trace (gc-heap) | Memory keeps growing over time |
+| `workflow_automated_hang_bundle` | dump → stacks → counters | Application is frozen/unresponsive |
+| `workflow_automated_baseline_bundle` | counters → trace → gcdump → stacks | Collect reference data from healthy state |
 
-- **workflow_automated_high_cpu_bundle**: Collects CPU trace, performance counters, and thread stacks
-- **workflow_automated_memory_leak_bundle**: Collects GC dump, GC counters, and GC heap trace
-- **workflow_automated_hang_bundle**: Collects memory dump, thread stacks, and thread counters
-- **workflow_automated_baseline_bundle**: Collects counters, baseline trace, GC dump, and thread stacks
+**Parameters:**
+- `pid` (required) — target .NET process ID
+- `duration` (optional) — collection duration in `hh:mm:ss` format (default: `00:01:00`, use `00:00:05`–`00:00:30` for quick tests)
 
-### Using Automated Workflows
+**Returns:** success status, collected artifacts with IDs, session IDs, execution time.
 
-Automated workflows simplify the diagnostic process by executing all necessary collection steps automatically:
-
-```json
-{
-  "pid": 12345,
-  "duration": "00:01:00"
-}
-```
-
-Each workflow returns:
-- Success status
-- Steps completed / total steps
-- Array of collected artifacts with metadata
-- Session IDs for tracking
-- Execution time in milliseconds
-- Error information if any steps failed
+---
 
 ## Manual Investigation Guides
 
-For more granular control or when automated workflows are not suitable, use the following manual step-by-step guides.
+For granular control or when automated workflows are not suitable.
 
-## High CPU Investigation
+### High CPU Investigation
 
-Step-by-step guide for high CPU investigation:
+1. `runtime_list_targets` — find the .NET process with high CPU
+2. `runtime_inspect_target` — verify process details
+3. `collect_trace` with `cpu-sampling` profile (30–60 sec) — capture CPU activity
+4. `collect_counters` with `System.Runtime` provider — CPU and thread pool metrics
+5. `collect_stacks` — snapshot of all thread stacks
+6. `artifact_summarize` — automated analysis with key findings
+7. `detect_patterns` with `patternTypes: high_cpu` — identify hot paths
+8. Review recommendations and optimize identified methods
 
-1. Use `runtime_list_targets` to find the .NET process with high CPU usage
-2. Use `runtime_inspect_target` to verify the process is .NET and get details
-3. Use `collect_trace` with `cpu-sampling` profile for 30-60 seconds to capture CPU activity
-4. Use `collect_counters` with `System.Runtime` provider to get CPU and thread metrics
-5. Use `collect_stacks` to capture a snapshot of thread stacks
-6. Open the trace in PerfView or `dotnet-trace analyze` to identify hot methods
-7. Look for methods with high CPU time in the trace
-8. Check thread pool configuration and contention in counters
-9. Review stack traces to identify blocking patterns
+**Quick alternative:** `workflow_automated_high_cpu_bundle`
 
-**Alternative**: Use `workflow_automated_high_cpu_bundle` for automated collection.
+---
 
-## Memory Leak Investigation
+### Memory Leak Investigation
 
-Step-by-step guide for memory leak investigation:
+1. `runtime_list_targets` — find the .NET process with high memory
+2. `collect_gcdump` — capture GC heap snapshot (baseline)
+3. Wait for memory to grow, then `collect_gcdump` again (issue snapshot)
+4. `visualize_heap_snapshot` — type distribution analysis
+5. `visualize_heap_snapshot` with `view: diff` and `baselineArtifactId` — compare baseline vs issue
+6. `visualize_heap_snapshot` with `view: retainer_paths` — find what holds objects in memory
+7. `collect_counters` with `System.Runtime` — GC metrics, allocation rate
+8. `detect_patterns` with `patternTypes: memory_leaks` — automated leak detection
 
-1. Use `runtime_list_targets` to find the .NET process with high memory usage
-2. Use `runtime_inspect_target` to verify the process is .NET and get details
-3. Use `collect_gcdump` to capture GC heap snapshot
-4. Use `collect_counters` with `System.Runtime` provider to get GC metrics
-5. Use `collect_trace` with `gc-heap` profile to capture allocation activity
-6. Use `visualize_heap_snapshot` with the gcdump artifact for type distribution analysis (v1.2.0)
-7. Use `visualize_heap_snapshot` with diff view to compare baseline vs issue gcdumps (v1.2.0)
-8. Use `visualize_heap_snapshot` with retainer paths to identify object retention chains (v1.2.0)
-9. Check heap size and generation distribution
-10. Identify top types by size and count
-11. Look for large object arrays or strings
-12. Check GC pause times in counters
-13. Review allocation rate in trace
+**Quick alternative:** `workflow_automated_memory_leak_bundle`
 
-**Alternative**: Use `workflow_automated_memory_leak_bundle` for automated collection.
+**Tip:** Use `.gcdump` files for heap visualization (reliable). `.nettrace` files are unreliable for heap data.
 
-**Note (v1.2.0):** For heap visualization, use .gcdump files (reliable) instead of .nettrace (unreliable for heap data).
+---
 
-## Hang/Deadlock Investigation
+### Hang/Deadlock Investigation
 
-Step-by-step guide for hang/deadlock investigation:
+1. `runtime_list_targets` — find the hung .NET process
+2. `collect_dump` — capture full memory dump immediately
+3. `collect_stacks` — capture managed thread stacks
+4. `analyze_dump_sos` with command `threads` — list all threads and their states
+5. `analyze_dump_sos` with command `clrstack` — get stack traces per thread
+6. `detect_patterns` with `patternTypes: deadlocks` — detect circular wait patterns
+7. `collect_counters` with `System.Runtime` — check thread pool queue length
+8. Look for: blocked threads, circular waits, async/await deadlocks, thread pool starvation
 
-1. Use `runtime_list_targets` to find the .NET process that is hung
-2. Use `runtime_inspect_target` to verify the process is .NET and get details
-3. Use `collect_dump` to capture a full memory dump
-4. Use `collect_stacks` to capture managed thread stacks
-5. Use `collect_counters` with `System.Runtime` provider to get thread metrics
-6. Use `analyze_dump_sos` with `threads` command to list all threads
-7. Use `analyze_dump_sos` with `clrstack` command to get stack traces for each thread
-8. Use `visualize_flame_graph` with the dump artifact to generate a snapshot flame graph (v1.2.0)
-9. Optionally use the `filename` parameter to automatically save and open the visualization in your default browser
-10. Look for threads blocked on locks, monitors, or wait handles
-11. Check for deadlock patterns (circular wait chains)
-12. Review thread pool queue length and worker threads
-13. Check for async/await deadlocks or thread pool starvation
+**Quick alternative:** `workflow_automated_hang_bundle`
 
-**Alternative**: Use `workflow_automated_hang_bundle` for automated collection.
+---
 
-### Flame Graph Visualization Example
+### Baseline Performance Collection
 
-The `visualize_flame_graph` tool generates compact flame graphs showing thread call stacks. Here's an example of a flame graph visualization:
+1. `runtime_list_targets` — identify the target process in healthy state
+2. `runtime_inspect_target` — verify process details
+3. `workflow_automated_baseline_bundle` with short duration (30–60 sec)
+4. `artifact_pin` — pin baseline artifacts to prevent automatic cleanup
+5. Later, use `session_analyze` with `baselineSessionId` to compare with issue session
 
-![Flame Graph Example](images/flame-graph.svg)
+**Tip:** Always collect baseline data before investigating issues. Without baseline, you can't tell if metrics are abnormal.
 
-**Features:**
-- Fixed-width rectangles (200px) for better readability
-- Color-coded by thread ID
-- Unique call sites only (no duplicates)
-- Automatic XML escaping for special characters
-- Optional `filename` parameter for auto-saving and opening in browser
+---
 
-**Usage example:**
-```json
-{
-  "artifactId": "art_8d9461dc58ad4f81a5ec2ce13d831eb6",
-  "autoAnalyze": "true",
-  "flameKind": "snapshot",
-  "format": "svg",
-  "filename": "/tmp/flame-graph.svg"
-}
-```
+## Analysis Workflow
 
-## Baseline Performance Collection
+After collecting artifacts (manually or via workflow):
 
-Plan for collecting baseline performance data:
-
-1. Use `runtime_list_targets` to identify the target process
-2. Use `runtime_inspect_target` to verify the process is .NET and get details
-3. Use `collect_counters` with `System.Runtime` provider for 60 seconds to capture baseline metrics
-4. Use `collect_trace` with default profile for 60 seconds to capture baseline trace
-5. Use `collect_gcdump` to capture baseline GC heap snapshot
-6. Use `collect_stacks` to capture baseline thread stacks
-7. Save the collected artifacts with descriptive names (e.g., `baseline_cpu.trace`, `baseline_counters.json`)
-8. Document the system conditions (CPU, memory, load) during baseline collection
-9. Store baseline artifacts in a dedicated folder for comparison with future collections
-10. Use `import_gcdump` to import baseline gcdumps for later comparison (v1.2.0)
-
-**Alternative**: Use `workflow_automated_baseline_bundle` for automated collection.
+1. **`artifact_summarize`** — start here for automated high-level analysis
+2. **`detect_patterns`** — check for known problem patterns
+3. **`visualize_heap_snapshot`** — for memory issues (gcdump artifacts)
+4. **`analyze_dump_sos`** — for deep .NET runtime analysis (dump artifacts)
+5. **`session_analyze`** — compare sessions, especially with baseline

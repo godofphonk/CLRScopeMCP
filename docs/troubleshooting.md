@@ -141,31 +141,9 @@ This document provides solutions to common issues when using CLRScope MCP.
 - Use `artifact_summarize` for general analysis
 - Patterns may not be present in collected data
 
-### Flame Graph Generation Fails
+### Heap Visualization Fails
 
-**Problem:** `visualize_flame_graph` fails with error.
-
-**Solutions:**
-- For Dump artifacts: ensure dotnet-dump is available (v1.2.0)
-- For Trace artifacts: verify trace contains CPU sampling data
-- For Stacks artifacts: check JSON format is valid
-- Try with `auto_analyze=true` for Dump/Trace artifacts
-- Check artifact file exists and is readable
-
-### Flame Graph Shows No Data
-
-**Problem:** Flame graph renders but shows empty or placeholder.
-
-**Solutions:**
-- Artifact may not contain stack data
-- Check artifact type: Dump/Trace require preprocessing (v1.2.0)
-- Try with `analysis_mode=force` to re-analyze
-- Verify artifact was collected successfully
-- Check log for parsing errors
-
-### Heap Visualization Fails (v1.2.0)
-
-**Problem:** `visualize_heap_snapshot` or `visualize_nettrace_heap` fails with error.
+**Problem:** `visualize_heap_snapshot` fails with error.
 
 **Solutions:**
 - For .gcdump: Verify file is valid gcdump format
@@ -175,38 +153,15 @@ This document provides solutions to common issues when using CLRScope MCP.
 - Check process-based parsing timeout (5 minutes for reliability)
 - Verify ClrScope.HeapParser.dll is in correct location
 
-### Heap Visualization Shows Partial Data (v1.2.0)
+### Heap Visualization Shows Partial Data
 
 **Problem:** Heap visualization returns error about partial heap data.
 
 **Solutions:**
-- For .nettrace: Preflight validation detected incomplete heap snapshot events
-- Use dotnet-gcdump collect instead of dotnet-trace collect for heap snapshots
-- For .nettrace with correct keywords (0x1980001): May still be partial due to EventPipe limitations
-- Use .gcdump files for reliable heap visualization
-- .nettrace suitable for CPU flame graphs, performance counters, trace analysis
-
-## Caching Issues
-
-### Cache Not Working
-
-**Problem**: Flame graph always re-analyzes instead of using cache.
-
-**Solutions:**
-- Check `analysis_mode` parameter: use `auto` or `reuse`
-- Verify cache key hasn't changed (artifact hash, kind, version)
-- Cache may have been cleared by cleanup
-- Try `analysis_mode=force` to test re-analysis
-
-### Cache Miss Errors
-
-**Problem:** `analysis_mode=reuse` fails with cache miss error.
-
-**Solutions:**
-- Use `analysis_mode=auto` to analyze and cache
-- Verify artifact exists and is valid
-- Check if artifact was modified (hash changed)
-- Re-run with `analysis_mode=force` to populate cache
+- Use `.gcdump` files for reliable heap visualization (recommended)
+- `.nettrace` heap snapshots are unreliable even with correct keywords
+- Use `dotnet-gcdump collect` instead of `dotnet-trace collect` for heap snapshots
+- `.nettrace` files are suitable for CPU profiling and trace analysis, not heap visualization
 
 ## Session Issues
 
@@ -417,13 +372,7 @@ mcp1_system_capabilities
 
 - Verify artifact type
 - Check collection succeeded
-- Try with auto_analyze=true
-
-### "Cache miss"
-
-- Use analysis_mode=auto
-- Verify artifact exists
-- Re-run with analysis_mode=force
+- Ensure stacks were collected during active work period
 
 ## Conclusion
 

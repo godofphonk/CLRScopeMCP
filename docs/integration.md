@@ -30,7 +30,7 @@ brew install dotnet
 
 **Purpose:** Collect memory dumps and perform SOS analysis
 
-**Used in:** `collect_dump`, `analyze_dump_sos`, `visualize_flame_graph` (for Dump artifacts, v1.2.0)
+**Used in:** `collect_dump`, `analyze_dump_sos`
 
 **Install:**
 ```bash
@@ -39,7 +39,7 @@ dotnet tool install -g dotnet-dump
 
 **Alternatives:** gcore (Linux), Procdump (Windows)
 
-**Without this tool:** Memory dumps not collected via dotnet-dump (use OS tools instead), flame graph for Dump artifacts not available
+**Without this tool:** Memory dumps not collected via dotnet-dump (use OS tools instead), SOS analysis not available
 
 ---
 

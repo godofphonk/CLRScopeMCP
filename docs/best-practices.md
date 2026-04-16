@@ -96,7 +96,7 @@ This prevents wasting time on non-.NET processes or processes that have already 
 - **Memory Leak Investigation**: Faster than full dump, focuses on heap
 - **Object Analysis**: Identify large objects, type distribution
 - **GC Behavior**: Analyze generation distribution, collection patterns
-- **Heap Visualization**: Advanced analysis with type distribution, retained flame graphs, diff views, retainer paths (v1.2.0)
+- **Heap Visualization**: Advanced analysis with type distribution, treemap, diff views, retainer paths
 
 **When Not to Use:**
 - **Thread Analysis**: Use stacks or dump instead
@@ -109,7 +109,7 @@ This prevents wasting time on non-.NET processes or processes that have already 
 - Not suitable for real-time monitoring
 
 **Best Practices (v1.2.0):**
-- Use `visualize_heap_snapshot` for type distribution, retained flame graphs, diff views, retainer paths
+- Use `visualize_heap_snapshot` for type distribution, treemap, diff views, retainer paths
 - Process-based parsing via ClrScope.HeapParser with 5-minute timeout for reliability
 - Compare baseline vs issue gcdumps using diff view to identify growing objects
 - Use .gcdump files for heap visualization (reliable) vs .nettrace (unreliable for heap data)
@@ -117,7 +117,7 @@ This prevents wasting time on non-.NET processes or processes that have already 
 ### Thread Stacks (collect_stacks)
 
 **Output Format:**
-- **json** (recommended): Structured data, easier to parse, flame graph compatible
+- **json** (recommended): Structured data, easier to parse programmatically
 - **text**: Human-readable, compatible with dotnet-stack output
 - **Recommendation**: Use json for automated analysis, text for manual inspection
 
@@ -128,7 +128,7 @@ This prevents wasting time on non-.NET processes or processes that have already 
 
 **Best Practices:**
 - Collect during active issue state
-- Use json format for flame graph visualization
+- Use json format for programmatic analysis
 - Combine with counters for thread pool context
 
 ### Performance Counters (collect_counters)
@@ -166,7 +166,7 @@ This prevents wasting time on non-.NET processes or processes that have already 
 
 **Best Practices (v1.2.0):**
 - Use `import_gcdump` for heap visualization (reliable)
-- Use `import_trace` for CPU flame graphs, performance counters, trace analysis
+- Use `import_trace` for CPU profiling, performance counters, trace analysis
 - Note: .nettrace heap snapshots are unreliable even with correct keywords
 - For heap visualization, prefer .gcdump over .nettrace
 
@@ -235,15 +235,19 @@ mcp1_session_analyze --session_id <problem_session> --baseline_session_id <basel
 
 Identifies deviations from normal behavior.
 
-### 4. Use Flame Graphs for Stack Analysis
+### 4. Use Heap Visualization for Memory Analysis
 
-For Dump and Stacks artifacts, use flame graph visualization:
+For GcDump artifacts, use heap visualization to understand memory distribution:
 
 ```bash
-mcp1_visualize_flame_graph --artifact_id <id> --format svg --auto_analyze true
+mcp1_visualize_heap_snapshot --artifact_id <id> --view type_distribution
 ```
 
-Provides visual representation of call stacks and hot paths.
+Compare baseline vs issue snapshots with diff view:
+
+```bash
+mcp1_visualize_heap_snapshot --artifact_id <issue_id> --view diff --baselineArtifactId <baseline_id>
+```
 
 ## Performance Optimization
 
@@ -258,14 +262,6 @@ mcp1_artifact_cleanup --strategy age --maxAge 7d
 # Remove duplicates
 mcp1_artifact_cleanup --strategy duplicates
 ```
-
-### Cache Management
-
-Flame graph preprocessing is cached by default. Use `analysis_mode` to control:
-
-- `auto`: Use cache or analyze (default)
-- `reuse`: Only use cached data (fast)
-- `force`: Re-analyze (slow, fresh data)
 
 ### Artifact Pinning
 
@@ -335,36 +331,36 @@ dotnet-symbol set-symbol-server https://msdl.microsoft.com/download/symbols
 ### High CPU Investigation
 
 1. Collect baseline during normal operation
-2. Use `workflow_automated_high_cpu_bundle` during issue
+2. Use `workflow_automated_high_cpu_bundle` during issue (duration: 30–60 sec)
 3. Analyze with `artifact_summarize` and `detect_patterns`
-4. Review flame graph for hot methods
-5. Compare with baseline
+4. Review trace data for hot methods
+5. Compare with baseline using `session_analyze`
 
 ### Memory Leak Investigation
 
-1. Collect baseline gcdump
-2. Wait for issue to manifest (5-10 minutes)
+1. Collect baseline gcdump from healthy state
+2. Wait for issue to manifest (5–10 minutes)
 3. Collect gcdump during issue
-4. Compare baseline vs issue
-5. Use `artifact_summarize` with `focus memory`
-6. Identify growing object types
+4. Use `visualize_heap_snapshot` with `view: diff` to compare baseline vs issue
+5. Use `visualize_heap_snapshot` with `view: retainer_paths` for retention chains
+6. Use `artifact_summarize` with `focus: memory`
+7. Identify growing object types
 
 ### Hang/Deadlock Investigation
 
 1. Collect dump immediately during hang
 2. Use `analyze_dump_sos` with `threads` and `clrstack`
-3. Use `visualize_flame_graph` for stack visualization
-4. Look for circular wait patterns
-5. Check thread pool state
+3. Use `detect_patterns` with `patternTypes: deadlocks`
+4. Look for circular wait patterns and blocked threads
+5. Check thread pool state in counters
 
 ### Baseline Performance Collection
 
-1. Identify representative process
-2. Use `workflow_automated_baseline_bundle`
-3. Save artifacts with descriptive names
-4. Document system conditions
-5. Store in dedicated location
+1. Identify representative process via `runtime_list_targets`
+2. Use `workflow_automated_baseline_bundle` (duration: 30–60 sec)
+3. Pin artifacts with `artifact_pin` to prevent cleanup
+4. Use `session_analyze` with `baselineSessionId` for future comparisons
 
 ## Conclusion
 
-Following these best practices ensures efficient, effective, and reliable diagnostic investigations using CLRScope MCP. Automated workflows, appropriate artifact selection, and proper analysis techniques lead to faster problem resolution.
+Following these best practices ensures efficient diagnostic investigations using CLRScope MCP. Start with automated workflows, use appropriate artifact types, and always collect baseline data for comparison.

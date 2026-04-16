@@ -11,27 +11,40 @@
 CLRScope MCP provides AI-powered diagnostic capabilities for .NET applications through the Model Context Protocol. It enables LLM agents to perform deep analysis of .NET processes including performance profiling, memory leak detection, thread analysis, and automated pattern detection.
 
 **v1.2.0 Highlights:**
-- Advanced heap visualization with type distribution, retained flame graphs, diff views, and retainer paths
+- Advanced heap visualization with type distribution, treemap, diff views, and retainer paths
 - Preflight validation for .nettrace heap snapshots to detect partial/incomplete data
 - Process-based heap parsing via ClrScope.HeapParser with 5-minute timeout for reliability
 - Import existing .gcdump and .nettrace files for analysis
-- Enhanced null checks and logging for robust error handling
+- Automated workflow bundles for common diagnostic scenarios
+
+## Quick Start for AI Agents
+
+Once CLRScope MCP is configured in your IDE, just describe the problem in natural language:
+
+| Scenario | Example Prompt |
+|----------|---------------|
+| **High CPU** | "My .NET app has 100% CPU. PID 12345. Find the cause." |
+| **Memory Leak** | "App memory keeps growing. PID 12345. Investigate." |
+| **Hang/Deadlock** | "App is frozen, not responding. PID 12345. Check for deadlock." |
+| **Baseline** | "Collect baseline performance data for PID 12345." |
+| **Compare** | "Compare current performance with previous baseline session." |
+
+The AI agent will automatically select and execute the appropriate CLRScope tools.
 
 ## Features
 
 | Feature | Description |
 |---------|-------------|
-| 🎯 **Runtime Detection** | Attachable .NET process detection (host OS only; target architecture currently unavailable) |
+| 🎯 **Runtime Detection** | Discover and inspect attachable .NET processes |
 | 📊 **Performance Counters** | Real-time CPU, memory, GC, and thread pool metrics |
-| 🔥 **Flame Graph Visualization** | Enhanced stack trace visualization with Dump/Trace support, caching, and progress reporting (v1.2.0) |
-| 🧠 **Heap Visualization** | Advanced heap snapshot analysis with type distribution, retained flame graphs, diff views, and retainer paths (v1.2.0) |
-| 📁 **Artifact Import** | Import existing .gcdump and .nettrace files for analysis (v1.2.0) |
-| **Memory Dump Analysis** | Compressed dump support with automatic decompression |
-| **SOS Commands** | Sequential SOS command execution for deep analysis |
-| **Pattern Detection** | Automatic detection of memory leaks, deadlocks, high CPU |
-| **Artifact Management** | Pagination, filtering, and cleanup strategies |
-| **Baseline Comparison** | Compare diagnostic sessions with baseline |
-| 🤖 **Automated Workflows** | One-click diagnostic bundles for common scenarios (high CPU, memory leaks, hangs, baseline) |
+| 🧠 **Heap Visualization** | Heap snapshot analysis with type distribution, treemap, diff views, and retainer paths |
+| 📁 **Artifact Import** | Import existing .gcdump and .nettrace files for offline analysis |
+| 💾 **Memory Dump Analysis** | Full memory dump collection with optional compression |
+| 🔍 **SOS Commands** | Sequential SOS command execution for deep .NET runtime analysis |
+| 🧩 **Pattern Detection** | Automatic detection of memory leaks, deadlocks, thread pool starvation, high CPU |
+| 📦 **Artifact Management** | Pagination, filtering, pinning, and cleanup strategies |
+| 📈 **Baseline Comparison** | Compare diagnostic sessions with baseline for deviation analysis |
+| 🤖 **Automated Workflows** | One-command diagnostic bundles for high CPU, memory leaks, hangs, and baseline |
 
 ## System Requirements
 
@@ -117,10 +130,62 @@ For full functionality, the following CLI tools are required:
 
 See [Full Requirements](docs/requirements.md) for installation instructions and feature-specific requirements.
 
+## Available Tools
+
+### Collection
+| Tool | Description |
+|------|-------------|
+| `collect_trace` | EventPipe trace (CPU sampling, GC heap, custom providers) |
+| `collect_dump` | Full memory dump with optional heap and compression |
+| `collect_gcdump` | GC heap snapshot (lightweight alternative to full dump) |
+| `collect_stacks` | Managed thread stacks (text or JSON) |
+| `collect_counters` | Performance counters (System.Runtime, ASP.NET, etc.) |
+| `import_gcdump` | Import existing .gcdump file |
+| `import_trace` | Import existing .nettrace file |
+
+### Analysis
+| Tool | Description |
+|------|-------------|
+| `artifact_summarize` | Automated summary with key metrics and recommendations |
+| `detect_patterns` | Pattern detection: memory leaks, deadlocks, thread pool starvation, high CPU |
+| `analyze_dump_sos` | SOS commands on dump files (threads, clrstack, dumpheap, etc.) |
+| `symbols_resolve` | Load symbols via dotnet-symbol |
+| `visualize_heap_snapshot` | Heap visualization: type distribution, treemap, diff, retainer paths |
+| `session_analyze` | Session analysis with optional baseline comparison |
+
+### Runtime
+| Tool | Description |
+|------|-------------|
+| `runtime_list_targets` | List all attachable .NET processes |
+| `runtime_inspect_target` | Detailed info about a specific .NET process |
+
+### Automated Workflows
+| Tool | Description |
+|------|-------------|
+| `workflow_automated_high_cpu_bundle` | trace + counters + stacks |
+| `workflow_automated_memory_leak_bundle` | gcdump + counters + trace (gc-heap) |
+| `workflow_automated_hang_bundle` | dump + stacks + counters |
+| `workflow_automated_baseline_bundle` | counters + trace + gcdump + stacks |
+
+### Management
+| Tool | Description |
+|------|-------------|
+| `artifact_list` | List artifacts with filtering and pagination |
+| `artifact_get_metadata` | Get artifact metadata by ID |
+| `artifact_read_text` | Read text content of an artifact |
+| `artifact_pin` / `artifact_unpin` | Protect artifacts from automatic cleanup |
+| `artifact_cleanup` | Clean old artifacts (by age or duplicates) |
+| `artifact_delete` | Delete specific artifact |
+| `session_get` | Get session info |
+| `session_cancel` | Cancel active session |
+| `session_group_by_incident` | Group sessions by incident ID |
+| `system_health` | Server health check |
+| `system_capabilities` | Available capabilities and feature flags |
+
 ## Documentation
 
-- [Investigation Guides](docs/investigation-guides.md) - Step-by-step guides for memory leaks, hangs, high CPU, and baseline performance collection
-- [Best Practices](docs/best-practices.md) - Recommended workflows and optimization techniques for effective diagnostics
+- [Investigation Guides](docs/investigation-guides.md) - Step-by-step diagnostic workflows for common scenarios
+- [Best Practices](docs/best-practices.md) - Collection parameters, analysis techniques, and optimization tips
 - [Troubleshooting](docs/troubleshooting.md) - Solutions to common issues and error messages
-- [Tool Integration](docs/integration.md) - Required CLI tools and installation instructions for diagnostic features
-- [Full Requirements](docs/requirements.md) - Comprehensive requirements for using all CLRScope MCP features
+- [Tool Integration](docs/integration.md) - Required CLI tools and installation instructions
+- [Full Requirements](docs/requirements.md) - System and platform requirements

@@ -95,11 +95,6 @@ This document provides comprehensive requirements for using all CLRScope MCP fea
 - **Required**: dotnet-dump
 - **Recommended**: dotnet-symbol (for symbol resolution)
 
-### Flame Graph Visualization
-- **Required for Dump artifacts**: dotnet-dump (for SOS analysis, v1.2.0)
-- **Required for Trace artifacts**: dotnet-trace (for CPU sampling)
-- **Required for Stacks artifacts**: dotnet-stack (for managed stacks)
-
 ### Thread Analysis
 - **Required**: dotnet-stack
 
