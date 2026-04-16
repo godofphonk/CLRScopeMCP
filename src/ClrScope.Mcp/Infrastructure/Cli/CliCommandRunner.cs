@@ -130,12 +130,7 @@ public class CliCommandRunner : ICliCommandRunner
 
             TryKill(process);
 
-            return new CommandLineResult(
-                -1,
-                "",
-                "Command was cancelled.",
-                false,
-                CommandErrorCategory.Cancelled);
+            throw; // Re-throw OperationCanceledException for proper cancellation handling
         }
         catch (Exception ex)
         {

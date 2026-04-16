@@ -2069,6 +2069,16 @@ private static string TruncateCallSite(string callSite, int maxLength)
                 logger.LogInformation("Preparing heap snapshot for artifact {ArtifactId}", artifactId);
                 var prepared = await preparer.PrepareAsync(artifact, options, cancellationToken);
 
+                // Include GcDumpGraphAdapter debug info for debugging
+                var debugInfo = new System.Text.StringBuilder();
+                debugInfo.AppendLine("<!-- GcDumpGraphAdapter Debug Info:");
+                debugInfo.AppendLine($"  NodeIndexLimit={prepared.Snapshot.Metadata.SegmentCount}");
+                debugInfo.AppendLine($"  TotalHeapBytes={prepared.Snapshot.Metadata.TotalHeapBytes}");
+                debugInfo.AppendLine($"  TotalObjectCount={prepared.Snapshot.Metadata.TotalObjectCount}");
+                debugInfo.AppendLine($"  RootCount={prepared.Snapshot.Metadata.RootCount}");
+                debugInfo.AppendLine($"  TypeStats Count={prepared.Snapshot.TypeStats?.Count ?? 0}");
+                debugInfo.AppendLine("  Check console logs for Step-by-step GcDumpGraphAdapter logging (Step 1-10) -->");
+
                 if (format.ToLowerInvariant() == "json")
                 {
                     content = JsonSerializer.Serialize(prepared.Snapshot, new JsonSerializerOptions
@@ -2086,6 +2096,12 @@ private static string TruncateCallSite(string callSite, int maxLength)
                 {
                     var renderer = new HeapTypeDistributionRenderer();
                     content = renderer.RenderHtml(prepared.Snapshot, metricKind);
+                }
+
+                // Prepend debug info to HTML content
+                if (format.ToLowerInvariant() == "html")
+                {
+                    content = debugInfo.ToString() + content;
                 }
             }
 
