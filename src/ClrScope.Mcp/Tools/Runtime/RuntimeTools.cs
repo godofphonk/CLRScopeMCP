@@ -1,4 +1,4 @@
-using ClrScope.Mcp.Services;
+using ClrScope.Mcp.Services.Runtime;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;

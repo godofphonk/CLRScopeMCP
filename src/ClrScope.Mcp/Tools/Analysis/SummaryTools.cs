@@ -1,5 +1,8 @@
 using ClrScope.Mcp.Domain.Artifacts;
-using ClrScope.Mcp.Domain.Heap;
+using ClrScope.Mcp.Domain.Heap.Adapters;
+using ClrScope.Mcp.Domain.Heap.Data;
+using ClrScope.Mcp.Domain.Heap.Enums;
+using ClrScope.Mcp.Domain.Heap.Options;
 using ClrScope.Mcp.Infrastructure;
 using ClrScope.Mcp.Infrastructure.Utils;
 using ClrScope.Mcp.Options;

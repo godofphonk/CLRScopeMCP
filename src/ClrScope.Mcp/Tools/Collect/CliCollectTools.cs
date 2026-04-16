@@ -2,7 +2,7 @@ using ClrScope.Mcp.Domain.Artifacts;
 using ClrScope.Mcp.Domain.Sessions;
 using ClrScope.Mcp.Infrastructure;
 using ClrScope.Mcp.Options;
-using ClrScope.Mcp.Services;
+using ClrScope.Mcp.Services.Collect;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -141,7 +141,7 @@ public sealed class CollectCountersTools
 
         try
         {
-            var request = new ClrScope.Mcp.Services.CollectGcDumpRequest(pid);
+            var request = new CollectGcDumpRequest(pid);
             var result = await gcdumpService.CollectGcDumpAsync(request, cancellationToken: cancellationToken);
 
             if (result.Artifact != null)
@@ -399,7 +399,7 @@ public sealed class CollectCountersTools
 
         try
         {
-            var request = new ClrScope.Mcp.Services.CollectStacksRequest(pid, format);
+            var request = new CollectStacksRequest(pid, format);
             var result = await stacksService.CollectStacksAsync(request, cancellationToken: cancellationToken);
 
             if (result.Artifact != null)

@@ -1,7 +1,9 @@
 using ClrScope.Mcp.DependencyInjection;
 using ClrScope.Mcp.Infrastructure;
 using ClrScope.Mcp.Options;
-using ClrScope.Mcp.Services;
+using ClrScope.Mcp.Services.Collect;
+using ClrScope.Mcp.Services.Health;
+using ClrScope.Mcp.Services.Runtime;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;

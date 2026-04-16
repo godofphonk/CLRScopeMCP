@@ -1,0 +1,219 @@
+using ClrScope.Mcp.Contracts;
+using ClrScope.Mcp.Domain.Artifacts;
+using ClrScope.Mcp.Domain.Sessions;
+using ClrScope.Mcp.Infrastructure;
+using ClrScope.Mcp.Options;
+using ClrScope.Mcp.Validation;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using ModelContextProtocol.Server;
+
+namespace ClrScope.Mcp.Services.Collect;
+
+public record CollectGcDumpRequest(int Pid);
+
+public record CollectGcDumpResult(
+    Session Session,
+    Artifact? Artifact,
+    string? Error)
+{
+    public static CollectGcDumpResult Success(Session session, Artifact artifact) =>
+        new(session, artifact, null);
+
+    public static CollectGcDumpResult Failure(Session session, string error) =>
+        new(session, null, error);
+}
+
+public class CollectGcDumpService
+{
+    private readonly IOptions<ClrScopeOptions> _options;
+    private readonly IPreflightValidator _preflightValidator;
+    private readonly ISqliteSessionStore _sessionStore;
+    private readonly ISqliteArtifactStore _artifactStore;
+    private readonly IPidLockManager _pidLockManager;
+    private readonly IActiveOperationRegistry _activeOperationRegistry;
+    private readonly ICliCommandRunner _cliRunner;
+    private readonly ICliToolAvailabilityChecker _availabilityChecker;
+    private readonly ILogger<CollectGcDumpService> _logger;
+
+    public CollectGcDumpService(
+        IOptions<ClrScopeOptions> options,
+        IPreflightValidator preflightValidator,
+        ISqliteSessionStore sessionStore,
+        ISqliteArtifactStore artifactStore,
+        IPidLockManager pidLockManager,
+        IActiveOperationRegistry activeOperationRegistry,
+        ICliCommandRunner cliRunner,
+        ICliToolAvailabilityChecker availabilityChecker,
+        ILogger<CollectGcDumpService> logger)
+    {
+        _options = options;
+        _preflightValidator = preflightValidator;
+        _sessionStore = sessionStore;
+        _artifactStore = artifactStore;
+        _pidLockManager = pidLockManager;
+        _activeOperationRegistry = activeOperationRegistry;
+        _cliRunner = cliRunner;
+        _availabilityChecker = availabilityChecker;
+        _logger = logger;
+    }
+
+    public async Task<CollectGcDumpResult> CollectGcDumpAsync(
+        CollectGcDumpRequest request,
+        IProgress<double>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        progress?.Report(0);
+
+        // Check dotnet-gcdump availability
+        var availability = await _availabilityChecker.CheckAvailabilityAsync("dotnet-gcdump", cancellationToken);
+        if (!availability.IsAvailable)
+        {
+            var failedSession = await _sessionStore.CreateAsync(SessionKind.GcDump, request.Pid, cancellationToken: cancellationToken);
+            failedSession = failedSession.AsFailed(availability.InstallHint);
+            await _sessionStore.UpdateAsync(failedSession, cancellationToken);
+            return CollectGcDumpResult.Failure(failedSession, availability.InstallHint ?? "dotnet-gcdump CLI not found");
+        }
+
+        // Acquire PID lock
+        using var pidLock = await _pidLockManager.AcquireLockAsync(request.Pid, cancellationToken);
+
+        // Preflight validation
+        var preflightResult = await _preflightValidator.ValidateCollectAsync(request.Pid, CollectionOperationType.GcDump, cancellationToken);
+        if (!preflightResult.IsValid)
+        {
+            var failedSession = await _sessionStore.CreateAsync(SessionKind.GcDump, request.Pid, cancellationToken: cancellationToken);
+            failedSession = failedSession.AsFailed(preflightResult.Message);
+            await _sessionStore.UpdateAsync(failedSession, cancellationToken);
+            return CollectGcDumpResult.Failure(failedSession, preflightResult.Message ?? "Preflight validation failed");
+        }
+
+        // Create session
+        var session = await _sessionStore.CreateAsync(SessionKind.GcDump, request.Pid, cancellationToken: cancellationToken);
+        await _sessionStore.UpdateAsync(session with { Status = SessionStatus.Running, Phase = SessionPhase.Attaching }, cancellationToken);
+
+        // Create linked CTS
+        using var operationCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        _activeOperationRegistry.TryRegister(session.SessionId, operationCts);
+
+        string? filePath = null;
+        try
+        {
+            // Setup artifact path
+            var artifactRoot = _options.Value.GetArtifactRoot();
+            var gcdumpsDir = Path.Combine(artifactRoot, "gcdumps");
+            Directory.CreateDirectory(gcdumpsDir);
+
+            var fileName = $"gcdump_{session.SessionId.Value}.gcdump";
+            filePath = Path.Combine(gcdumpsDir, fileName);
+
+            progress?.Report(20);
+            await _sessionStore.UpdateAsync(session with { Phase = SessionPhase.Collecting }, operationCts.Token);
+
+            // Collect GC dump via dotnet-gcdump CLI
+            _logger.LogInformation("Collecting GC dump for PID {Pid} to {FilePath}", request.Pid, filePath);
+            var result = await _cliRunner.ExecuteAsync("dotnet-gcdump", new[] { "collect", "-p", request.Pid.ToString(), "-o", filePath }, operationCts.Token);
+
+            if (result.ExitCode != 0)
+            {
+                var error = !string.IsNullOrEmpty(result.StandardError) ? result.StandardError : result.StandardOutput;
+                session = session.AsFailed(error);
+                await _sessionStore.UpdateAsync(session, CancellationToken.None);
+                return CollectGcDumpResult.Failure(session, error ?? "GC dump collection failed");
+            }
+
+            // Check if file was created
+            if (!File.Exists(filePath))
+            {
+                session = session.AsFailed("GC dump file not created");
+                await _sessionStore.UpdateAsync(session, CancellationToken.None);
+                return CollectGcDumpResult.Failure(session, "GC dump file was not created");
+            }
+
+            var fileInfo = new FileInfo(filePath);
+            if (fileInfo.Length == 0)
+            {
+                session = session.AsFailed("GC dump file is empty");
+                await _sessionStore.UpdateAsync(session, CancellationToken.None);
+                return CollectGcDumpResult.Failure(session, "GC dump file is empty");
+            }
+
+            // Warn if gcdump file is large
+            const long largeGcDumpThreshold = 200 * 1024 * 1024; // 200 MB
+            if (fileInfo.Length > largeGcDumpThreshold)
+            {
+                _logger.LogWarning("Large GC dump file detected: {Size} MB for PID {Pid}. Consider using full memory dump instead for comprehensive analysis.",
+                    fileInfo.Length / (1024 * 1024), request.Pid);
+            }
+
+            progress?.Report(70);
+            session = session with { Phase = SessionPhase.Persisting };
+            await _sessionStore.UpdateAsync(session, operationCts.Token);
+
+            // Create artifact record
+            var artifact = await _artifactStore.CreateAsync(
+                ArtifactKind.GcDump,
+                filePath,
+                fileInfo.Length,
+                request.Pid,
+                session.SessionId,
+                operationCts.Token
+            );
+
+            // Update artifact with URIs
+            var diagUri = $"clrscope://artifact/{artifact.ArtifactId.Value}";
+            var fileUri = new Uri(filePath).AbsoluteUri;
+            artifact = artifact with { DiagUri = diagUri, FileUri = fileUri };
+            await _artifactStore.UpdateAsync(artifact with { Status = ArtifactStatus.Completed }, CancellationToken.None);
+
+            await _sessionStore.UpdateAsync(session.AsCompleted(), CancellationToken.None);
+
+            // Re-read to get updated state
+            var updatedSession = await _sessionStore.GetAsync(session.SessionId, CancellationToken.None);
+            var updatedArtifact = await _artifactStore.GetAsync(artifact.ArtifactId, CancellationToken.None);
+
+            progress?.Report(100);
+            return CollectGcDumpResult.Success(updatedSession ?? session, updatedArtifact ?? artifact);
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogInformation("GC dump collection cancelled for session {SessionId}", session.SessionId);
+            session = session.AsCancelled();
+            await _sessionStore.UpdateAsync(session, CancellationToken.None);
+            return CollectGcDumpResult.Failure(session, "GC dump collection cancelled");
+        }
+        catch (Exception ex) when (!operationCts.Token.IsCancellationRequested)
+        {
+            // Best-effort: mark session as failed
+            try
+            {
+                session = session.AsFailed(ex.Message);
+                await _sessionStore.UpdateAsync(session, CancellationToken.None);
+                _logger.LogInformation("Marked session {SessionId} as failed due to exception: {Error}", session.SessionId, ex.Message);
+            }
+            catch (Exception updateEx)
+            {
+                _logger.LogError(updateEx, "Failed to mark session {SessionId} as failed", session.SessionId);
+            }
+
+            // Cleanup orphaned file on unexpected failure
+            if (filePath != null && File.Exists(filePath))
+            {
+                try
+                {
+                    File.Delete(filePath);
+                    _logger.LogInformation("Cleaned up orphaned file: {FilePath}", filePath);
+                }
+                catch (Exception deleteEx)
+                {
+                    _logger.LogWarning(deleteEx, "Failed to cleanup orphaned file: {FilePath}", filePath);
+                }
+            }
+            throw;
+        }
+        finally
+        {
+            _activeOperationRegistry.Complete(session.SessionId);
+        }
+    }
+}

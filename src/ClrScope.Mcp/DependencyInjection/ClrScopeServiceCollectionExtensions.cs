@@ -1,9 +1,13 @@
 using ClrScope.Mcp.Contracts;
-using ClrScope.Mcp.Domain.Heap;
+using ClrScope.Mcp.Domain.Heap.Adapters;
+using ClrScope.Mcp.Domain.Heap.Envelopes;
+using ClrScope.Mcp.Domain.Heap.Facades;
 using ClrScope.Mcp.Infrastructure;
 using ClrScope.Mcp.Options;
-using ClrScope.Mcp.Services;
+using ClrScope.Mcp.Services.Collect;
+using ClrScope.Mcp.Services.Health;
 using ClrScope.Mcp.Services.Heap;
+using ClrScope.Mcp.Services.Runtime;
 using ClrScope.Mcp.Tools.Analysis;
 using ClrScope.Mcp.Tools.Artifacts;
 using ClrScope.Mcp.Tools.Collect;
