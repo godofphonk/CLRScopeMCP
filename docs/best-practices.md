@@ -109,7 +109,8 @@ This prevents wasting time on non-.NET processes or processes that have already 
 - Not suitable for real-time monitoring
 
 **Best Practices (v1.2.0):**
-- Use `analyze_heap` for type statistics and diff comparison (JSON/text output)
+- Use `analyze_heap` for type statistics with retained size (dominator tree analysis)
+- Use `find_retainer_paths` to trace why specific objects are kept alive
 - Process-based parsing via ClrScope.HeapParser with 5-minute timeout for reliability
 - Compare baseline vs issue gcdumps using diff analysis to identify growing objects
 - Use .gcdump files for heap analysis (reliable) vs .nettrace (unreliable for heap data)
@@ -237,7 +238,7 @@ Identifies deviations from normal behavior.
 
 ### 4. Use Heap Analysis for Memory Analysis
 
-For GcDump artifacts, use heap analysis to understand memory distribution:
+For GcDump artifacts, use heap analysis to understand memory distribution. The dominator tree calculates accurate retained sizes (not just shallow sizes):
 
 ```bash
 mcp1_analyze_heap --artifact_id <id> --analysis_type type_stats
@@ -248,6 +249,16 @@ Compare baseline vs issue snapshots with diff analysis:
 ```bash
 mcp1_analyze_heap --artifact_id <issue_id> --analysis_type diff --baselineArtifactId <baseline_id>
 ```
+
+### 5. Use Retainer Paths for Leak Root Cause
+
+Once you identify a suspect type via `analyze_heap`, trace its retention chain:
+
+```bash
+mcp1_find_retainer_paths --artifact_id <id> --targetNodeId <node_id> --maxPaths 10
+```
+
+This shows why an object is kept alive by tracing paths from GC roots to the target.
 
 ## Performance Optimization
 
@@ -342,8 +353,9 @@ dotnet-symbol set-symbol-server https://msdl.microsoft.com/download/symbols
 2. Wait for issue to manifest (5–10 minutes)
 3. Collect gcdump during issue
 4. Use `analyze_heap` with `analysis_type: diff` to compare baseline vs issue
-5. Use `artifact_summarize` with `focus: memory`
-6. Identify growing object types
+5. Use `find_retainer_paths` to trace why suspect objects are retained
+6. Use `artifact_summarize` with `focus: memory`
+7. Identify growing object types and their retention chains
 
 ### Hang/Deadlock Investigation
 
