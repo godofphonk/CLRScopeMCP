@@ -111,5 +111,10 @@ jobs:
           name: nuget-package
           path: ./artifacts
 
-      - name: Publish to NuGet
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a66eefa2bf2572fc311ea6ff65a7b6ecc4df96a6
+        with:
+          dotnet-version: '10.0.100'
+
+      - name: Publish to NuGet with trusted publishing
         run: dotnet nuget push artifacts/*.nupkg --source https://api.nuget.org/v3/index.json --skip-duplicate
