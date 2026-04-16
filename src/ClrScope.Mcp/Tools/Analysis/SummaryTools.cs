@@ -471,25 +471,9 @@ public sealed class SummaryTools
         return new List<StackFrameData>();
     }
 
-    // Try to detect if trace contains CPU sampling data by checking file content
-    try
-    {
-        var fileContent = File.ReadAllText(traceFilePath);
-        var hasCpuSampling = fileContent.Contains("SampleProfiler") ||
-                           fileContent.Contains("cpu-sampling") ||
-                           fileContent.Contains("dotnet-sampled-thread-time");
-
-        if (!hasCpuSampling)
-        {
-            // Return empty list to trigger error message
-            return new List<StackFrameData>();
-        }
-    }
-    catch
-    {
-        // If reading fails, return empty list
-    }
-
+    // .nettrace is a binary format - cannot use ReadAllText
+    // This requires TraceEvent library or dotnet-trace convert for proper parsing
+    // Returning empty list to trigger appropriate error message
     return new List<StackFrameData>();
 }
 
@@ -1132,27 +1116,10 @@ private static string TruncateCallSite(string callSite, int maxLength)
                 return;
             }
 
-            var fileContent = await File.ReadAllTextAsync(filePath, cancellationToken);
-            var traceSize = fileContent.Length;
-
-            foreach (var pattern in patternsToDetect)
-            {
-                switch (pattern)
-                {
-                    case "high_cpu":
-                        DetectTraceHighCPU(fileContent, traceSize, detectedPatterns);
-                        break;
-                    case "memory_leaks":
-                        DetectTraceMemoryLeaks(fileContent, detectedPatterns);
-                        break;
-                    case "thread_pool":
-                        DetectTraceThreadPool(fileContent, detectedPatterns);
-                        break;
-                    case "excessive_allocations":
-                        DetectTraceAllocations(fileContent, detectedPatterns);
-                        break;
-                }
-            }
+            // .nettrace is a binary format - cannot use ReadAllTextAsync
+            // This requires TraceEvent library or dotnet-trace convert for proper parsing
+            // Pattern detection not available for binary trace files
+            return;
         }
         catch (Exception)
         {
@@ -1676,88 +1643,10 @@ private static string TruncateCallSite(string callSite, int maxLength)
         summary.Findings.Add("Trace contains EventPipe events for performance analysis.");
         summary.KeyMetrics["Trace Size"] = FormatBytes(artifact.SizeBytes);
 
-        try
-        {
-            if (File.Exists(artifact.FilePath))
-            {
-                var fileContent = File.ReadAllText(artifact.FilePath);
-
-                var hasCpuSampling = fileContent.Contains("cpu-sampling") || fileContent.Contains("CPU") || fileContent.Contains("Sample");
-                var hasGcEvents = fileContent.Contains("GC") || fileContent.Contains("gc-heap") || fileContent.Contains("Alloc");
-                var hasThreadPool = fileContent.Contains("ThreadPool") || fileContent.Contains("Worker");
-                var hasIoEvents = fileContent.Contains("IO") || fileContent.Contains("File") || fileContent.Contains("Network");
-
-                summary.KeyMetrics["CPU Sampling"] = hasCpuSampling ? "Yes" : "No";
-                summary.KeyMetrics["GC Events"] = hasGcEvents ? "Yes" : "No";
-                summary.KeyMetrics["ThreadPool Events"] = hasThreadPool ? "Yes" : "No";
-                summary.KeyMetrics["I/O Events"] = hasIoEvents ? "Yes" : "No";
-
-                if (hasCpuSampling)
-                {
-                    summary.Findings.Add("Trace contains CPU sampling data for hotspot analysis.");
-                }
-
-                if (hasGcEvents)
-                {
-                    summary.Findings.Add("Trace contains GC events for memory analysis.");
-                }
-
-                if (hasThreadPool)
-                {
-                    summary.Findings.Add("Trace contains thread pool events for contention analysis.");
-                }
-
-                if (focus == "cpu" || focus == "all")
-                {
-                    if (hasCpuSampling)
-                    {
-                        summary.Recommendations.Add("Use PerfView or dotnet-trace analyze to examine CPU samples.");
-                        summary.Recommendations.Add("Look for hot methods with high CPU time.");
-                    }
-                    else
-                    {
-                        summary.Recommendations.Add("Trace may not contain CPU sampling data - consider collecting with cpu-sampling profile.");
-                    }
-                }
-
-                if (focus == "memory" || focus == "all")
-                {
-                    if (hasGcEvents)
-                    {
-                        summary.Recommendations.Add("Check for allocation patterns and GC activity.");
-                        summary.Recommendations.Add("Examine GC heap allocation rate and pause times.");
-                    }
-                    else
-                    {
-                        summary.Recommendations.Add("Consider collecting trace with gc-heap profile for memory analysis.");
-                    }
-                }
-
-                if (focus == "threads" || focus == "all")
-                {
-                    if (hasThreadPool)
-                    {
-                        summary.Recommendations.Add("Analyze thread pool usage and contention.");
-                    }
-                }
-
-                if (focus == "io" || focus == "all")
-                {
-                    if (hasIoEvents)
-                    {
-                        summary.Recommendations.Add("Look for I/O operations and network activity.");
-                    }
-                }
-            }
-            else
-            {
-                summary.KeyMetrics["Analysis"] = "File not found";
-            }
-        }
-        catch (Exception)
-        {
-            summary.KeyMetrics["Analysis"] = "Analysis failed";
-        }
+        // .nettrace is a binary format - cannot use ReadAllText
+        // This requires TraceEvent library or dotnet-trace convert for proper parsing
+        summary.Findings.Add("Binary trace format requires TraceEvent library or dotnet-trace convert for detailed analysis.");
+        summary.Recommendations.Add("Use dotnet-trace convert --format Speedscope to convert to a readable format for analysis.");
     }
 
     private static void AnalyzeCountersArtifact(Artifact artifact, ArtifactAnalysisSummary summary, string focus)
