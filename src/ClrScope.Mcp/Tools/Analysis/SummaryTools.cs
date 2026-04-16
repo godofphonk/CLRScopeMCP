@@ -369,7 +369,7 @@ public sealed class SummaryTools
                 // Save to file if filename is provided
                 if (!string.IsNullOrEmpty(filename))
                 {
-                    await SaveAndOpenVisualizationAsync(stacksFlameGraph, filename, format.ToLowerInvariant(), logger, cancellationToken);
+                    await SaveAndOpenVisualizationAsync(stacksFlameGraph, filename, format.ToLowerInvariant(), logger, artifactRoot, cancellationToken);
                 }
                 
                 return VisualizationResult.Success(stacksFlameGraph, format.ToLowerInvariant());
@@ -413,7 +413,7 @@ public sealed class SummaryTools
             // Save to file if filename is provided
             if (!string.IsNullOrEmpty(filename))
             {
-                await SaveAndOpenVisualizationAsync(flameGraph, filename, format.ToLowerInvariant(), logger, cancellationToken);
+                await SaveAndOpenVisualizationAsync(flameGraph, filename, format.ToLowerInvariant(), logger, artifactRoot, cancellationToken);
             }
 
             return VisualizationResult.Success(flameGraph, format.ToLowerInvariant());
@@ -425,10 +425,13 @@ public sealed class SummaryTools
         }
     }
 
-    private static async Task SaveAndOpenVisualizationAsync(string content, string filename, string format, ILogger logger, CancellationToken cancellationToken)
+    private static async Task SaveAndOpenVisualizationAsync(string content, string filename, string format, ILogger logger, string artifactRoot, CancellationToken cancellationToken)
     {
         try
         {
+            // Validate filename is within artifact root to prevent arbitrary file writes
+            PathSecurity.EnsurePathWithinDirectory(filename, artifactRoot);
+
             // Save to file
             await System.IO.File.WriteAllTextAsync(filename, content, cancellationToken);
             logger.LogInformation("Visualization saved to {Filename}", filename);
@@ -1989,6 +1992,8 @@ private static string TruncateCallSite(string callSite, int maxLength)
         var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
         var logger = server.Services!.GetRequiredService<ILogger<SummaryTools>>();
         var preparer = server.Services!.GetRequiredService<IHeapSnapshotPreparer>();
+        var clrScopeOptions = server.Services!.GetRequiredService<Microsoft.Extensions.Options.IOptions<ClrScopeOptions>>();
+        var artifactRoot = clrScopeOptions.Value.GetArtifactRoot();
 
         // Add 5-minute timeout to prevent hanging (sync operations don't respect cancellation)
         using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
@@ -2162,7 +2167,7 @@ private static string TruncateCallSite(string callSite, int maxLength)
             // Save to file if filename is provided
             if (!string.IsNullOrEmpty(filename))
             {
-                await SaveAndOpenVisualizationAsync(content, filename, format.ToLowerInvariant(), logger, linkedCts.Token);
+                await SaveAndOpenVisualizationAsync(content, filename, format.ToLowerInvariant(), logger, artifactRoot, linkedCts.Token);
             }
 
             return VisualizationResult.Success(content, format);
