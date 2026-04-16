@@ -71,20 +71,6 @@ class Program
         var schemaInitializer = host.Services.GetRequiredService<SqliteSchemaInitializer>();
         await schemaInitializer.InitializeAsync();
 
-        // Startup cleanup disabled by default for security - requires explicit user action
-        // Uncomment if you want automatic cleanup on startup (but be aware of path validation)
-        // var retentionService = host.Services.GetRequiredService<IArtifactRetentionService>();
-        // var logger = host.Services.GetRequiredService<ILogger<Program>>();
-        // try
-        // {
-        //     var deletedCount = await retentionService.CleanupOldArtifactsAsync(TimeSpan.FromDays(7));
-        //     logger.LogInformation("Startup cleanup: {DeletedCount} artifacts deleted (older than 7 days)", deletedCount);
-        // }
-        // catch (Exception ex)
-        // {
-        //     logger.LogError(ex, "Startup cleanup failed");
-        // }
-
         await host.RunAsync();
     }
 
