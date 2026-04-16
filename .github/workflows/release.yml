@@ -101,6 +101,8 @@ jobs:
 
   publish-nuget:
     needs: [build-nuget]
+    permissions:
+      id-token: write
     runs-on: ubuntu-latest
     steps:
       - name: Download artifact
@@ -114,5 +116,11 @@ jobs:
         with:
           dotnet-version: '10.0.100'
 
+      - name: NuGet login (OIDC → temp API key)
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
       - name: Publish to NuGet
-        run: dotnet nuget push artifacts/*.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }} --skip-duplicate
+        run: dotnet nuget push artifacts/*.nupkg --api-key ${{steps.login.outputs.NUGET_API_KEY}} --source https://api.nuget.org/v3/index.json --skip-duplicate
