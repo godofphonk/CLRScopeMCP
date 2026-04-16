@@ -1814,6 +1814,92 @@ private static string TruncateCallSite(string callSite, int maxLength)
         return $"{size:0.##} {sizes[order]}";
     }
 
+    [McpServerTool(Name = "visualize_nettrace_heap"), Description("Visualize a .nettrace EventPipe heap snapshot as type distribution, treemap, or retained flame")]
+    public static async Task<VisualizationResult> VisualizeNettraceHeap(
+        string artifactId,
+        McpServer server,
+        [Description("View kind: 'type_distribution' (default), 'treemap', 'retained_flame'")] string view = "type_distribution",
+        [Description("Metric: 'shallow_size' (default), 'count', 'retained_size'")] string metric = "shallow_size",
+        [Description("Output format: 'html' (default), 'json'")] string format = "html",
+        [Description("Grouping: 'type' (default), 'namespace', 'assembly'")] string groupBy = "type",
+        [Description("Maximum types to render")] int maxTypes = 200,
+        CancellationToken cancellationToken = default)
+    {
+        var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
+        var logger = server.Services!.GetRequiredService<ILogger<SummaryTools>>();
+        var eventPipeAdapter = server.Services!.GetRequiredService<IHeapGraphSourceAdapter>();
+        var facade = server.Services!.GetRequiredService<IMemoryGraphFacade>();
+        var mapper = server.Services!.GetRequiredService<IHeapSnapshotMapper>();
+
+        try
+        {
+            var artifact = await artifactStore.GetAsync(new ArtifactId(artifactId), cancellationToken);
+            if (artifact == null)
+            {
+                return VisualizationResult.Failure($"Artifact not found: {artifactId}");
+            }
+
+            if (artifact.Kind != ArtifactKind.Trace)
+            {
+                return VisualizationResult.Failure($"Artifact {artifactId} is not a Trace (.nettrace file).");
+            }
+
+            logger.LogInformation("Reading EventPipe heap graph from artifact {ArtifactId}", artifactId);
+
+            var envelope = await eventPipeAdapter.ReadAsync(artifact.FilePath, cancellationToken, null);
+
+            var snapshot = mapper.Map(artifact, envelope, facade);
+
+            var viewKind = view.ToLowerInvariant() switch
+            {
+                "treemap" => HeapViewKind.Treemap,
+                "retained_flame" => HeapViewKind.RetainedFlame,
+                _ => HeapViewKind.TypeDistribution
+            };
+
+            var metricKind = metric.ToLowerInvariant() switch
+            {
+                "count" => HeapMetricKind.Count,
+                "retained_size" => HeapMetricKind.RetainedSize,
+                _ => HeapMetricKind.ShallowSize
+            };
+
+            string content;
+            if (format.ToLowerInvariant() == "json")
+            {
+                content = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions
+                {
+                    WriteIndented = true,
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                });
+            }
+            else if (viewKind == HeapViewKind.Treemap)
+            {
+                var renderer = new HeapTreemapRenderer();
+                content = renderer.RenderHtml(snapshot, metricKind);
+            }
+            else if (viewKind == HeapViewKind.RetainedFlame)
+            {
+                var graphAdapter = server.Services!.GetRequiredService<IGcDumpGraphAdapter>();
+                var heapGraph = await graphAdapter.LoadGraphAsync(artifact.FilePath, cancellationToken);
+                var flameRenderer = new HeapRetainedFlameRenderer();
+                content = flameRenderer.RenderHtml(heapGraph, metricKind);
+            }
+            else
+            {
+                var renderer = new HeapTypeDistributionRenderer();
+                content = renderer.RenderHtml(snapshot, metricKind);
+            }
+
+            return VisualizationResult.Success(content, format);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Nettrace heap visualization failed for artifact {ArtifactId}", artifactId);
+            return VisualizationResult.Failure($"Nettrace heap visualization failed: {ex.Message}");
+        }
+    }
+
     [McpServerTool(Name = "visualize_heap_snapshot"), Description("Visualize a .gcdump heap snapshot as type distribution, treemap, retained flame, diff, or retainer paths")]
     public static async Task<VisualizationResult> VisualizeHeapSnapshot(
         string artifactId,
@@ -1926,6 +2012,11 @@ private static string TruncateCallSite(string callSite, int maxLength)
                 if (string.IsNullOrEmpty(targetObjectId))
                 {
                     return VisualizationResult.Failure("targetObjectId is required for retainer_paths view");
+                }
+
+                if (!long.TryParse(targetObjectId, out var parsedTargetId))
+                {
+                    return VisualizationResult.Failure($"targetObjectId '{targetObjectId}' is not a valid numeric ID");
                 }
 
                 var graphAdapter = server.Services!.GetRequiredService<IGcDumpGraphAdapter>();
