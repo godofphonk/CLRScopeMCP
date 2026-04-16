@@ -10,18 +10,22 @@ public class EventPipeHeapGraphSourceAdapterTests
 {
     private readonly Mock<ILogger<EventPipeHeapGraphSourceAdapter>> _loggerMock;
     private readonly EventPipeHeapGraphSourceAdapter _adapter;
+    private readonly string _testDataPath;
 
     public EventPipeHeapGraphSourceAdapterTests()
     {
         _loggerMock = new Mock<ILogger<EventPipeHeapGraphSourceAdapter>>();
         _adapter = new EventPipeHeapGraphSourceAdapter(_loggerMock.Object);
+        _testDataPath = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "test-data"));
     }
+
+    private string GetTestDataPath(string fileName) => Path.Combine(_testDataPath, fileName);
 
     [Fact]
     public async Task ReadAsync_WithValidNettraceFile_ReturnsMemoryGraphEnvelope()
     {
         // Arrange
-        var nettracePath = "/home/gospodin/Desktop/homeProjects/CLRScopeMCP/test-data/test-data.nettrace";
+        var nettracePath = GetTestDataPath("test-data.nettrace");
 
         // Act
         var result = await _adapter.ReadAsync(nettracePath, CancellationToken.None);
@@ -47,7 +51,7 @@ public class EventPipeHeapGraphSourceAdapterTests
     public async Task ReadAsync_WithInvalidExtension_ThrowsException()
     {
         // Arrange
-        var invalidPath = "/home/gospodin/Desktop/homeProjects/CLRScopeMCP/test-data/test-data.txt";
+        var invalidPath = GetTestDataPath("test-data.txt");
 
         // Act & Assert
         await Assert.ThrowsAnyAsync<Exception>(
@@ -58,7 +62,7 @@ public class EventPipeHeapGraphSourceAdapterTests
     public async Task ReadAsync_VerifyMemoryGraphIsNotNull()
     {
         // Arrange
-        var nettracePath = "/home/gospodin/Desktop/homeProjects/CLRScopeMCP/test-data/test-data.nettrace";
+        var nettracePath = GetTestDataPath("test-data.nettrace");
 
         // Act
         var result = await _adapter.ReadAsync(nettracePath, CancellationToken.None);
@@ -73,7 +77,7 @@ public class EventPipeHeapGraphSourceAdapterTests
     public async Task ReadAsync_VerifyHeapInfoIsNotNull()
     {
         // Arrange
-        var nettracePath = "/home/gospodin/Desktop/homeProjects/CLRScopeMCP/test-data/test-data.nettrace";
+        var nettracePath = GetTestDataPath("test-data.nettrace");
 
         // Act
         var result = await _adapter.ReadAsync(nettracePath, CancellationToken.None);
@@ -88,18 +92,18 @@ public class EventPipeHeapGraphSourceAdapterTests
     public async Task ReadAsync_VerifyDoesNotHang()
     {
         // Arrange
-        var nettracePath = "/home/gospodin/Desktop/homeProjects/CLRScopeMCP/test-data/test-data.nettrace";
+        var nettracePath = GetTestDataPath("test-data.nettrace");
         var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30)); // 30 second timeout
 
         // Act
         var task = _adapter.ReadAsync(nettracePath, cts.Token);
-        
+
         // Wait for completion or timeout
         var completed = await Task.WhenAny(task, Task.Delay(30000));
 
         // Assert
         Assert.True(task.IsCompleted, "ReadAsync did not complete within 30 seconds - likely deadlock");
-        
+
         if (task.IsCompleted)
         {
             var result = await task;
@@ -111,7 +115,7 @@ public class EventPipeHeapGraphSourceAdapterTests
     public async Task ReadAsync_VerifyLogMessagesAreLogged()
     {
         // Arrange
-        var nettracePath = "/home/gospodin/Desktop/homeProjects/CLRScopeMCP/test-data/test-data.nettrace";
+        var nettracePath = GetTestDataPath("test-data.nettrace");
 
         // Act
         await _adapter.ReadAsync(nettracePath, CancellationToken.None);
@@ -131,14 +135,14 @@ public class EventPipeHeapGraphSourceAdapterTests
     public async Task ReadAsync_VerifyNettraceFileExistsAndIsReadable()
     {
         // Arrange
-        var nettracePath = "/home/gospodin/Desktop/homeProjects/CLRScopeMCP/test-data/test-data.nettrace";
+        var nettracePath = GetTestDataPath("test-data.nettrace");
 
         // Assert - Verify file exists and is readable
         Assert.True(File.Exists(nettracePath), $"Nettrace file not found: {nettracePath}");
-        
+
         var fileInfo = new FileInfo(nettracePath);
         Assert.True(fileInfo.Length > 0, $"Nettrace file is empty: {nettracePath}");
-        
+
         // Verify file can be read
         using var stream = File.OpenRead(nettracePath);
         Assert.NotNull(stream);
@@ -148,7 +152,7 @@ public class EventPipeHeapGraphSourceAdapterTests
     public async Task ReadAsync_WithCancelledCancellationToken_ThrowsOperationCanceledException()
     {
         // Arrange
-        var nettracePath = "/home/gospodin/Desktop/homeProjects/CLRScopeMCP/test-data/test-data.nettrace";
+        var nettracePath = GetTestDataPath("test-data.nettrace");
         var cts = new CancellationTokenSource();
         cts.Cancel(); // Cancel immediately
 
@@ -161,7 +165,7 @@ public class EventPipeHeapGraphSourceAdapterTests
     public async Task ReadAsync_WithShortTimeout_ThrowsOperationCanceledException()
     {
         // Arrange
-        var nettracePath = "/home/gospodin/Desktop/homeProjects/CLRScopeMCP/test-data/test-data.nettrace";
+        var nettracePath = GetTestDataPath("test-data.nettrace");
         var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(1)); // Very short timeout
 
         // Act & Assert

@@ -12,19 +12,23 @@ public class GcDumpGraphAdapterTests
 {
     private readonly Mock<ILogger<GcDumpGraphAdapter>> _loggerMock;
     private readonly GcDumpGraphAdapter _adapter;
+    private readonly string _testDataPath;
 
     public GcDumpGraphAdapterTests()
     {
         _loggerMock = new Mock<ILogger<GcDumpGraphAdapter>>();
         _adapter = new GcDumpGraphAdapter(_loggerMock.Object);
+        _testDataPath = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "test-data"));
     }
+
+    private string GetTestDataPath(string fileName) => Path.Combine(_testDataPath, fileName);
 
     [Fact]
     public async Task LoadGraphAsync_WithValidGcdumpFile_ReturnsHeapGraphData()
     {
         // Arrange
-        var gcdumpPath = "/home/gospodin/Desktop/homeProjects/CLRScopeMCP/test-data/test-data.gcdump";
-        
+        var gcdumpPath = GetTestDataPath("test-data.gcdump");
+
         // Act
         var result = await _adapter.LoadGraphAsync(gcdumpPath, CancellationToken.None);
 
@@ -33,7 +37,7 @@ public class GcDumpGraphAdapterTests
         Assert.NotNull(result.Nodes);
         Assert.NotNull(result.Edges);
         Assert.NotNull(result.Roots);
-        
+
         // The file contains 3,761 objects according to dotnet-gcdump report
         // We expect at least some nodes to be parsed
         _loggerMock.Verify(
@@ -61,7 +65,7 @@ public class GcDumpGraphAdapterTests
     public async Task LoadGraphAsync_WithInvalidExtension_LogsWarning()
     {
         // Arrange
-        var invalidPath = "/home/gospodin/Desktop/homeProjects/CLRScopeMCP/test-data/test-data.txt";
+        var invalidPath = GetTestDataPath("test-data.txt");
 
         // Act & Assert
         await Assert.ThrowsAnyAsync<Exception>(
@@ -72,7 +76,7 @@ public class GcDumpGraphAdapterTests
     public async Task LoadGraphAsync_WithStream_ReturnsHeapGraphData()
     {
         // Arrange
-        var gcdumpPath = "/home/gospodin/Desktop/homeProjects/CLRScopeMCP/test-data/test-data.gcdump";
+        var gcdumpPath = GetTestDataPath("test-data.gcdump");
         using var stream = File.OpenRead(gcdumpPath);
 
         // Act
@@ -88,7 +92,7 @@ public class GcDumpGraphAdapterTests
     public async Task LoadGraphAsync_VerifyNodeCountIsNotZero()
     {
         // Arrange
-        var gcdumpPath = "/home/gospodin/Desktop/homeProjects/CLRScopeMCP/test-data/test-data.gcdump";
+        var gcdumpPath = GetTestDataPath("test-data.gcdump");
 
         // Act
         var result = await _adapter.LoadGraphAsync(gcdumpPath, CancellationToken.None);
@@ -96,7 +100,7 @@ public class GcDumpGraphAdapterTests
         // Assert
         // The file contains 3,761 objects according to dotnet-gcdump report
         // If NodeIndexLimit is 0 or nodes count is 0, parsing failed
-        Assert.True(result.Nodes.Count > 0, 
+        Assert.True(result.Nodes.Count > 0,
             $"Expected nodes count > 0, but got {result.Nodes.Count}. " +
             "This indicates GcDumpGraphAdapter failed to parse the gcdump file.");
     }
@@ -105,7 +109,7 @@ public class GcDumpGraphAdapterTests
     public async Task LoadGraphAsync_VerifyTotalHeapBytesIsNotZero()
     {
         // Arrange
-        var gcdumpPath = "/home/gospodin/Desktop/homeProjects/CLRScopeMCP/test-data/test-data.gcdump";
+        var gcdumpPath = GetTestDataPath("test-data.gcdump");
 
         // Act
         var result = await _adapter.LoadGraphAsync(gcdumpPath, CancellationToken.None);
@@ -113,7 +117,7 @@ public class GcDumpGraphAdapterTests
         // Assert
         // The file contains 1,316,260 GC Heap bytes according to dotnet-gcdump report
         var totalHeapBytes = result.Nodes.Values.Sum(n => n.ShallowSizeBytes);
-        Assert.True(totalHeapBytes > 0, 
+        Assert.True(totalHeapBytes > 0,
             $"Expected total heap bytes > 0, but got {totalHeapBytes}. " +
             "This indicates GcDumpGraphAdapter failed to parse the gcdump file.");
     }
@@ -122,7 +126,7 @@ public class GcDumpGraphAdapterTests
     public async Task LoadGraphAsync_VerifyLogMessagesAreLogged()
     {
         // Arrange
-        var gcdumpPath = "/home/gospodin/Desktop/homeProjects/CLRScopeMCP/test-data/test-data.gcdump";
+        var gcdumpPath = GetTestDataPath("test-data.gcdump");
 
         // Act
         await _adapter.LoadGraphAsync(gcdumpPath, CancellationToken.None);
@@ -142,14 +146,14 @@ public class GcDumpGraphAdapterTests
     public async Task LoadGraphAsync_DetailedDiagnostic_VerifyGCDumpFileContent()
     {
         // Arrange
-        var gcdumpPath = "/home/gospodin/Desktop/homeProjects/CLRScopeMCP/test-data/test-data.gcdump";
+        var gcdumpPath = GetTestDataPath("test-data.gcdump");
 
         // Act
         var result = await _adapter.LoadGraphAsync(gcdumpPath, CancellationToken.None);
 
         // Assert - Detailed diagnostic
         Assert.NotNull(result);
-        
+
         // Log detailed information for debugging
         var totalNodes = result.Nodes.Count;
         var totalEdges = result.Edges.Count;
@@ -169,14 +173,14 @@ public class GcDumpGraphAdapterTests
     public async Task LoadGraphAsync_VerifyGCDumpFileExistsAndIsReadable()
     {
         // Arrange
-        var gcdumpPath = "/home/gospodin/Desktop/homeProjects/CLRScopeMCP/test-data/test-data.gcdump";
+        var gcdumpPath = GetTestDataPath("test-data.gcdump");
 
         // Assert - Verify file exists and is readable
         Assert.True(File.Exists(gcdumpPath), $"GCDump file not found: {gcdumpPath}");
-        
+
         var fileInfo = new FileInfo(gcdumpPath);
         Assert.True(fileInfo.Length > 0, $"GCDump file is empty: {gcdumpPath}");
-        
+
         // Verify file can be read
         using var stream = File.OpenRead(gcdumpPath);
         Assert.NotNull(stream);
@@ -186,7 +190,7 @@ public class GcDumpGraphAdapterTests
     public async Task LoadGraphAsync_VerifyGCDumpFileHeader()
     {
         // Arrange
-        var gcdumpPath = "/home/gospodin/Desktop/homeProjects/CLRScopeMCP/test-data/test-data.gcdump";
+        var gcdumpPath = GetTestDataPath("test-data.gcdump");
 
         // Act - Read first few bytes to verify file format
         using var stream = File.OpenRead(gcdumpPath);
@@ -203,7 +207,7 @@ public class GcDumpGraphAdapterTests
     public async Task LoadGraphAsync_VerifyGCHeapDumpMemoryGraphHasNodes()
     {
         // Arrange
-        var gcdumpPath = "/home/gospodin/Desktop/homeProjects/CLRScopeMCP/test-data/test-data.gcdump";
+        var gcdumpPath = GetTestDataPath("test-data.gcdump");
 
         // Act - Directly access GCHeapDump to verify MemoryGraph
         await Task.Run(() =>
@@ -212,7 +216,7 @@ public class GcDumpGraphAdapterTests
             var graph = gcHeapDump.MemoryGraph;
 
             // Assert - This should fail if NodeIndexLimit is 0
-            Assert.True(graph.NodeIndexLimit > 0, 
+            Assert.True(graph.NodeIndexLimit > 0,
                 $"GCHeapDump.MemoryGraph.NodeIndexLimit is {graph.NodeIndexLimit}, expected > 0. " +
                 "This indicates the gcdump file is not being parsed correctly by GCHeapDump.");
         });
@@ -222,7 +226,7 @@ public class GcDumpGraphAdapterTests
     public async Task LoadGraphAsync_VerifyGCHeapDumpHasNonZeroNodes()
     {
         // Arrange
-        var gcdumpPath = "/home/gospodin/Desktop/homeProjects/CLRScopeMCP/test-data/test-data.gcdump";
+        var gcdumpPath = GetTestDataPath("test-data.gcdump");
 
         // Act - Directly access GCHeapDump to verify nodes
         await Task.Run(() =>
@@ -242,7 +246,7 @@ public class GcDumpGraphAdapterTests
             }
 
             // Assert - Should have at least some nodes with size > 0
-            Assert.True(nodeCount > 0, 
+            Assert.True(nodeCount > 0,
                 $"GCHeapDump has {nodeCount} nodes with size > 0, expected > 0. " +
                 "The file contains 3,761 objects according to dotnet-gcdump report.");
         });
