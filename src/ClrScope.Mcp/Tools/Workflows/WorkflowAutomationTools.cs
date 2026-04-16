@@ -8,7 +8,6 @@ using System.Globalization;
 
 namespace ClrScope.Mcp.Tools.Workflows;
 
-// TODO: Workflow automation - re-enabled for testing
 [McpServerToolType]
 public sealed class WorkflowAutomationTools
 {
