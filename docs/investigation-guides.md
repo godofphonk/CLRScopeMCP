@@ -47,9 +47,10 @@ For granular control or when automated workflows are not suitable.
 3. Wait for memory to grow, then `collect_gcdump` again (issue snapshot)
 4. `analyze_heap` — type statistics with retained size (dominator tree analysis)
 5. `analyze_heap` with `analysisType: diff` and `baselineArtifactId` — compare baseline vs issue
-6. `find_retainer_paths` with `targetNodeId` — trace retention chain from GC roots to suspect object
-7. `collect_counters` with `System.Runtime` — GC metrics, allocation rate
-8. `detect_patterns` with `patternTypes: memory_leaks` — automated leak detection
+6. `analyze_heap` with `analysisType: objects` — get list of objects with their node IDs (sorted by size or count)
+7. `find_retainer_paths` with `targetNodeId` — trace retention chain from GC roots to suspect object
+8. `collect_counters` with `System.Runtime` — GC metrics, allocation rate
+9. `detect_patterns` with `patternTypes: memory_leaks` — automated leak detection
 
 **Quick alternative:** `workflow_automated_memory_leak_bundle`
 

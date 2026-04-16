@@ -252,9 +252,13 @@ mcp1_analyze_heap --artifact_id <issue_id> --analysis_type diff --baselineArtifa
 
 ### 5. Use Retainer Paths for Leak Root Cause
 
-Once you identify a suspect type via `analyze_heap`, trace its retention chain:
+Once you identify a suspect type via `analyze_heap`, get the node IDs of specific objects:
 
 ```bash
+# Get list of objects with their node IDs (sorted by shallow size)
+mcp1_analyze_heap --artifact_id <id> --analysis_type objects --metric shallow_size --maxTypes 50
+
+# Then trace retention chain for a specific object
 mcp1_find_retainer_paths --artifact_id <id> --targetNodeId <node_id> --maxPaths 10
 ```
 

@@ -152,8 +152,8 @@ See [Full Requirements](docs/requirements.md) for installation instructions and 
 | `detect_patterns` | Pattern detection: memory leaks, deadlocks, thread pool starvation, high CPU |
 | `analyze_dump_sos` | SOS commands on dump files (threads, clrstack, dumpheap, etc.) |
 | `symbols_resolve` | Load symbols via dotnet-symbol |
-| `analyze_heap` | Heap analysis with dominator tree and retained size: type statistics (top N) or diff between two gcdumps |
-| `find_retainer_paths` | Trace object retention chains from GC roots to a target node |
+| `analyze_heap` | Analyze .gcdump heap snapshot: type statistics (top N types), object list (with node IDs for find_retainer_paths), or diff comparison between two snapshots |
+| `find_retainer_paths` | Trace object retention chains from GC roots to a target node (use analyze_heap with `analysisType: objects` to get node IDs) |
 | `session_analyze` | Session analysis with optional baseline comparison |
 
 ### Runtime

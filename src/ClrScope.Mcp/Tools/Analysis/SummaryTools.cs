@@ -968,14 +968,14 @@ public sealed class SummaryTools
     // The vendored EventPipeDotNetHeapDumper library has issues constructing MemoryGraph from EventPipe events
     // For now, use .gcdump files instead: mcp1_collect_gcdump + mcp1_analyze_heap
 
-    [McpServerTool(Name = "analyze_heap"), Description("Analyze a .gcdump heap snapshot: type statistics (top N types) or diff comparison between two gcdumps. Returns JSON/text output only.")]
+    [McpServerTool(Name = "analyze_heap"), Description("Analyze a .gcdump heap snapshot: type statistics (top N types), object list (with node IDs for find_retainer_paths), or diff comparison between two gcdumps. Returns JSON/text output only.")]
     public static async Task<HeapAnalysisResult> AnalyzeHeap(
         string artifactId,
         McpServer server,
-        [Description("Analysis type: 'type_stats' (default) for top N types, 'diff' for comparison between two snapshots")] string analysisType = "type_stats",
+        [Description("Analysis type: 'type_stats' (default) for top N types, 'objects' for object list with node IDs, 'diff' for comparison between two snapshots")] string analysisType = "type_stats",
         [Description("Metric: 'shallow_size' (default), 'count'")] string metric = "shallow_size",
         [Description("Analysis mode: 'auto' (default), 'reuse' (cache only), 'force' (re-analyze)")] string analysisMode = "auto",
-        [Description("Maximum types to include in type_stats output")] int maxTypes = 50,
+        [Description("Maximum types to include in type_stats output, or maximum objects to include in objects output")] int maxTypes = 50,
         [Description("Baseline artifact ID for diff comparison")] string? baselineArtifactId = null,
         CancellationToken cancellationToken = default)
     {
@@ -1071,6 +1071,41 @@ public sealed class SummaryTools
                 };
 
                 return HeapAnalysisResult.Success(JsonSerializer.Serialize(diffData, new JsonSerializerOptions
+                {
+                    WriteIndented = true,
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                }));
+            }
+            else if (analysisType.ToLowerInvariant() == "objects")
+            {
+                logger.LogInformation("Preparing heap snapshot for artifact {ArtifactId} (objects mode)", artifactId);
+                var prepared = await preparer.PrepareAsync(artifact, options, linkedCts.Token);
+
+                // Sort nodes by metric (shallow size or count) and take top N
+                var sortedNodes = metric.ToLowerInvariant() == "count"
+                    ? prepared.Snapshot.Nodes.OrderByDescending(n => n.Count)
+                    : prepared.Snapshot.Nodes.OrderByDescending(n => n.ShallowSizeBytes);
+
+                var objectsData = new HeapObjectListData
+                {
+                    ArtifactId = artifactId,
+                    Metric = metric.ToLowerInvariant(),
+                    TotalHeapBytes = prepared.Snapshot.Metadata.TotalHeapBytes,
+                    TotalObjectCount = prepared.Snapshot.Metadata.TotalObjectCount,
+                    Objects = sortedNodes.Take(maxTypes).Select(node => new HeapObjectData
+                    {
+                        NodeId = node.NodeId.ToString(),
+                        TypeName = node.TypeName,
+                        Namespace = node.Namespace,
+                        AssemblyName = node.AssemblyName,
+                        ShallowSizeBytes = node.ShallowSizeBytes,
+                        RetainedSizeBytes = node.RetainedSizeBytes,
+                        Count = node.Count,
+                        Generation = node.Generation
+                    }).ToList()
+                };
+
+                return HeapAnalysisResult.Success(JsonSerializer.Serialize(objectsData, new JsonSerializerOptions
                 {
                     WriteIndented = true,
                     PropertyNamingPolicy = JsonNamingPolicy.CamelCase
@@ -1294,6 +1329,27 @@ public record HeapTypeStatsData
     public long TotalHeapBytes { get; init; }
     public long TotalObjectCount { get; init; }
     public List<TypeStatData> TypeStats { get; init; } = new();
+}
+
+public record HeapObjectListData
+{
+    public string ArtifactId { get; init; } = string.Empty;
+    public string Metric { get; init; } = string.Empty;
+    public long TotalHeapBytes { get; init; }
+    public long TotalObjectCount { get; init; }
+    public List<HeapObjectData> Objects { get; init; } = new();
+}
+
+public record HeapObjectData
+{
+    public string NodeId { get; init; } = string.Empty;
+    public string TypeName { get; init; } = string.Empty;
+    public string Namespace { get; init; } = string.Empty;
+    public string AssemblyName { get; init; } = string.Empty;
+    public long ShallowSizeBytes { get; init; }
+    public long RetainedSizeBytes { get; init; }
+    public int Count { get; init; }
+    public string Generation { get; init; } = string.Empty;
 }
 
 public record HeapDiffAnalysisData
