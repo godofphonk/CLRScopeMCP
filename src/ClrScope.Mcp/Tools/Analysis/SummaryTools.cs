@@ -1833,27 +1833,34 @@ private static string TruncateCallSite(string callSite, int maxLength)
 
         try
         {
+            logger.LogInformation("Step 1: Getting artifact {ArtifactId}", artifactId);
             var artifact = await artifactStore.GetAsync(new ArtifactId(artifactId), cancellationToken);
             if (artifact == null)
             {
                 return VisualizationResult.Failure($"Artifact not found: {artifactId}");
             }
 
+            logger.LogInformation("Step 2: Artifact found, Kind: {Kind}", artifact.Kind);
             if (artifact.Kind != ArtifactKind.Trace)
             {
                 return VisualizationResult.Failure($"Artifact {artifactId} is not a Trace (.nettrace file).");
             }
 
-            logger.LogInformation("Reading EventPipe heap graph from artifact {ArtifactId}", artifactId);
+            logger.LogInformation("Step 3: Reading EventPipe heap graph from artifact {ArtifactId}", artifactId);
 
             var envelope = await eventPipeAdapter.ReadAsync(artifact.FilePath, cancellationToken, null);
+            logger.LogInformation("Step 4: EventPipeAdapter.ReadAsync completed, envelope is null: {IsNull}", envelope == null);
 
             if (envelope == null || envelope.MemoryGraph == null)
             {
-                return VisualizationResult.Failure("Failed to read EventPipe heap graph - MemoryGraph is null");
+                var errorMsg = $"Failed to read EventPipe heap graph - MemoryGraph is null (envelope null: {envelope == null})";
+                logger.LogError(errorMsg);
+                return VisualizationResult.Failure(errorMsg);
             }
 
+            logger.LogInformation("Step 5: Mapping MemoryGraph to HeapSnapshotData");
             var snapshot = mapper.Map(artifact, envelope, facade);
+            logger.LogInformation("Step 6: Mapping completed, snapshot is null: {IsNull}", snapshot == null);
 
             if (snapshot == null)
             {
@@ -1874,6 +1881,8 @@ private static string TruncateCallSite(string callSite, int maxLength)
                 _ => HeapMetricKind.ShallowSize
             };
 
+            logger.LogInformation("Step 7: Rendering view: {ViewKind}, metric: {MetricKind}, format: {Format}", viewKind, metricKind, format);
+
             string content;
             if (format.ToLowerInvariant() == "json")
             {
@@ -1890,8 +1899,10 @@ private static string TruncateCallSite(string callSite, int maxLength)
             }
             else if (viewKind == HeapViewKind.RetainedFlame)
             {
+                logger.LogInformation("Step 8: Loading heap graph for retained flame");
                 var graphAdapter = server.Services!.GetRequiredService<IGcDumpGraphAdapter>();
                 var heapGraph = await graphAdapter.LoadGraphAsync(artifact.FilePath, cancellationToken);
+                logger.LogInformation("Step 9: Heap graph loaded");
                 var flameRenderer = new HeapRetainedFlameRenderer();
                 content = flameRenderer.RenderHtml(heapGraph, metricKind);
             }
@@ -1901,12 +1912,13 @@ private static string TruncateCallSite(string callSite, int maxLength)
                 content = renderer.RenderHtml(snapshot, metricKind);
             }
 
+            logger.LogInformation("Step 10: Rendering completed successfully");
             return VisualizationResult.Success(content, format);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Nettrace heap visualization failed for artifact {ArtifactId}", artifactId);
-            return VisualizationResult.Failure($"Nettrace heap visualization failed: {ex.Message}");
+            logger.LogError(ex, "Nettrace heap visualization failed for artifact {ArtifactId}. Stack trace: {StackTrace}", artifactId, ex.StackTrace);
+            return VisualizationResult.Failure($"Nettrace heap visualization failed: {ex.Message}\nStack trace: {ex.StackTrace}");
         }
     }
 
