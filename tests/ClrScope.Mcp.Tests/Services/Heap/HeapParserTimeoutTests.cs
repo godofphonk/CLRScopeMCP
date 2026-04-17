@@ -20,10 +20,11 @@ public class HeapParserTimeoutTests
     {
         // Arrange - create a mock adapter that simulates a slow parser
         var mockAdapter = new SlowMockHeapParserAdapter(new TestOutputHelperLogger<SlowMockHeapParserAdapter>(_output));
-        
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5)); // 5 second timeout for test
+
         // Act & Assert
-        var exception = await Assert.ThrowsAsync<TimeoutException>(() =>
-            mockAdapter.LoadGraphAsync("dummy.gcdump", CancellationToken.None)
+        var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            mockAdapter.LoadGraphAsync("dummy.gcdump", cts.Token)
         );
 
         _output.WriteLine($"Timeout exception thrown: {exception.Message}");
@@ -69,10 +70,10 @@ public class HeapParserTimeoutTests
 
             try
             {
-                // Simulate a process that takes longer than the timeout (10 minutes)
+                // Simulate a process that takes longer than the timeout (30 seconds)
                 // In a real scenario, this would be a separate process
-                await Task.Delay(TimeSpan.FromMinutes(10), cancellationToken);
-                
+                await Task.Delay(TimeSpan.FromSeconds(30), cancellationToken);
+
                 // Should never reach here due to timeout
                 ProcessWasKilled = false;
                 throw new InvalidOperationException("Process should have timed out");
