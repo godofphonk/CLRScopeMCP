@@ -1,5 +1,4 @@
 using ClrScope.Mcp.Services.Collect;
-using ClrScope.Mcp.Tools.Workflows;
 
 namespace ClrScope.Mcp.Services.Workflows;
 

@@ -1,7 +1,7 @@
 using ClrScope.Mcp.Domain.Artifacts;
 using ClrScope.Mcp.Infrastructure;
+using ClrScope.Mcp.Infrastructure.Utils;
 using ClrScope.Mcp.Options;
-using ClrScope.Mcp.Services.Artifacts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -52,14 +52,14 @@ public sealed class ArtifactCrudTools
                 return new ArtifactMetadataResult(
                     Found: false,
                     ArtifactId: artifactId,
-                    Kind: string.Empty,
-                    Status: string.Empty,
-                    FilePath: string.Empty,
+                    Kind: null,
+                    Status: null,
+                    FilePath: null,
                     SizeBytes: 0,
-                    Sha256: string.Empty,
-                    HashState: string.Empty,
+                    Sha256: null,
+                    HashState: null,
                     Pid: 0,
-                    CreatedAtUtc: DateTime.UtcNow,
+                    CreatedAtUtc: null,
                     Error: "Artifact not found"
                 );
             }
@@ -297,7 +297,6 @@ public sealed class ArtifactCrudTools
         var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
         var logger = server.Services!.GetRequiredService<ILogger<ArtifactCrudTools>>();
         var options = server.Services!.GetRequiredService<IOptions<ClrScopeOptions>>();
-        var pathValidator = server.Services!.GetRequiredService<IArtifactPathValidatorService>();
 
         try
         {
@@ -315,7 +314,20 @@ public sealed class ArtifactCrudTools
             }
 
             var artifactRoot = options.Value.GetArtifactRoot();
-            pathValidator.ValidateArtifactPath(artifact.FilePath, artifactRoot);
+            try
+            {
+                PathSecurity.EnsurePathWithinDirectory(artifact.FilePath, artifactRoot);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                logger.LogError("Path validation failed: {FilePath} is outside artifact root {ArtifactRoot}", artifact.FilePath, artifactRoot);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Path validation failed for {FilePath}", artifact.FilePath);
+                throw new UnauthorizedAccessException("Invalid file path", ex);
+            }
 
             if (File.Exists(artifact.FilePath))
             {
@@ -382,7 +394,6 @@ public sealed class ArtifactCrudTools
         var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
         var logger = server.Services!.GetRequiredService<ILogger<ArtifactCrudTools>>();
         var options = server.Services!.GetRequiredService<IOptions<ClrScopeOptions>>();
-        var pathValidator = server.Services!.GetRequiredService<IArtifactPathValidatorService>();
 
         try
         {
@@ -420,7 +431,20 @@ public sealed class ArtifactCrudTools
             }
 
             var artifactRoot = options.Value.GetArtifactRoot();
-            pathValidator.ValidateArtifactPath(artifact.FilePath, artifactRoot);
+            try
+            {
+                PathSecurity.EnsurePathWithinDirectory(artifact.FilePath, artifactRoot);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                logger.LogError("Path validation failed: {FilePath} is outside artifact root {ArtifactRoot}", artifact.FilePath, artifactRoot);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Path validation failed for {FilePath}", artifact.FilePath);
+                throw new UnauthorizedAccessException("Invalid file path", ex);
+            }
 
             if (!File.Exists(artifact.FilePath))
             {

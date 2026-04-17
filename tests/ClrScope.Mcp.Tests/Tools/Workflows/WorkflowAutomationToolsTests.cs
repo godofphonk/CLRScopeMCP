@@ -1,4 +1,4 @@
-using ClrScope.Mcp.Tools.Workflows;
+using ClrScope.Mcp.Services.Workflows;
 using Xunit;
 
 namespace ClrScope.Mcp.Tests.Tools.Workflows;

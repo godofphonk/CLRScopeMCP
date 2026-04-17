@@ -9,7 +9,7 @@ namespace ClrScope.Mcp.Tools.Workflows;
 public sealed class WorkflowAutomationTools
 {
     [McpServerTool(Name = "workflow_automated_high_cpu_bundle"), Description("Automated collection of high CPU diagnostic bundle - executes collect_trace, collect_counters, and collect_stacks in sequence")]
-    public static async Task<WorkflowAutomationResult> AutomatedHighCpuBundle(
+    public static async Task<Services.Workflows.WorkflowAutomationResult> AutomatedHighCpuBundle(
         [Description("Process ID to collect high CPU diagnostic bundle from")] int pid,
         McpServer server,
         [Description("Duration for trace and counters collection (hh:mm:ss format, default: 00:01:00)")] string duration = "00:01:00",
@@ -21,7 +21,7 @@ public sealed class WorkflowAutomationTools
     }
 
     [McpServerTool(Name = "workflow_automated_memory_leak_bundle"), Description("Automated collection of memory leak diagnostic bundle - executes collect_gcdump, collect_counters, and collect_trace in sequence")]
-    public static async Task<WorkflowAutomationResult> AutomatedMemoryLeakBundle(
+    public static async Task<Services.Workflows.WorkflowAutomationResult> AutomatedMemoryLeakBundle(
         [Description("Process ID to collect memory leak diagnostic bundle from")] int pid,
         McpServer server,
         [Description("Duration for trace and counters collection (hh:mm:ss format, default: 00:01:00)")] string duration = "00:01:00",
@@ -45,7 +45,7 @@ public sealed class WorkflowAutomationTools
     }
 
     [McpServerTool(Name = "workflow_automated_baseline_bundle"), Description("Automated collection of baseline performance bundle - executes collect_counters, collect_trace, collect_gcdump, and collect_stacks in sequence")]
-    public static async Task<WorkflowAutomationResult> AutomatedBaselineBundle(
+    public static async Task<Services.Workflows.WorkflowAutomationResult> AutomatedBaselineBundle(
         [Description("Process ID to collect baseline performance bundle from")] int pid,
         McpServer server,
         [Description("Duration for trace and counters collection (hh:mm:ss format, default: 00:01:00)")] string duration = "00:01:00",
@@ -56,22 +56,3 @@ public sealed class WorkflowAutomationTools
         return await orchestrator.ExecuteWorkflowAsync(workflow, pid, server.Services!, duration, cancellationToken);
     }
 }
-
-// Re-export types from Services.Workflows for backward compatibility with tests
-public record ArtifactInfo(
-    string ArtifactId,
-    string Kind,
-    string? FilePath,
-    long SizeBytes
-);
-
-public record WorkflowAutomationResult(
-    bool Success,
-    string WorkflowName,
-    int StepsCompleted,
-    int TotalSteps,
-    ArtifactInfo[] Artifacts,
-    string[] SessionIds,
-    string? Error,
-    long ExecutionTimeMs
-);

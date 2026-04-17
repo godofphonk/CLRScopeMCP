@@ -1,7 +1,6 @@
 using ClrScope.Mcp.Domain.Artifacts;
 using ClrScope.Mcp.Infrastructure;
 using ClrScope.Mcp.Infrastructure.Utils;
-using ClrScope.Mcp.Services.Artifacts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;

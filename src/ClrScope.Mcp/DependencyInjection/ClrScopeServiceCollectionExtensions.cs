@@ -4,7 +4,6 @@ using ClrScope.Mcp.Domain.Heap;
 using ClrScope.Mcp.Infrastructure;
 using ClrScope.Mcp.Options;
 using ClrScope.Mcp.Services.Analysis.PatternDetectors;
-using ClrScope.Mcp.Services.Artifacts;
 using ClrScope.Mcp.Services.Collect;
 using ClrScope.Mcp.Services.Health;
 using ClrScope.Mcp.Services.Heap;
@@ -86,9 +85,6 @@ public static class ClrScopeServiceCollectionExtensions
 
         // Artifact content analyzer
         services.AddSingleton<ArtifactContentAnalyzer>();
-
-        // Artifact path validator
-        services.AddSingleton<IArtifactPathValidatorService, ArtifactPathValidatorService>();
 
         return services;
     }

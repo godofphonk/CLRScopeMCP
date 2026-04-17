@@ -1,7 +1,6 @@
 using ClrScope.Mcp.Services.Collect;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using ClrScope.Mcp.Tools.Workflows;
 
 namespace ClrScope.Mcp.Services.Workflows;
 
