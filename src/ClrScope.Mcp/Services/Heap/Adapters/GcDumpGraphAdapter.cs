@@ -9,6 +9,11 @@ namespace ClrScope.Mcp.Services.Heap;
 
 /// <summary>
 /// GcDump graph adapter using vendored GCHeapDump from dotnet/diagnostics.
+/// 
+/// NOTE: This adapter is for unit testing only. It loads gcdump files in-process
+/// without the isolation provided by GcDumpProcessAdapter. For production use,
+/// prefer GcDumpProcessAdapter which runs parsing in a separate process for
+/// better isolation and error handling.
 /// </summary>
 public sealed class GcDumpGraphAdapter : IGcDumpGraphAdapter
 {

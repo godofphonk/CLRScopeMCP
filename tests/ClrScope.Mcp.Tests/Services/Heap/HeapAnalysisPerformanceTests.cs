@@ -23,19 +23,19 @@ public class HeapAnalysisPerformanceTests
     public HeapAnalysisPerformanceTests(ITestOutputHelper output)
     {
         _output = output;
-        
+
         var loggerFactory = LoggerFactory.Create(builder =>
         {
             builder.AddConsole();
             builder.SetMinimumLevel(LogLevel.Warning); // Reduce noise for performance tests
         });
-        
+
         _adapterLogger = loggerFactory.CreateLogger<GcDumpGraphAdapter>();
         _calculatorLogger = loggerFactory.CreateLogger<DominatorTreeCalculator>();
-        
+
         _adapter = new GcDumpGraphAdapter(_adapterLogger);
         _calculator = new DominatorTreeCalculator(_calculatorLogger);
-        
+
         _testDataPath = Path.Combine(AppContext.BaseDirectory, "test-data", "test-data.gcdump");
     }
 

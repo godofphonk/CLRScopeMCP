@@ -423,7 +423,10 @@ public sealed class DominatorTreeCalculator
 
         foreach (var edge in graph.Edges.Where(e => !e.IsWeak))
         {
-            reverseAdjacency[edge.ToNodeId].Add((edge.FromNodeId, edge.EdgeKind));
+            if (reverseAdjacency.ContainsKey(edge.ToNodeId))
+            {
+                reverseAdjacency[edge.ToNodeId].Add((edge.FromNodeId, edge.EdgeKind));
+            }
         }
 
         _logger.LogInformation("ReverseBFS: Built reverse adjacency with {EdgeCount} strong edges",
