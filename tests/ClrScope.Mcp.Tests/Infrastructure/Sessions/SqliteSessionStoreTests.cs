@@ -55,7 +55,6 @@ public class SqliteSessionStoreTests : IDisposable
         Assert.Equal(SessionStatus.Pending, session.Status);
         Assert.Equal(SessionPhase.Preflight, session.Phase);
         Assert.NotNull(session.SessionId);
-        Assert.NotNull(session.CreatedAtUtc);
         Assert.Null(session.CompletedAtUtc);
         Assert.Null(session.Error);
     }
@@ -272,7 +271,7 @@ public class SqliteSessionStoreTests : IDisposable
         // Assert
         Assert.Equal(pid, session.Pid);
         var retrievedSession = await _store.GetAsync(session.SessionId);
-        Assert.Equal(pid, retrievedSession.Pid);
+        Assert.Equal(pid, retrievedSession!.Pid);
     }
 
     [Fact]
@@ -295,7 +294,7 @@ public class SqliteSessionStoreTests : IDisposable
         var retrievedSession = await _store.GetAsync(session.SessionId);
 
         // Assert
-        Assert.Equal(originalSessionId, retrievedSession.SessionId);
+        Assert.Equal(originalSessionId, retrievedSession!.SessionId);
         Assert.Equal(originalCreatedAt, retrievedSession.CreatedAtUtc);
         Assert.Equal(originalKind, retrievedSession.Kind);
         Assert.Equal(originalPid, retrievedSession.Pid);

@@ -44,7 +44,7 @@ public class FullPreflightValidatorTests
 
         // Assert
         Assert.False(result.IsValid);
-        Assert.Equal(ClrScopeError.VALIDATION_INVALID_PID, result.Error.Value);
+        Assert.Equal(ClrScopeError.VALIDATION_INVALID_PID, result.Error!.Value);
     }
 
     [Fact]
@@ -65,7 +65,7 @@ public class FullPreflightValidatorTests
 
         // Assert
         Assert.False(result.IsValid);
-        Assert.Equal(ClrScopeError.VALIDATION_INVALID_PID, result.Error.Value);
+        Assert.Equal(ClrScopeError.VALIDATION_INVALID_PID, result.Error!.Value);
     }
 
     [Fact]
@@ -87,7 +87,7 @@ public class FullPreflightValidatorTests
 
         // Assert
         Assert.False(result.IsValid);
-        Assert.Equal(ClrScopeError.PREFLIGHT_PROCESS_NOT_FOUND, result.Error.Value);
+        Assert.Equal(ClrScopeError.PREFLIGHT_PROCESS_NOT_FOUND, result.Error!.Value);
     }
 
     [Fact]
@@ -146,7 +146,7 @@ public class FullPreflightValidatorTests
 
         // Assert
         Assert.False(result.IsValid);
-        Assert.Equal(ClrScopeError.PREFLIGHT_ARTIFACT_ROOT_NOT_WRITABLE, result.Error.Value);
+        Assert.Equal(ClrScopeError.PREFLIGHT_ARTIFACT_ROOT_NOT_WRITABLE, result.Error!.Value);
     }
 
     [Fact]
@@ -169,7 +169,7 @@ public class FullPreflightValidatorTests
 
         // Assert - should fail because PID 1 is not a .NET process
         Assert.False(result.IsValid);
-        Assert.Equal(ClrScopeError.PREFLIGHT_NOT_DOTNET, result.Error.Value);
+        Assert.Equal(ClrScopeError.PREFLIGHT_NOT_DOTNET, result.Error!.Value);
     }
 
     [Fact]
