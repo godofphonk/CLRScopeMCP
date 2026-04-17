@@ -148,7 +148,7 @@ public class DominatorTreeCalculatorIntegrationTests
         Assert.Equal(500, graph.Nodes[5].RetainedSizeBytes);
     }
 
-    [Fact(Skip = "TODO: ReverseBFS step order needs to be reversed (root->target, not target->root)")]
+    [Fact]
     public void FindRetainerPaths_StaticFieldLeak_ReturnsCorrectPath()
     {
         // Scenario: Find retainer path for leaked object in static field leak

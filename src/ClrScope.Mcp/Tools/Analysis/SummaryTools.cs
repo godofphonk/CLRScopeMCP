@@ -964,9 +964,9 @@ public sealed class SummaryTools
         return $"{size:0.##} {sizes[order]}";
     }
 
-    // TODO: Re-enable after fixing MemoryGraph traversal NullReferenceException issues
-    // The vendored EventPipeDotNetHeapDumper library has issues constructing MemoryGraph from EventPipe events
-    // For now, use .gcdump files instead: mcp1_collect_gcdump + mcp1_analyze_heap
+    // NOTE: EventPipe heap analysis (.nettrace) removed due to vendored library issues
+    // The EventPipeDotNetHeapDumper library has problems constructing MemoryGraph from EventPipe events
+    // Use .gcdump files instead: mcp1_collect_gcdump + mcp1_analyze_heap
 
     [McpServerTool(Name = "analyze_heap"), Description("Analyze a .gcdump heap snapshot: type statistics (top N types), object list (with node IDs for find_retainer_paths), or diff comparison between two gcdumps. Returns JSON/text output only.")]
     public static async Task<HeapAnalysisResult> AnalyzeHeap(

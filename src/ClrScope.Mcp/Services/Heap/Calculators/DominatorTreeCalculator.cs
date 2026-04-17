@@ -11,6 +11,7 @@ public sealed class DominatorTreeCalculator
 {
     private readonly ILogger<DominatorTreeCalculator> _logger;
     private const long SuperRootNodeId = -1;
+    private const int MaxRetainerPathLength = 50;
 
     public DominatorTreeCalculator(ILogger<DominatorTreeCalculator> logger)
     {
@@ -390,11 +391,12 @@ public sealed class DominatorTreeCalculator
 
     /// <summary>
     /// Step 7: Reverse BFS - Build reverse adjacency on strong edges, BFS from target to roots, save paths.
+    /// Uses per-path visited set to find all possible paths, not just one.
     /// </summary>
     private List<RetainerPath> ReverseBFS(HeapGraphData graph, long targetNodeId)
     {
         _logger.LogInformation("ReverseBFS: Starting for target node {TargetNodeId}", targetNodeId);
-        _logger.LogInformation("ReverseBFS: Graph has {NodeCount} nodes, {EdgeCount} edges",
+        _logger.LogDebug("ReverseBFS: Graph has {NodeCount} nodes, {EdgeCount} edges",
             graph.Nodes.Count, graph.Edges.Count);
 
         // Check if target node exists
@@ -421,10 +423,6 @@ public sealed class DominatorTreeCalculator
 
         foreach (var edge in graph.Edges.Where(e => !e.IsWeak))
         {
-            if (!reverseAdjacency.ContainsKey(edge.ToNodeId))
-            {
-                reverseAdjacency[edge.ToNodeId] = new List<(long, string)>();
-            }
             reverseAdjacency[edge.ToNodeId].Add((edge.FromNodeId, edge.EdgeKind));
         }
 
@@ -436,35 +434,37 @@ public sealed class DominatorTreeCalculator
         _logger.LogInformation("ReverseBFS: Target node {TargetNodeId} has {PredCount} predecessors",
             targetNodeId, predecessors.Count);
 
-        // BFS from target to roots
+        // BFS from target to roots with per-path visited set
         var paths = new List<RetainerPath>();
-        var queue = new Queue<(long nodeId, List<RetainerPathStep> currentPath)>();
-        queue.Enqueue((targetNodeId, new List<RetainerPathStep>()));
-        var visited = new HashSet<long>();
+        var queue = new Queue<(long nodeId, List<RetainerPathStep> currentPath, HashSet<long> visited)>();
+        queue.Enqueue((targetNodeId, new List<RetainerPathStep>(), new HashSet<long> { targetNodeId }));
 
         _logger.LogInformation("ReverseBFS: Starting BFS from target node {TargetNodeId}", targetNodeId);
         var bfsStep = 0;
 
         while (queue.Count > 0)
         {
-            var (currentNodeId, currentPath) = queue.Dequeue();
+            var (currentNodeId, currentPath, visited) = queue.Dequeue();
             bfsStep++;
 
             if (bfsStep <= 10) // Log first 10 steps only
             {
-                _logger.LogInformation("ReverseBFS: BFS step {Step}, queue size {QueueSize}, currentNodeId {NodeId}, path length {PathLength}",
+                _logger.LogDebug("ReverseBFS: BFS step {Step}, queue size {QueueSize}, currentNodeId {NodeId}, path length {PathLength}",
                     bfsStep, queue.Count, currentNodeId, currentPath.Count);
             }
 
             // Check if reached a root
             if (graph.Nodes.TryGetValue(currentNodeId, out var currentNode) && currentNode.IsRoot)
             {
-                _logger.LogInformation("ReverseBFS: Found root at node {NodeId}, path length {PathLength}", currentNodeId, currentPath.Count);
+                _logger.LogDebug("ReverseBFS: Found root at node {NodeId}, path length {PathLength}", currentNodeId, currentPath.Count);
+                // Reverse steps to get root->target order
+                var reversedSteps = new List<RetainerPathStep>(currentPath);
+                reversedSteps.Reverse();
                 paths.Add(new RetainerPath
                 {
                     RootNodeId = currentNodeId,
                     RootKind = currentNode.RootKind ?? "Unknown",
-                    Steps = currentPath.ToList(),
+                    Steps = reversedSteps,
                     TotalSteps = currentPath.Count
                 });
                 continue;
@@ -473,11 +473,12 @@ public sealed class DominatorTreeCalculator
             // Explore predecessors
             foreach (var (predNodeId, edgeKind) in reverseAdjacency.GetValueOrDefault(currentNodeId, new List<(long, string)>()))
             {
-                if (!visited.Contains(predNodeId) && currentPath.Count < 50)
+                if (!visited.Contains(predNodeId) && currentPath.Count < MaxRetainerPathLength)
                 {
-                    visited.Add(predNodeId);
+                    var newVisited = new HashSet<long>(visited);
+                    newVisited.Add(predNodeId);
 
-                    var newPath = currentPath.ToList();
+                    var newPath = new List<RetainerPathStep>(currentPath);
                     newPath.Add(new RetainerPathStep
                     {
                         FromNodeId = predNodeId,
@@ -486,12 +487,12 @@ public sealed class DominatorTreeCalculator
                         IsWeak = false // All edges in reverse adjacency are strong edges
                     });
 
-                    queue.Enqueue((predNodeId, newPath));
+                    queue.Enqueue((predNodeId, newPath, newVisited));
                 }
                 else if (bfsStep <= 10)
                 {
-                    _logger.LogInformation("ReverseBFS: Skipping predecessor {PredNodeId} - visited: {Visited}, path too long: {TooLong}",
-                        predNodeId, visited.Contains(predNodeId), currentPath.Count >= 50);
+                    _logger.LogDebug("ReverseBFS: Skipping predecessor {PredNodeId} - visited: {Visited}, path too long: {TooLong}",
+                        predNodeId, visited.Contains(predNodeId), currentPath.Count >= MaxRetainerPathLength);
                 }
             }
         }
@@ -529,27 +530,18 @@ public sealed class DominatorTreeCalculator
     /// </summary>
     private List<RetainerPath> SortPaths(List<RetainerPath> paths, Dictionary<long, MemoryNodeData> nodes)
     {
-        var sorted = paths.OrderByDescending(p =>
-        {
-            // Priority 1: Shorter paths first
-            var lengthScore = -p.TotalSteps;
-
-            // Priority 2: Non-weak edges preferred
-            var weakScore = -p.Steps.Count(s => s.IsWeak);
-
-            // Priority 3: Maximum retained size in the path
-            var maxRetainedSizeInPath = 0L;
-            if (p.Steps.Count > 0)
+        var sorted = paths
+            .OrderBy(p => p.TotalSteps)  // Shorter paths first
+            .ThenBy(p => p.Steps.Count(s => s.IsWeak))  // Fewer weak edges preferred
+            .ThenByDescending(p =>
             {
-                maxRetainedSizeInPath = p.Steps
+                // Maximum retained size in the path
+                if (p.Steps.Count == 0) return 0L;
+                return p.Steps
                     .Select(step => nodes.TryGetValue(step.FromNodeId, out var node) ? node.RetainedSizeBytes : 0L)
                     .Max();
-            }
-            var sizeScore = maxRetainedSizeInPath;
-
-            // Composite score
-            return (lengthScore * 10000) + (weakScore * 100) + (sizeScore / 1024); // Normalize size to KB
-        }).ToList();
+            })
+            .ToList();
 
         return sorted;
     }

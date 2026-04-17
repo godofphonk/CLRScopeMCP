@@ -13,23 +13,19 @@ namespace ClrScope.Mcp.Tests.Services.Heap;
 public class HeapAnalysisEndToEndTests
 {
     private readonly Mock<ILogger<GcDumpGraphAdapter>> _gcDumpLoggerMock;
-    private readonly Mock<ILogger<EventPipeHeapGraphSourceAdapter>> _eventPipeLoggerMock;
     private readonly Mock<ILogger<DominatorTreeCalculator>> _calculatorLoggerMock;
     private readonly GcDumpGraphAdapter _gcDumpAdapter;
-    private readonly EventPipeHeapGraphSourceAdapter _eventPipeAdapter;
     private readonly DominatorTreeCalculator _calculator;
     private readonly string _testDataPath;
 
     public HeapAnalysisEndToEndTests()
     {
         _gcDumpLoggerMock = new Mock<ILogger<GcDumpGraphAdapter>>();
-        _eventPipeLoggerMock = new Mock<ILogger<EventPipeHeapGraphSourceAdapter>>();
         _calculatorLoggerMock = new Mock<ILogger<DominatorTreeCalculator>>();
-        
+
         _gcDumpAdapter = new GcDumpGraphAdapter(_gcDumpLoggerMock.Object);
-        _eventPipeAdapter = new EventPipeHeapGraphSourceAdapter(_eventPipeLoggerMock.Object);
         _calculator = new DominatorTreeCalculator(_calculatorLoggerMock.Object);
-        
+
         _testDataPath = Path.Combine(AppContext.BaseDirectory, "test-data");
     }
 
@@ -172,37 +168,6 @@ public class HeapAnalysisEndToEndTests
                 Assert.True(firstPath.TotalSteps > 0);
             }
         }
-    }
-
-    [Fact]
-    public async Task EndToEnd_NettraceFile_LoadAndValidateStructure()
-    {
-        // Arrange
-        var nettracePath = GetTestDataPath("test-data.nettrace");
-        
-        // Act
-        var envelope = await _eventPipeAdapter.ReadAsync(nettracePath, CancellationToken.None);
-        
-        // Assert - Validate envelope structure
-        Assert.NotNull(envelope);
-        Assert.NotNull(envelope.MemoryGraph);
-        Assert.NotNull(envelope.HeapInfo);
-        Assert.NotNull(envelope.HeapInfo.Segments);
-    }
-
-    [Fact]
-    public async Task EndToEnd_NettraceFile_VerifyMetadata()
-    {
-        // Arrange
-        var nettracePath = GetTestDataPath("test-data.nettrace");
-        
-        // Act
-        var envelope = await _eventPipeAdapter.ReadAsync(nettracePath, CancellationToken.None);
-        
-        // Assert - Verify envelope metadata
-        Assert.NotNull(envelope);
-        Assert.NotNull(envelope.Metadata);
-        Assert.Equal("nettrace", envelope.Metadata.SourceKind);
     }
 
     [Fact]

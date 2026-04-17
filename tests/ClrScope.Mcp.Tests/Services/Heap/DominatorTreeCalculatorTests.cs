@@ -273,7 +273,7 @@ public class DominatorTreeCalculatorTests
         Assert.Equal(3, paths[0].TotalSteps); // Root -> A -> B -> C
     }
 
-    [Fact(Skip = "TODO: ReverseBFS needs to find all paths, not just one")]
+    [Fact]
     public void FindRetainerPaths_MultiplePaths_ReturnsMultiplePaths()
     {
         // Graph: Root -> A, Root -> B, A -> C, B -> C
