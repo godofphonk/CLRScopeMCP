@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ClrScope.HeapParser/ClrScope.HeapParser.csproj" />
+    <Project Path="src/ClrScope.Mcp/ClrScope.Mcp.csproj" />
+  </Folder>
+  <Folder Name="/third_party/">
+    <Project Path="third_party/DotNetHeapDump/DotNetHeapDump.csproj" />
+  </Folder>
+</Solution>

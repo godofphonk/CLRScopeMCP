@@ -9,7 +9,7 @@
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <DefineConstants>$(DefineConstants);FASTSERIALIZATION_PUBLIC;GROWABLEARRAY_PUBLIC</DefineConstants>
-    <NoWarn>$(NoWarn);CS0436;CS8600;CS8604;CS8625;CA1416;CS8618;CS8601;CS8603</NoWarn>
+    <NoWarn>$(NoWarn);CS0436;CS8600;CS8604;CS8625;CA1416;CS8618;CS8601;CS8603;CS8602;CS8767</NoWarn>
   </PropertyGroup>
 
   <PropertyGroup>
