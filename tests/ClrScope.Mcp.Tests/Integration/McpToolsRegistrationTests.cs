@@ -65,8 +65,7 @@ public class McpToolsRegistrationTests
                 .Where(m => m.GetCustomAttribute<McpServerToolAttribute>() != null)
                 .ToList();
             
-            Assert.NotEmpty(methods, 
-                $"Tool class {toolType.Name} with [McpServerToolType] should have at least one method with [McpServerTool] attribute");
+            Assert.NotEmpty(methods);
         }
     }
 

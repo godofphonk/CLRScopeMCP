@@ -6,9 +6,6 @@
   <Folder Name="/tests/">
     <Project Path="tests/ClrScope.Mcp.Tests/ClrScope.Mcp.Tests.csproj" />
   </Folder>
-  <Folder Name="/bench/">
-    <Project Path="bench/ClrScope.Benchmarks/ClrScope.Benchmarks.csproj" />
-  </Folder>
   <Folder Name="/third_party/">
     <Project Path="third_party/DotNetHeapDump/DotNetHeapDump.csproj" />
   </Folder>
