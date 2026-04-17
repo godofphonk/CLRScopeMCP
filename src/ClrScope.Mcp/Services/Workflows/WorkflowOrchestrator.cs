@@ -23,7 +23,6 @@ public sealed class WorkflowOrchestrator
     public async Task<WorkflowAutomationResult> ExecuteWorkflowAsync(
         IWorkflow workflow,
         int pid,
-        IServiceProvider serviceProvider,
         string duration,
         CancellationToken cancellationToken)
     {
@@ -36,7 +35,7 @@ public sealed class WorkflowOrchestrator
         {
             _logger.LogInformation("Starting {WorkflowName} for PID {Pid}", workflow.WorkflowName, pid);
 
-            var result = await workflow.ExecuteAsync(pid, serviceProvider, duration, cancellationToken);
+            var result = await workflow.ExecuteAsync(pid, duration, cancellationToken);
 
             artifacts.AddRange(result.Artifacts);
             sessionIds.AddRange(result.SessionIds);

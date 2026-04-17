@@ -17,7 +17,7 @@ public sealed class WorkflowAutomationTools
     {
         var orchestrator = server.Services!.GetRequiredService<WorkflowOrchestrator>();
         var workflow = server.Services!.GetRequiredService<HighCpuWorkflow>();
-        return await orchestrator.ExecuteWorkflowAsync(workflow, pid, server.Services!, duration, cancellationToken);
+        return await orchestrator.ExecuteWorkflowAsync(workflow, pid, duration, cancellationToken);
     }
 
     [McpServerTool(Name = "workflow_automated_memory_leak_bundle"), Description("Automated collection of memory leak diagnostic bundle - executes collect_gcdump, collect_counters, and collect_trace in sequence")]
@@ -29,7 +29,7 @@ public sealed class WorkflowAutomationTools
     {
         var orchestrator = server.Services!.GetRequiredService<WorkflowOrchestrator>();
         var workflow = server.Services!.GetRequiredService<MemoryLeakWorkflow>();
-        return await orchestrator.ExecuteWorkflowAsync(workflow, pid, server.Services!, duration, cancellationToken);
+        return await orchestrator.ExecuteWorkflowAsync(workflow, pid, duration, cancellationToken);
     }
 
     [McpServerTool(Name = "workflow_automated_hang_bundle"), Description("Automated collection of hang/deadlock diagnostic bundle - executes collect_dump, collect_stacks, and collect_counters in sequence")]
@@ -41,7 +41,7 @@ public sealed class WorkflowAutomationTools
     {
         var orchestrator = server.Services!.GetRequiredService<WorkflowOrchestrator>();
         var workflow = server.Services!.GetRequiredService<HangWorkflow>();
-        return await orchestrator.ExecuteWorkflowAsync(workflow, pid, server.Services!, duration, cancellationToken);
+        return await orchestrator.ExecuteWorkflowAsync(workflow, pid, duration, cancellationToken);
     }
 
     [McpServerTool(Name = "workflow_automated_baseline_bundle"), Description("Automated collection of baseline performance bundle - executes collect_counters, collect_trace, collect_gcdump, and collect_stacks in sequence")]
@@ -53,6 +53,6 @@ public sealed class WorkflowAutomationTools
     {
         var orchestrator = server.Services!.GetRequiredService<WorkflowOrchestrator>();
         var workflow = server.Services!.GetRequiredService<BaselineWorkflow>();
-        return await orchestrator.ExecuteWorkflowAsync(workflow, pid, server.Services!, duration, cancellationToken);
+        return await orchestrator.ExecuteWorkflowAsync(workflow, pid, duration, cancellationToken);
     }
 }

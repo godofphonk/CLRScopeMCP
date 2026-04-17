@@ -35,7 +35,6 @@ public sealed class MemoryLeakWorkflow : IWorkflow
 
     public async Task<WorkflowAutomationResult> ExecuteAsync(
         int pid,
-        IServiceProvider serviceProvider,
         string duration,
         CancellationToken cancellationToken)
     {

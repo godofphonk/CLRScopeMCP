@@ -22,7 +22,6 @@ public interface IWorkflow
     /// </summary>
     Task<WorkflowAutomationResult> ExecuteAsync(
         int pid,
-        IServiceProvider serviceProvider,
         string duration,
         CancellationToken cancellationToken);
 }
