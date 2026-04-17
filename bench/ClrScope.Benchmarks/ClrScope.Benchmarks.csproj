@@ -21,7 +21,7 @@
 
   <ItemGroup>
     <None Include="..\..\test-data\test-data.gcdump" CopyToOutputDirectory="PreserveNewest" Link="test-data\test-data.gcdump" />
-    <None Include="test-data\memory-pressure.gcdump" CopyToOutputDirectory="PreserveNewest" Link="test-data\memory-pressure.gcdump" />
+    <None Include="test-data\memory-pressure.gcdump" CopyToOutputDirectory="PreserveNewest" Link="test-data\memory-pressure.gcdump" Condition="Exists('test-data\memory-pressure.gcdump')" />
   </ItemGroup>
 
 </Project>
