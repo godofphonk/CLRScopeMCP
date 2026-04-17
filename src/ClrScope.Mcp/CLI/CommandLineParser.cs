@@ -24,10 +24,7 @@ public static class CommandLineParser
         };
 
         // Run command (default)
-        var runCommand = new Command("run", "Run the MCP server")
-        {
-            IsHidden = true // Hidden since it's the default
-        };
+        var runCommand = new Command("run", "Run the MCP server");
         runCommand.SetHandler(async () =>
         {
             var host = Bootstrap.BuildHost();
@@ -36,21 +33,16 @@ public static class CommandLineParser
         rootCommand.AddCommand(runCommand);
 
         // Demo command
-        var demoCommand = new Command("demo", "Run demo mode");
+        var demoCommand = new Command("demo", "Run demo mode")
+        {
+            IsHidden = true
+        };
         demoCommand.SetHandler(async () =>
         {
             var host = Bootstrap.BuildHost();
             await RunDemoAsync(host);
         });
         rootCommand.AddCommand(demoCommand);
-
-        // Version option
-        var versionOption = new Option<bool>(new[] { "--version", "-v" }, "Show version information");
-        rootCommand.AddOption(versionOption);
-
-        // Help option
-        var helpOption = new Option<bool>(new[] { "--help", "-h" }, "Show help information");
-        rootCommand.AddOption(helpOption);
 
         // Set default handler (run server)
         rootCommand.SetHandler(async () =>
