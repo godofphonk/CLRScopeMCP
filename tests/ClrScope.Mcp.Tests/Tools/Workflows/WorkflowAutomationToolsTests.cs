@@ -1,4 +1,6 @@
+using ClrScope.Mcp.Infrastructure;
 using ClrScope.Mcp.Services.Workflows;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace ClrScope.Mcp.Tests.Tools.Workflows;
@@ -166,5 +168,70 @@ public class WorkflowAutomationToolsTests
         Assert.Contains("rolled back", result.Error);
         Assert.Contains("Failed state", result.Error);
         Assert.Single(result.SessionIds); // Session was created before failure
+    }
+
+    [Fact]
+    public async Task WorkflowOrchestrator_DoesNotDeadlock_WhenInnerServiceAlsoLocks()
+    {
+        // Arrange
+        var pidLockManager = new PidLockManager();
+        var orchestrator = new WorkflowOrchestrator(NullLogger<WorkflowOrchestrator>.Instance);
+        var pid = 12345;
+        var duration = "00:00:01";
+
+        // Create a mock workflow that acquires the same PID lock internally
+        var mockWorkflow = new MockWorkflowThatAlsoLocks(pidLockManager);
+
+        // Act & Assert
+        // Use a timeout to detect deadlock - if deadlock occurs, this will timeout and fail
+        var timeoutTask = Task.Delay(TimeSpan.FromSeconds(5));
+        var executeTask = orchestrator.ExecuteWorkflowAsync(mockWorkflow, pid, duration, CancellationToken.None);
+
+        var completedTask = await Task.WhenAny(executeTask, timeoutTask);
+
+        if (completedTask == timeoutTask)
+        {
+            // Timeout means deadlock occurred
+            throw new TimeoutException("WorkflowOrchestrator deadlocked when inner service also acquired PID lock");
+        }
+
+        // If we reach here, no deadlock occurred
+        var result = await executeTask;
+        Assert.NotNull(result);
+    }
+
+    /// <summary>
+    /// Mock workflow that simulates collect services by acquiring PID lock internally
+    /// </summary>
+    private class MockWorkflowThatAlsoLocks : IWorkflow
+    {
+        private readonly IPidLockManager _pidLockManager;
+
+        public MockWorkflowThatAlsoLocks(IPidLockManager pidLockManager)
+        {
+            _pidLockManager = pidLockManager;
+        }
+
+        public string WorkflowName => "MockWorkflowWithLock";
+        public int TotalSteps => 1;
+
+        public async Task<WorkflowAutomationResult> ExecuteAsync(int pid, string duration, CancellationToken cancellationToken)
+        {
+            // Simulate collect service behavior: acquire PID lock internally
+            using var pidLock = await _pidLockManager.AcquireLockAsync(pid, cancellationToken);
+
+            // Simulate some work
+            await Task.Delay(100, cancellationToken);
+
+            return new WorkflowAutomationResult(
+                Success: true,
+                WorkflowName: WorkflowName,
+                StepsCompleted: 1,
+                TotalSteps: TotalSteps,
+                Artifacts: Array.Empty<ArtifactInfo>(),
+                SessionIds: Array.Empty<string>(),
+                Error: null,
+                ExecutionTimeMs: 100);
+        }
     }
 }

@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Logging;
-using ClrScope.Mcp.Infrastructure;
 
 namespace ClrScope.Mcp.Services.Workflows;
 
@@ -9,16 +8,15 @@ namespace ClrScope.Mcp.Services.Workflows;
 public sealed class WorkflowOrchestrator
 {
     private readonly ILogger<WorkflowOrchestrator> _logger;
-    private readonly IPidLockManager _pidLockManager;
 
-    public WorkflowOrchestrator(ILogger<WorkflowOrchestrator> logger, IPidLockManager pidLockManager)
+    public WorkflowOrchestrator(ILogger<WorkflowOrchestrator> logger)
     {
         _logger = logger;
-        _pidLockManager = pidLockManager;
     }
 
     /// <summary>
     /// Execute a workflow with shared orchestration logic
+    /// Note: PID locking is handled by individual collect services, not by the orchestrator
     /// </summary>
     public async Task<WorkflowAutomationResult> ExecuteWorkflowAsync(
         IWorkflow workflow,
@@ -26,7 +24,6 @@ public sealed class WorkflowOrchestrator
         string duration,
         CancellationToken cancellationToken)
     {
-        using var pidLock = await _pidLockManager.AcquireLockAsync(pid, cancellationToken);
         var startTime = DateTime.UtcNow;
         var artifacts = new List<ArtifactInfo>();
         var sessionIds = new List<string>();

@@ -74,7 +74,7 @@ public sealed class ArtifactQueryTools
                 Pid: artifact.Pid,
                 CreatedAtUtc: artifact.CreatedAtUtc,
                 FilePath: includeFilePath ? artifact.FilePath : null,
-                Error: string.Empty
+                Error: null
             );
         }
         catch (ArgumentException ex)
@@ -83,14 +83,14 @@ public sealed class ArtifactQueryTools
             return new ArtifactMetadataResult(
                 Found: false,
                 ArtifactId: artifactId,
-                Kind: string.Empty,
-                Status: string.Empty,
-                FilePath: string.Empty,
+                Kind: null,
+                Status: null,
+                FilePath: null,
                 SizeBytes: 0,
-                Sha256: string.Empty,
-                HashState: string.Empty,
+                Sha256: null,
+                HashState: null,
                 Pid: 0,
-                CreatedAtUtc: DateTime.UtcNow,
+                CreatedAtUtc: null,
                 Error: $"Invalid input: {ex.Message}"
             );
         }
@@ -100,14 +100,14 @@ public sealed class ArtifactQueryTools
             return new ArtifactMetadataResult(
                 Found: false,
                 ArtifactId: artifactId,
-                Kind: string.Empty,
-                Status: string.Empty,
-                FilePath: string.Empty,
+                Kind: null,
+                Status: null,
+                FilePath: null,
                 SizeBytes: 0,
-                Sha256: string.Empty,
-                HashState: string.Empty,
+                Sha256: null,
+                HashState: null,
                 Pid: 0,
-                CreatedAtUtc: DateTime.UtcNow,
+                CreatedAtUtc: null,
                 Error: $"Get artifact metadata failed: {ex.Message}"
             );
         }

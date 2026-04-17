@@ -44,7 +44,7 @@ public sealed class SystemTools
                 ArtifactRoot: health.ArtifactRoot.Path,
                 FreeDiskSpaceBytes: health.ArtifactRoot.FreeSpaceBytes,
                 DiagnosticsClientAvailable: diagnosticsClientAvailable,
-                Error: string.Empty
+                Error: null
             );
         }
         catch (Exception ex)

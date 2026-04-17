@@ -66,10 +66,10 @@ public sealed class RuntimeTools
             return new InspectTargetResult(
                 Found: false,
                 Attachable: false,
-                ProcessName: string.Empty,
-                CommandLine: string.Empty,
-                OperatingSystem: string.Empty,
-                ProcessArchitecture: string.Empty,
+                ProcessName: null,
+                CommandLine: null,
+                OperatingSystem: null,
+                ProcessArchitecture: null,
                 Warnings: Array.Empty<string>(),
                 Error: "Process ID must be greater than 0"
             );
@@ -88,10 +88,10 @@ public sealed class RuntimeTools
                 return new InspectTargetResult(
                     Found: false,
                     Attachable: false,
-                    ProcessName: string.Empty,
-                    CommandLine: string.Empty,
-                    OperatingSystem: string.Empty,
-                    ProcessArchitecture: string.Empty,
+                    ProcessName: null,
+                    CommandLine: null,
+                    OperatingSystem: null,
+                    ProcessArchitecture: null,
                     Warnings: Array.Empty<string>(),
                     Error: result.Error
                 );
@@ -102,12 +102,12 @@ public sealed class RuntimeTools
             return new InspectTargetResult(
                 Found: result.Found,
                 Attachable: result.Attachable,
-                ProcessName: result.Details?.ProcessName ?? string.Empty,
-                CommandLine: result.Details?.CommandLine ?? string.Empty,
-                OperatingSystem: result.Details?.OperatingSystem ?? string.Empty,
-                ProcessArchitecture: result.Details?.ProcessArchitecture ?? string.Empty,
+                ProcessName: result.Details?.ProcessName,
+                CommandLine: result.Details?.CommandLine,
+                OperatingSystem: result.Details?.OperatingSystem,
+                ProcessArchitecture: result.Details?.ProcessArchitecture,
                 Warnings: result.Warnings,
-                Error: result.Error ?? string.Empty
+                Error: result.Error
             );
         }
         catch (ArgumentException ex)
@@ -116,10 +116,10 @@ public sealed class RuntimeTools
             return new InspectTargetResult(
                 Found: false,
                 Attachable: false,
-                ProcessName: string.Empty,
-                CommandLine: string.Empty,
-                OperatingSystem: string.Empty,
-                ProcessArchitecture: string.Empty,
+                ProcessName: null,
+                CommandLine: null,
+                OperatingSystem: null,
+                ProcessArchitecture: null,
                 Warnings: Array.Empty<string>(),
                 Error: $"Invalid input: {ex.Message}"
             );
@@ -130,10 +130,10 @@ public sealed class RuntimeTools
             return new InspectTargetResult(
                 Found: false,
                 Attachable: false,
-                ProcessName: string.Empty,
-                CommandLine: string.Empty,
-                OperatingSystem: string.Empty,
-                ProcessArchitecture: string.Empty,
+                ProcessName: null,
+                CommandLine: null,
+                OperatingSystem: null,
+                ProcessArchitecture: null,
                 Warnings: Array.Empty<string>(),
                 Error: $"Inspect target failed: {ex.Message}"
             );
