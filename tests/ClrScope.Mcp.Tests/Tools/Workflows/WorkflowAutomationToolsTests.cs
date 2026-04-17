@@ -26,8 +26,7 @@ public class WorkflowAutomationToolsTests
             TotalSteps: 3,
             Artifacts: artifacts,
             SessionIds: new[] { "session-1", "session-2", "session-3" },
-            Error: null,
-            ExecutionTimeMs: 5000
+            Error: null
         );
 
         // Assert
@@ -38,7 +37,6 @@ public class WorkflowAutomationToolsTests
         Assert.Equal(3, result.Artifacts.Length);
         Assert.Equal(3, result.SessionIds.Length);
         Assert.Null(result.Error);
-        Assert.Equal(5000, result.ExecutionTimeMs);
     }
 
     [Fact]
@@ -76,8 +74,7 @@ public class WorkflowAutomationToolsTests
             TotalSteps: 3,
             Artifacts: artifacts,
             SessionIds: new[] { "session-1" },
-            Error: "Step 2 failed; Step 3 failed",
-            ExecutionTimeMs: 3000
+            Error: "Step 2 failed; Step 3 failed"
         );
 
         // Assert
@@ -99,8 +96,7 @@ public class WorkflowAutomationToolsTests
             TotalSteps: 3,
             Artifacts: Array.Empty<ArtifactInfo>(),
             SessionIds: Array.Empty<string>(),
-            Error: "Process ID must be greater than 0",
-            ExecutionTimeMs: 0
+            Error: "Process ID must be greater than 0"
         );
 
         // Assert
@@ -130,8 +126,7 @@ public class WorkflowAutomationToolsTests
             TotalSteps: 3,
             Artifacts: artifacts,
             SessionIds: new[] { "session-1", "session-2" },
-            Error: "Step 3 (collect_trace) failed: Operation canceled",
-            ExecutionTimeMs: 4500
+            Error: "Step 3 (collect_trace) failed: Operation canceled"
         );
 
         // Assert
@@ -159,8 +154,7 @@ public class WorkflowAutomationToolsTests
             TotalSteps: 3,
             Artifacts: Array.Empty<ArtifactInfo>(),
             SessionIds: new[] { "session-1" },
-            Error: "Step 2 (collect_stacks) failed: Operation canceled. Session rolled back to Failed state.",
-            ExecutionTimeMs: 2000
+            Error: "Step 2 (collect_stacks) failed: Operation canceled. Session rolled back to Failed state."
         );
 
         // Assert
@@ -230,8 +224,7 @@ public class WorkflowAutomationToolsTests
                 TotalSteps: TotalSteps,
                 Artifacts: Array.Empty<ArtifactInfo>(),
                 SessionIds: Array.Empty<string>(),
-                Error: null,
-                ExecutionTimeMs: 100);
+                Error: null);
         }
     }
 }

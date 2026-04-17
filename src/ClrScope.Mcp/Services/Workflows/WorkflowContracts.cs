@@ -20,6 +20,5 @@ public record WorkflowAutomationResult(
     int TotalSteps,
     ArtifactInfo[] Artifacts,
     string[] SessionIds,
-    string? Error,
-    long ExecutionTimeMs
+    string? Error
 );

@@ -53,8 +53,7 @@ public sealed class WorkflowOrchestrator
                 TotalSteps: workflow.TotalSteps,
                 Artifacts: artifacts.ToArray(),
                 SessionIds: sessionIds.ToArray(),
-                Error: result.Error,
-                ExecutionTimeMs: executionTimeMs);
+                Error: result.Error);
         }
         catch (Exception ex)
         {
@@ -68,8 +67,7 @@ public sealed class WorkflowOrchestrator
                 TotalSteps: workflow.TotalSteps,
                 Artifacts: artifacts.ToArray(),
                 SessionIds: sessionIds.ToArray(),
-                Error: ex.Message,
-                ExecutionTimeMs: executionTimeMs);
+                Error: ex.Message);
         }
     }
 }

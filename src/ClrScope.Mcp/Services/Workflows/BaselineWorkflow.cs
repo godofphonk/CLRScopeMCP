@@ -119,7 +119,6 @@ public sealed class BaselineWorkflow : IWorkflow
             TotalSteps: TotalSteps,
             Artifacts: artifacts.ToArray(),
             SessionIds: sessionIds.ToArray(),
-            Error: error,
-            ExecutionTimeMs: 0);
+            Error: error);
     }
 }
