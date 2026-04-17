@@ -194,5 +194,6 @@ See [Full Requirements](docs/requirements.md) for installation instructions and 
 - [Investigation Guides](docs/investigation-guides.md) - Step-by-step diagnostic workflows for common scenarios
 - [Best Practices](docs/best-practices.md) - Collection parameters, analysis techniques, and optimization tips
 - [Troubleshooting](docs/troubleshooting.md) - Solutions to common issues and error messages
+- [SOS Commands](docs/sos-commands.md) - Reference for SOS debugging commands
 - [Tool Integration](docs/integration.md) - Required CLI tools and installation instructions
 - [Full Requirements](docs/requirements.md) - System and platform requirements
