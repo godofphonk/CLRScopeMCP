@@ -586,6 +586,13 @@
           "xunit.extensibility.core": "[2.9.3]"
         }
       },
+      "clrscope.heapparser": {
+        "type": "Project",
+        "dependencies": {
+          "ClrScope.Mcp": "[1.3.0, )",
+          "ClrScope.ThirdParty.DotNetHeapDump": "[1.0.0, )"
+        }
+      },
       "clrscope.mcp": {
         "type": "Project",
         "dependencies": {

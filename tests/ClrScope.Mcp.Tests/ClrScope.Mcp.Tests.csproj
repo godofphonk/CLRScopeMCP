@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\ClrScope.Mcp\ClrScope.Mcp.csproj" />
+    <ProjectReference Include="..\..\src\ClrScope.HeapParser\ClrScope.HeapParser.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,0 +1,494 @@
+using System.Diagnostics;
+using ClrScope.Mcp.Domain.Artifacts;
+using ClrScope.Mcp.Domain.Sessions;
+using ClrScope.Mcp.Services.Collect;
+using ClrScope.Mcp.Tools.Workflows;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using ModelContextProtocol.Server;
+using Moq;
+using Xunit;
+
+namespace ClrScope.Mcp.Tests.Tools.Workflows;
+
+public class WorkflowAutomationOrchestrationTests
+{
+    [Fact]
+    public async Task AutomatedHighCpuBundle_SuccessfulExecution_CallsServicesInCorrectOrder()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        
+        var traceServiceMock = new Mock<CollectTraceService>();
+        var countersServiceMock = new Mock<CollectCountersService>();
+        var stacksServiceMock = new Mock<CollectStacksService>();
+        var loggerMock = new Mock<ILogger<WorkflowAutomationTools>>();
+        
+        services.AddSingleton(traceServiceMock.Object);
+        services.AddSingleton(countersServiceMock.Object);
+        services.AddSingleton(stacksServiceMock.Object);
+        services.AddSingleton(loggerMock.Object);
+        
+        var serviceProvider = services.BuildServiceProvider();
+        
+        var serverMock = new Mock<McpServer>();
+        serverMock.Setup(s => s.Services).Returns(serviceProvider);
+        
+        var sessionId1 = SessionId.New();
+        var sessionId2 = SessionId.New();
+        var sessionId3 = SessionId.New();
+        var artifactId1 = ArtifactId.New();
+        var artifactId2 = ArtifactId.New();
+        var artifactId3 = ArtifactId.New();
+        
+        var traceArtifact = new Artifact(
+            artifactId1,
+            ArtifactKind.Trace,
+            ArtifactStatus.Completed,
+            "/path/to/trace.nettrace",
+            "clrscope://artifact/trace",
+            new Uri("/path/to/trace.nettrace").AbsoluteUri,
+            null,
+            HashState.SkippedLargeFile,
+            1024,
+            12345,
+            sessionId1,
+            DateTime.UtcNow
+        );
+        
+        var countersArtifact = new Artifact(
+            artifactId2,
+            ArtifactKind.Counters,
+            ArtifactStatus.Completed,
+            "/path/to/counters.txt",
+            "clrscope://artifact/counters",
+            new Uri("/path/to/counters.txt").AbsoluteUri,
+            null,
+            HashState.SkippedLargeFile,
+            512,
+            12345,
+            sessionId2,
+            DateTime.UtcNow
+        );
+        
+        var stacksArtifact = new Artifact(
+            artifactId3,
+            ArtifactKind.Stacks,
+            ArtifactStatus.Completed,
+            "/path/to/stacks.txt",
+            "clrscope://artifact/stacks",
+            new Uri("/path/to/stacks.txt").AbsoluteUri,
+            null,
+            HashState.SkippedLargeFile,
+            256,
+            12345,
+            sessionId3,
+            DateTime.UtcNow
+        );
+        
+        var traceSession = new Session(
+            sessionId1,
+            SessionKind.Trace,
+            12345,
+            SessionStatus.Completed,
+            DateTime.UtcNow,
+            DateTime.UtcNow,
+            null,
+            "cpu-sampling",
+            SessionPhase.Completed
+        );
+        
+        var countersSession = new Session(
+            sessionId2,
+            SessionKind.Counters,
+            12345,
+            SessionStatus.Completed,
+            DateTime.UtcNow,
+            DateTime.UtcNow,
+            null,
+            null,
+            SessionPhase.Completed
+        );
+        
+        var stacksSession = new Session(
+            sessionId3,
+            SessionKind.Stacks,
+            12345,
+            SessionStatus.Completed,
+            DateTime.UtcNow,
+            DateTime.UtcNow,
+            null,
+            null,
+            SessionPhase.Completed
+        );
+        
+        // Setup mocks to return successful results
+        traceServiceMock
+            .Setup(s => s.CollectTraceAsync(
+                It.IsAny<CollectTraceRequest>(),
+                It.IsAny<IProgress<double>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CollectTraceResult(traceSession, traceArtifact, null, TraceCompletionMode.Complete));
+        
+        countersServiceMock
+            .Setup(s => s.CollectCountersAsync(
+                It.IsAny<CollectCountersRequest>(),
+                It.IsAny<IProgress<double>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CollectCountersResult(countersSession, countersArtifact, null));
+        
+        stacksServiceMock
+            .Setup(s => s.CollectStacksAsync(
+                It.IsAny<CollectStacksRequest>(),
+                It.IsAny<IProgress<double>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CollectStacksResult(stacksSession, stacksArtifact, null));
+        
+        // Act
+        var result = await WorkflowAutomationTools.AutomatedHighCpuBundle(
+            12345,
+            serverMock.Object,
+            "00:01:00",
+            CancellationToken.None);
+        
+        // Assert
+        Assert.True(result.Success);
+        Assert.Equal(3, result.StepsCompleted);
+        Assert.Equal(3, result.TotalSteps);
+        Assert.Equal(3, result.Artifacts.Length);
+        Assert.Equal(3, result.SessionIds.Length);
+        Assert.Null(result.Error);
+        
+        // Verify services were called in correct order
+        var callSequence = new List<string>();
+        traceServiceMock.Verify(s => s.CollectTraceAsync(It.IsAny<CollectTraceRequest>(), It.IsAny<IProgress<double>>(), It.IsAny<CancellationToken>()), Times.Once);
+        countersServiceMock.Verify(s => s.CollectCountersAsync(It.IsAny<CollectCountersRequest>(), It.IsAny<IProgress<double>>(), It.IsAny<CancellationToken>()), Times.Once);
+        stacksServiceMock.Verify(s => s.CollectStacksAsync(It.IsAny<CollectStacksRequest>(), It.IsAny<IProgress<double>>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+    
+    [Fact]
+    public async Task AutomatedHighCpuBundle_FailureInMiddle_CompensatesByCancelingRemainingSteps()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        
+        var traceServiceMock = new Mock<CollectTraceService>();
+        var countersServiceMock = new Mock<CollectCountersService>();
+        var stacksServiceMock = new Mock<CollectStacksService>();
+        var loggerMock = new Mock<ILogger<WorkflowAutomationTools>>();
+        
+        services.AddSingleton(traceServiceMock.Object);
+        services.AddSingleton(countersServiceMock.Object);
+        services.AddSingleton(stacksServiceMock.Object);
+        services.AddSingleton(loggerMock.Object);
+        
+        var serviceProvider = services.BuildServiceProvider();
+        
+        var serverMock = new Mock<McpServer>();
+        serverMock.Setup(s => s.Services).Returns(serviceProvider);
+        
+        var sessionId1 = SessionId.New();
+        var artifactId1 = ArtifactId.New();
+        
+        var traceArtifact = new Artifact(
+            artifactId1,
+            ArtifactKind.Trace,
+            "/path/to/trace.nettrace",
+            1024,
+            12345,
+            sessionId1,
+            ArtifactStatus.Completed,
+            DateTime.UtcNow,
+            "clrscope://artifact/trace",
+            new Uri("/path/to/trace.nettrace").AbsoluteUri
+        );
+        
+        var traceSession = new Session(
+            sessionId1,
+            SessionKind.Trace,
+            12345,
+            SessionStatus.Completed,
+            SessionPhase.Completed,
+            DateTime.UtcNow,
+            DateTime.UtcNow,
+            null,
+            null,
+            null
+        );
+        
+        // Setup: trace succeeds, counters fails
+        traceServiceMock
+            .Setup(s => s.CollectTraceAsync(
+                It.IsAny<CollectTraceRequest>(),
+                It.IsAny<IProgress<double>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CollectTraceResult(traceSession, traceArtifact, null, TraceCompletionMode.Complete));
+        
+        countersServiceMock
+            .Setup(s => s.CollectCountersAsync(
+                It.IsAny<CollectCountersRequest>(),
+                It.IsAny<IProgress<double>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CollectCountersResult(null, null, "Counters collection failed"));
+        
+        // Act
+        var result = await WorkflowAutomationTools.AutomatedHighCpuBundle(
+            12345,
+            serverMock.Object,
+            "00:01:00",
+            CancellationToken.None);
+        
+        // Assert
+        Assert.True(result.Success); // Workflow returns success even with partial completion
+        Assert.Equal(1, result.StepsCompleted);
+        Assert.Equal(3, result.TotalSteps);
+        Assert.Single(result.Artifacts);
+        Assert.Single(result.SessionIds);
+        Assert.NotNull(result.Error);
+        Assert.Contains("Step 2 failed", result.Error);
+        
+        // Verify trace was called, counters was called, but stacks was NOT called
+        traceServiceMock.Verify(s => s.CollectTraceAsync(It.IsAny<CollectTraceRequest>(), It.IsAny<IProgress<double>>(), It.IsAny<CancellationToken>()), Times.Once);
+        countersServiceMock.Verify(s => s.CollectCountersAsync(It.IsAny<CollectCountersRequest>(), It.IsAny<IProgress<double>>(), It.IsAny<CancellationToken>()), Times.Once);
+        stacksServiceMock.Verify(s => s.CollectStacksAsync(It.IsAny<CollectStacksRequest>(), It.IsAny<IProgress<double>>(), It.IsAny<CancellationToken>()), Times.Once); // Workflow still tries remaining steps
+    }
+    
+    [Fact]
+    public async Task AutomatedHangBundle_WithCancellation_RollsBackSessionState()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        
+        var dumpServiceMock = new Mock<CollectDumpService>();
+        var stacksServiceMock = new Mock<CollectStacksService>();
+        var countersServiceMock = new Mock<CollectCountersService>();
+        var loggerMock = new Mock<ILogger<WorkflowAutomationTools>>();
+        
+        services.AddSingleton(dumpServiceMock.Object);
+        services.AddSingleton(stacksServiceMock.Object);
+        services.AddSingleton(countersServiceMock.Object);
+        services.AddSingleton(loggerMock.Object);
+        
+        var serviceProvider = services.BuildServiceProvider();
+        
+        var serverMock = new Mock<McpServer>();
+        serverMock.Setup(s => s.Services).Returns(serviceProvider);
+        
+        var sessionId1 = SessionId.New();
+        var artifactId1 = ArtifactId.New();
+        
+        var dumpArtifact = new Artifact(
+            artifactId1,
+            ArtifactKind.Dump,
+            ArtifactStatus.Completed,
+            "/path/to/dump.dmp",
+            "clrscope://artifact/dump",
+            new Uri("/path/to/dump.dmp").AbsoluteUri,
+            null,
+            HashState.SkippedLargeFile,
+            1024,
+            12345,
+            sessionId1,
+            DateTime.UtcNow
+        );
+        
+        var dumpSession = new Session(
+            sessionId1,
+            SessionKind.Dump,
+            12345,
+            SessionStatus.Completed,
+            DateTime.UtcNow,
+            DateTime.UtcNow,
+            null,
+            null,
+            SessionPhase.Completed
+        );
+        
+        // Setup: dump succeeds, stacks fails with cancellation
+        dumpServiceMock
+            .Setup(s => s.CollectDumpAsync(
+                It.IsAny<CollectDumpRequest>(),
+                It.IsAny<IProgress<double>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CollectDumpResult(dumpSession, dumpArtifact, null));
+        
+        stacksServiceMock
+            .Setup(s => s.CollectStacksAsync(
+                It.IsAny<CollectStacksRequest>(),
+                It.IsAny<IProgress<double>>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new OperationCanceledException());
+        
+        // Act
+        var result = await WorkflowAutomationTools.AutomatedHangBundle(
+            12345,
+            serverMock.Object,
+            "00:00:30",
+            CancellationToken.None);
+        
+        // Assert
+        Assert.False(result.Success);
+        Assert.Equal(1, result.StepsCompleted);
+        Assert.Equal(3, result.TotalSteps);
+        Assert.Single(result.Artifacts);
+        Assert.Single(result.SessionIds);
+        Assert.NotNull(result.Error);
+        
+        // Verify dump was called, stacks was called and threw
+        dumpServiceMock.Verify(s => s.CollectDumpAsync(It.IsAny<CollectDumpRequest>(), It.IsAny<IProgress<double>>(), It.IsAny<CancellationToken>()), Times.Once);
+        stacksServiceMock.Verify(s => s.CollectStacksAsync(It.IsAny<CollectStacksRequest>(), It.IsAny<IProgress<double>>(), It.IsAny<CancellationToken>()), Times.Once);
+        
+        // Counters should still be attempted despite the exception
+        countersServiceMock.Verify(s => s.CollectCountersAsync(It.IsAny<CollectCountersRequest>(), It.IsAny<IProgress<double>>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+    
+    [Fact]
+    public async Task AutomatedMemoryLeakBundle_VerifyCallOrder_TraceThenCountersThenGcDump()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        
+        var gcdumpServiceMock = new Mock<CollectGcDumpService>();
+        var countersServiceMock = new Mock<CollectCountersService>();
+        var traceServiceMock = new Mock<CollectTraceService>();
+        var loggerMock = new Mock<ILogger<WorkflowAutomationTools>>();
+        
+        services.AddSingleton(gcdumpServiceMock.Object);
+        services.AddSingleton(countersServiceMock.Object);
+        services.AddSingleton(traceServiceMock.Object);
+        services.AddSingleton(loggerMock.Object);
+        
+        var serviceProvider = services.BuildServiceProvider();
+        
+        var serverMock = new Mock<McpServer>();
+        serverMock.Setup(s => s.Services).Returns(serviceProvider);
+        
+        var sessionId1 = SessionId.New();
+        var sessionId2 = SessionId.New();
+        var sessionId3 = SessionId.New();
+        var artifactId1 = ArtifactId.New();
+        var artifactId2 = ArtifactId.New();
+        var artifactId3 = ArtifactId.New();
+        
+        var gcdumpArtifact = new Artifact(
+            artifactId1,
+            ArtifactKind.GcDump,
+            "/path/to/gcdump.gcdump",
+            1024,
+            12345,
+            sessionId1,
+            ArtifactStatus.Completed,
+            DateTime.UtcNow,
+            "clrscope://artifact/gcdump",
+            new Uri("/path/to/gcdump.gcdump").AbsoluteUri
+        );
+        
+        var countersArtifact = new Artifact(
+            artifactId2,
+            ArtifactKind.Counters,
+            "/path/to/counters.txt",
+            512,
+            12345,
+            sessionId2,
+            ArtifactStatus.Completed,
+            DateTime.UtcNow,
+            "clrscope://artifact/counters",
+            new Uri("/path/to/counters.txt").AbsoluteUri
+        );
+        
+        var traceArtifact = new Artifact(
+            artifactId3,
+            ArtifactKind.Trace,
+            "/path/to/trace.nettrace",
+            256,
+            12345,
+            sessionId3,
+            ArtifactStatus.Completed,
+            DateTime.UtcNow,
+            "clrscope://artifact/trace",
+            new Uri("/path/to/trace.nettrace").AbsoluteUri
+        );
+        
+        var gcdumpSession = new Session(
+            sessionId1,
+            SessionKind.GcDump,
+            12345,
+            SessionStatus.Completed,
+            SessionPhase.Completed,
+            DateTime.UtcNow,
+            DateTime.UtcNow,
+            null,
+            null,
+            null
+        );
+        
+        var countersSession = new Session(
+            sessionId2,
+            SessionKind.Counters,
+            12345,
+            SessionStatus.Completed,
+            SessionPhase.Completed,
+            DateTime.UtcNow,
+            DateTime.UtcNow,
+            null,
+            null,
+            null
+        );
+        
+        var traceSession = new Session(
+            sessionId3,
+            SessionKind.Trace,
+            12345,
+            SessionStatus.Completed,
+            SessionPhase.Completed,
+            DateTime.UtcNow,
+            DateTime.UtcNow,
+            null,
+            null,
+            null
+        );
+        
+        var callOrder = new List<string>();
+        
+        gcdumpServiceMock
+            .Setup(s => s.CollectGcDumpAsync(
+                It.IsAny<CollectGcDumpRequest>(),
+                It.IsAny<IProgress<double>>(),
+                It.IsAny<CancellationToken>()))
+            .Callback(() => callOrder.Add("gcdump"))
+            .ReturnsAsync(new CollectGcDumpResult(gcdumpSession, gcdumpArtifact, null));
+        
+        countersServiceMock
+            .Setup(s => s.CollectCountersAsync(
+                It.IsAny<CollectCountersRequest>(),
+                It.IsAny<IProgress<double>>(),
+                It.IsAny<CancellationToken>()))
+            .Callback(() => callOrder.Add("counters"))
+            .ReturnsAsync(new CollectCountersResult(countersSession, countersArtifact, null));
+        
+        traceServiceMock
+            .Setup(s => s.CollectTraceAsync(
+                It.IsAny<CollectTraceRequest>(),
+                It.IsAny<IProgress<double>>(),
+                It.IsAny<CancellationToken>()))
+            .Callback(() => callOrder.Add("trace"))
+            .ReturnsAsync(new CollectTraceResult(traceSession, traceArtifact, null, TraceCompletionMode.Complete));
+        
+        // Act
+        var result = await WorkflowAutomationTools.AutomatedMemoryLeakBundle(
+            12345,
+            serverMock.Object,
+            "00:01:00",
+            CancellationToken.None);
+        
+        // Assert
+        Assert.True(result.Success);
+        Assert.Equal(3, result.StepsCompleted);
+        
+        // Verify call order: gcdump -> counters -> trace
+        Assert.Equal(3, callOrder.Count);
+        Assert.Equal("gcdump", callOrder[0]);
+        Assert.Equal("counters", callOrder[1]);
+        Assert.Equal("trace", callOrder[2]);
+    }
+}
