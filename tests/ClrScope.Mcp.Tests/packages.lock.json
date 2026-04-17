@@ -532,6 +532,11 @@
         "resolved": "5.0.0",
         "contentHash": "JPJArwA1kdj8qDAkY2XGjSWoYnqiM7q/3yRNkt6n28Mnn95MuEGkZXUbPBf7qc3IjwrGY5ttQon7yqHZyQJmOQ=="
       },
+      "System.CommandLine": {
+        "type": "Transitive",
+        "resolved": "2.0.0-beta4.22272.1",
+        "contentHash": "1uqED/q2H0kKoLJ4+hI2iPSBSEdTuhfCYADeJrAqERmiGQ2NNacYKRNEQ+gFbU4glgVyK8rxI+ZOe1onEtr/Pg=="
+      },
       "System.Diagnostics.EventLog": {
         "type": "Transitive",
         "resolved": "10.0.6",
@@ -603,7 +608,8 @@
           "Microsoft.Extensions.Configuration.Binder": "[10.0.6, )",
           "Microsoft.Extensions.Configuration.Json": "[10.0.6, )",
           "Microsoft.Extensions.Hosting": "[10.0.6, )",
-          "ModelContextProtocol": "[1.2.0, )"
+          "ModelContextProtocol": "[1.2.0, )",
+          "System.CommandLine": "[2.0.0-beta4.22272.1, )"
         }
       },
       "ClrScope.ThirdParty.DotNetHeapDump": {

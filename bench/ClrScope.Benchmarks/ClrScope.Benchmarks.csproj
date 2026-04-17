@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" Version="0.14.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.6" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.6" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ClrScope.Mcp\ClrScope.Mcp.csproj" />
+    <ProjectReference Include="..\..\src\ClrScope.HeapParser\ClrScope.HeapParser.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\test-data\test-data.gcdump" CopyToOutputDirectory="PreserveNewest" Link="test-data\test-data.gcdump" />
+    <None Include="test-data\memory-pressure.gcdump" CopyToOutputDirectory="PreserveNewest" Link="test-data\memory-pressure.gcdump" />
+  </ItemGroup>
+
+</Project>

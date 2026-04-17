@@ -197,3 +197,28 @@ See [Full Requirements](docs/requirements.md) for installation instructions and 
 - [SOS Commands](docs/sos-commands.md) - Reference for SOS debugging commands
 - [Tool Integration](docs/integration.md) - Required CLI tools and installation instructions
 - [Full Requirements](docs/requirements.md) - System and platform requirements
+
+## Benchmarks
+
+Heap analysis benchmarks are available in `bench/ClrScope.Benchmarks/` for performance testing and optimization.
+
+**Running Benchmarks:**
+
+```bash
+# Run all benchmarks
+dotnet run -c Release --project bench/ClrScope.Benchmarks/ClrScope.Benchmarks.csproj
+
+# Run specific benchmark category
+dotnet run -c Release --project bench/ClrScope.Benchmarks/ClrScope.Benchmarks.csproj --filter "*Load*"
+dotnet run -c Release --project bench/ClrScope.Benchmarks/ClrScope.Benchmarks.csproj --filter "*Analysis*"
+```
+
+**Generating Test Data from MemoryPressureApp:**
+
+```bash
+# Generate realistic test data using the provided script
+cd bench/ClrScope.Benchmarks
+./generate-test-data.sh
+```
+
+See [bench/ClrScope.Benchmarks/README.md](bench/ClrScope.Benchmarks/README.md) for detailed instructions.
