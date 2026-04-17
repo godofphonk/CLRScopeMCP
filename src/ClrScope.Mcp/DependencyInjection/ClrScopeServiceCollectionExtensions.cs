@@ -27,6 +27,30 @@ namespace ClrScope.Mcp.DependencyInjection;
 public static class ClrScopeServiceCollectionExtensions
 {
     /// <summary>
+    /// All MCP tool types that should be registered with the server.
+    /// This is the single source of truth for tool registration.
+    /// </summary>
+    public static readonly Type[] RegisteredToolTypes =
+    [
+        typeof(RuntimeTools),
+        typeof(CollectTools),
+        typeof(CollectCountersTools),
+        typeof(SystemTools),
+        typeof(SessionTools),
+        typeof(ArtifactQueryTools),
+        typeof(ArtifactReadTools),
+        typeof(ArtifactDeleteTools),
+        typeof(ArtifactLifecycleTools),
+        typeof(AnalysisTools),
+        typeof(ResourceTools),
+        typeof(SummaryTools),
+        typeof(PatternDetectionTools),
+        typeof(HeapAnalysisTools),
+        typeof(SessionAnalysisTools),
+        typeof(WorkflowAutomationTools)
+    ];
+
+    /// <summary>
     /// Adds CLRScope storage services (SQLite stores and schema initializer)
     /// </summary>
     public static IServiceCollection AddClrScopeStorage(this IServiceCollection services)
@@ -132,24 +156,13 @@ public static class ClrScopeServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddClrScopeMcpTools(this IServiceCollection services)
     {
-        services.AddMcpServer()
-            .WithStdioServerTransport()
-            .WithTools<RuntimeTools>()
-            .WithTools<CollectTools>()
-            .WithTools<CollectCountersTools>()
-            .WithTools<SystemTools>()
-            .WithTools<SessionTools>()
-            .WithTools<ArtifactQueryTools>()
-            .WithTools<ArtifactReadTools>()
-            .WithTools<ArtifactDeleteTools>()
-            .WithTools<ArtifactLifecycleTools>()
-            .WithTools<AnalysisTools>()
-            .WithTools<ResourceTools>()
-            .WithTools<SummaryTools>()
-            .WithTools<PatternDetectionTools>()
-            .WithTools<HeapAnalysisTools>()
-            .WithTools<SessionAnalysisTools>()
-            .WithTools<WorkflowAutomationTools>();
+        var builder = services.AddMcpServer()
+            .WithStdioServerTransport();
+
+        foreach (var toolType in RegisteredToolTypes)
+        {
+            builder.WithTools(toolType);
+        }
 
         return services;
     }

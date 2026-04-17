@@ -8,7 +8,7 @@ namespace ClrScope.Mcp.Tools.Workflows;
 [McpServerToolType]
 public sealed class WorkflowAutomationTools
 {
-    private static async Task<Services.Workflows.WorkflowAutomationResult> ExecuteWorkflowAsync<TWorkflow>(
+    private static async Task<WorkflowAutomationResult> ExecuteWorkflowAsync<TWorkflow>(
         int pid,
         McpServer server,
         string duration,
@@ -21,7 +21,7 @@ public sealed class WorkflowAutomationTools
     }
 
     [McpServerTool(Name = "workflow_automated_high_cpu_bundle"), Description("Automated collection of high CPU diagnostic bundle - executes collect_trace, collect_counters, and collect_stacks in sequence")]
-    public static async Task<Services.Workflows.WorkflowAutomationResult> AutomatedHighCpuBundle(
+    public static async Task<WorkflowAutomationResult> AutomatedHighCpuBundle(
         [Description("Process ID to collect high CPU diagnostic bundle from")] int pid,
         McpServer server,
         [Description("Duration for trace and counters collection (hh:mm:ss format, default: 00:01:00)")] string duration = "00:01:00",
@@ -31,7 +31,7 @@ public sealed class WorkflowAutomationTools
     }
 
     [McpServerTool(Name = "workflow_automated_memory_leak_bundle"), Description("Automated collection of memory leak diagnostic bundle - executes collect_gcdump, collect_counters, and collect_trace in sequence")]
-    public static async Task<Services.Workflows.WorkflowAutomationResult> AutomatedMemoryLeakBundle(
+    public static async Task<WorkflowAutomationResult> AutomatedMemoryLeakBundle(
         [Description("Process ID to collect memory leak diagnostic bundle from")] int pid,
         McpServer server,
         [Description("Duration for trace and counters collection (hh:mm:ss format, default: 00:01:00)")] string duration = "00:01:00",
@@ -51,7 +51,7 @@ public sealed class WorkflowAutomationTools
     }
 
     [McpServerTool(Name = "workflow_automated_baseline_bundle"), Description("Automated collection of baseline performance bundle - executes collect_counters, collect_trace, collect_gcdump, and collect_stacks in sequence")]
-    public static async Task<Services.Workflows.WorkflowAutomationResult> AutomatedBaselineBundle(
+    public static async Task<WorkflowAutomationResult> AutomatedBaselineBundle(
         [Description("Process ID to collect baseline performance bundle from")] int pid,
         McpServer server,
         [Description("Duration for trace and counters collection (hh:mm:ss format, default: 00:01:00)")] string duration = "00:01:00",
