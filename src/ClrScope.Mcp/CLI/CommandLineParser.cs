@@ -17,7 +17,7 @@ public static class CommandLineParser
     /// <summary>
     /// Build and return the root command
     /// </summary>
-    public static RootCommand BuildRootCommand()
+    public static RootCommand BuildRootCommand(string[] args)
     {
         var rootCommand = new RootCommand
         {
@@ -28,7 +28,7 @@ public static class CommandLineParser
         var runCommand = new Command("run", "Run the MCP server");
         runCommand.SetHandler(async () =>
         {
-            var host = Bootstrap.BuildHost();
+            var host = Bootstrap.BuildHost(args);
             await RunServerAsync(host);
         });
         rootCommand.AddCommand(runCommand);
@@ -40,7 +40,7 @@ public static class CommandLineParser
         };
         demoCommand.SetHandler(async () =>
         {
-            var host = Bootstrap.BuildHost();
+            var host = Bootstrap.BuildHost(args);
             await RunDemoAsync(host);
         });
         rootCommand.AddCommand(demoCommand);
@@ -48,7 +48,7 @@ public static class CommandLineParser
         // Set default handler (run server)
         rootCommand.SetHandler(async () =>
         {
-            var host = Bootstrap.BuildHost();
+            var host = Bootstrap.BuildHost(args);
             await RunServerAsync(host);
         });
 
@@ -60,7 +60,7 @@ public static class CommandLineParser
     /// </summary>
     public static async Task<int> ParseAndInvokeAsync(string[] args)
     {
-        var rootCommand = BuildRootCommand();
+        var rootCommand = BuildRootCommand(args);
 
         // Handle --version and -v
         if (args.Contains("--version") || args.Contains("-v"))

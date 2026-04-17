@@ -16,9 +16,9 @@ public static class Bootstrap
     /// <summary>
     /// Build the application host with all services configured
     /// </summary>
-    public static IHost BuildHost()
+    public static IHost BuildHost(string[] args)
     {
-        return Host.CreateDefaultBuilder()
+        return Host.CreateDefaultBuilder(args)
             .ConfigureAppConfiguration((context, config) =>
             {
                 var contentRoot = context.HostingEnvironment.ContentRootPath;

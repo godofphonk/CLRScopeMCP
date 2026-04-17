@@ -22,7 +22,7 @@ public class McpToolsRegistrationTests
             .ToHashSet();
 
         // Build host to get actual registration
-        var host = Bootstrap.BuildHost();
+        var host = Bootstrap.BuildHost(Array.Empty<string>());
         var services = host.Services;
 
         // Get the McpServer registration from DI
