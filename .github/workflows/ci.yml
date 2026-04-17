@@ -112,7 +112,10 @@ jobs:
         shell: bash
 
   bench-build:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     continue-on-error: true
     steps:
       - name: Checkout

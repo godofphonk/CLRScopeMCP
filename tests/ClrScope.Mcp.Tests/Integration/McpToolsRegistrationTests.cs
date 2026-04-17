@@ -29,6 +29,11 @@ public class McpToolsRegistrationTests
         var assemblyToolTypes = GetToolTypes(assembly);
 
         // Act & Assert
+        // Verify no duplicate registrations
+        Assert.Equal(registeredToolTypes.Length, registeredToolTypes.Distinct().Count(),
+            "RegisteredToolTypes contains duplicate entries");
+
+        // Act & Assert
         // Verify that all types in RegisteredToolTypes have [McpServerToolType] attribute
         foreach (var registeredType in registeredToolTypes)
         {
