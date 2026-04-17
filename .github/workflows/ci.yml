@@ -126,9 +126,6 @@ jobs:
       - name: Restore
         run: dotnet restore ClrScopeMCP.slnx --locked-mode
 
-      - name: Build main project
-        run: dotnet build --no-restore -c Release ClrScopeMCP.slnx
-
       - name: Build benchmarks
         run: dotnet build --no-restore -c Release bench/ClrScope.Benchmarks/ClrScope.Benchmarks.csproj
 
