@@ -1,8 +1,7 @@
 using ClrScope.Mcp.Domain.Artifacts;
-using ClrScope.Mcp.Domain.Sessions;
 using ClrScope.Mcp.Infrastructure;
-using ClrScope.Mcp.Infrastructure.Utils;
 using ClrScope.Mcp.Options;
+using ClrScope.Mcp.Services.Artifacts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -13,26 +12,8 @@ using System.Globalization;
 namespace ClrScope.Mcp.Tools.Artifacts;
 
 [McpServerToolType]
-public sealed class ArtifactTools
+public sealed class ArtifactCrudTools
 {
-    private static void ValidateArtifactPath(string filePath, string artifactRoot, ILogger logger)
-    {
-        try
-        {
-            PathSecurity.EnsurePathWithinDirectory(filePath, artifactRoot);
-        }
-        catch (UnauthorizedAccessException)
-        {
-            logger.LogError("Path validation failed: {FilePath} is outside artifact root {ArtifactRoot}", filePath, artifactRoot);
-            throw;
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Path validation failed for {FilePath}", filePath);
-            throw new UnauthorizedAccessException("Invalid file path", ex);
-        }
-    }
-
     [McpServerTool(Name = "artifact_get_metadata", Title = "Get Artifact Metadata", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Get artifact metadata by ID")]
     public static async Task<ArtifactMetadataResult> GetArtifactMetadata(
         [Description("Artifact ID to get metadata for")] string artifactId,
@@ -40,7 +21,6 @@ public sealed class ArtifactTools
         [Description("Include file path in response (default: false)")] bool includeFilePath = false,
         CancellationToken cancellationToken = default)
     {
-        // Validate artifactId before getting services
         if (string.IsNullOrWhiteSpace(artifactId))
         {
             return new ArtifactMetadataResult(
@@ -59,7 +39,7 @@ public sealed class ArtifactTools
         }
 
         var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
-        var logger = server.Services!.GetRequiredService<ILogger<ArtifactTools>>();
+        var logger = server.Services!.GetRequiredService<ILogger<ArtifactCrudTools>>();
 
         try
         {
@@ -150,7 +130,6 @@ public sealed class ArtifactTools
         [Description("Include file path in response (default: false)")] bool includeFilePath = false,
         CancellationToken cancellationToken = default)
     {
-        // Validate pagination parameters before getting services
         if (offset < 0)
         {
             return new ArtifactListResult(
@@ -177,7 +156,6 @@ public sealed class ArtifactTools
             );
         }
 
-        // Validate dateFrom format before getting services
         if (!string.IsNullOrWhiteSpace(dateFrom))
         {
             if (!DateTime.TryParseExact(dateFrom, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var _))
@@ -194,7 +172,6 @@ public sealed class ArtifactTools
             }
         }
 
-        // Validate dateTo format before getting services
         if (!string.IsNullOrWhiteSpace(dateTo))
         {
             if (!DateTime.TryParseExact(dateTo, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var _))
@@ -211,7 +188,6 @@ public sealed class ArtifactTools
             }
         }
 
-        // Validate sessionId format before getting services
         if (!string.IsNullOrWhiteSpace(sessionId))
         {
             if (!System.Text.RegularExpressions.Regex.IsMatch(sessionId, @"^ses_[0-9a-f]{32}$"))
@@ -229,7 +205,7 @@ public sealed class ArtifactTools
         }
 
         var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
-        var logger = server.Services!.GetRequiredService<ILogger<ArtifactTools>>();
+        var logger = server.Services!.GetRequiredService<ILogger<ArtifactCrudTools>>();
 
         try
         {
@@ -237,31 +213,26 @@ public sealed class ArtifactTools
 
             var filtered = artifacts.AsEnumerable();
 
-            // Filter by Session ID
             if (!string.IsNullOrEmpty(sessionId))
             {
                 filtered = filtered.Where(a => a.SessionId.Value == sessionId);
             }
 
-            // Filter by PID
             if (pid.HasValue && pid.Value > 0)
             {
                 filtered = filtered.Where(a => a.Pid == pid.Value);
             }
 
-            // Filter by kind
             if (!string.IsNullOrEmpty(kind) && Enum.TryParse<ArtifactKind>(kind, true, out var kindFilter))
             {
                 filtered = filtered.Where(a => a.Kind == kindFilter);
             }
 
-            // Filter by status
             if (!string.IsNullOrEmpty(status) && Enum.TryParse<ArtifactStatus>(status, true, out var statusFilter))
             {
                 filtered = filtered.Where(a => a.Status == statusFilter);
             }
 
-            // Filter by date range
             if (!string.IsNullOrEmpty(dateFrom) && DateTime.TryParse(dateFrom, out var fromDate))
             {
                 filtered = filtered.Where(a => a.CreatedAtUtc >= fromDate);
@@ -269,7 +240,7 @@ public sealed class ArtifactTools
 
             if (!string.IsNullOrEmpty(dateTo) && DateTime.TryParse(dateTo, out var toDate))
             {
-                filtered = filtered.Where(a => a.CreatedAtUtc <= toDate.AddDays(1).AddTicks(-1)); // End of the day
+                filtered = filtered.Where(a => a.CreatedAtUtc <= toDate.AddDays(1).AddTicks(-1));
             }
 
             var totalCount = filtered.Count();
@@ -314,7 +285,6 @@ public sealed class ArtifactTools
         McpServer server,
         CancellationToken cancellationToken = default)
     {
-        // Validate artifactId before getting services
         if (string.IsNullOrWhiteSpace(artifactId))
         {
             return new DeleteArtifactResult(
@@ -325,8 +295,9 @@ public sealed class ArtifactTools
         }
 
         var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
-        var logger = server.Services!.GetRequiredService<ILogger<ArtifactTools>>();
+        var logger = server.Services!.GetRequiredService<ILogger<ArtifactCrudTools>>();
         var options = server.Services!.GetRequiredService<IOptions<ClrScopeOptions>>();
+        var pathValidator = server.Services!.GetRequiredService<IArtifactPathValidatorService>();
 
         try
         {
@@ -344,7 +315,7 @@ public sealed class ArtifactTools
             }
 
             var artifactRoot = options.Value.GetArtifactRoot();
-            ValidateArtifactPath(artifact.FilePath, artifactRoot, logger);
+            pathValidator.ValidateArtifactPath(artifact.FilePath, artifactRoot);
 
             if (File.Exists(artifact.FilePath))
             {
@@ -388,7 +359,6 @@ public sealed class ArtifactTools
         [Description("Output format: 'text' (for Counters/Stacks), 'hex' (hex dump), 'base64' (base64 encoded)")] string format = "text",
         CancellationToken cancellationToken = default)
     {
-        // Validate artifactId before getting services
         if (string.IsNullOrWhiteSpace(artifactId))
         {
             return new ReadArtifactTextResult(
@@ -399,7 +369,6 @@ public sealed class ArtifactTools
             );
         }
 
-        // Validate format before getting services
         if (format != "text" && format != "hex" && format != "base64")
         {
             return new ReadArtifactTextResult(
@@ -411,8 +380,9 @@ public sealed class ArtifactTools
         }
 
         var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
-        var logger = server.Services!.GetRequiredService<ILogger<ArtifactTools>>();
+        var logger = server.Services!.GetRequiredService<ILogger<ArtifactCrudTools>>();
         var options = server.Services!.GetRequiredService<IOptions<ClrScopeOptions>>();
+        var pathValidator = server.Services!.GetRequiredService<IArtifactPathValidatorService>();
 
         try
         {
@@ -429,7 +399,6 @@ public sealed class ArtifactTools
                 );
             }
 
-            // Validate format for text-only artifact kinds
             if (format == "text" && artifact.Kind != ArtifactKind.Counters && artifact.Kind != ArtifactKind.Stacks)
             {
                 return new ReadArtifactTextResult(
@@ -440,7 +409,6 @@ public sealed class ArtifactTools
                 );
             }
 
-            // Validate format parameter
             if (format != "text" && format != "hex" && format != "base64")
             {
                 return new ReadArtifactTextResult(
@@ -452,7 +420,7 @@ public sealed class ArtifactTools
             }
 
             var artifactRoot = options.Value.GetArtifactRoot();
-            ValidateArtifactPath(artifact.FilePath, artifactRoot, logger);
+            pathValidator.ValidateArtifactPath(artifact.FilePath, artifactRoot);
 
             if (!File.Exists(artifact.FilePath))
             {
@@ -466,12 +434,11 @@ public sealed class ArtifactTools
 
             var fileInfo = new FileInfo(artifact.FilePath);
 
-            // Adjust size limit based on format
             var maxSize = format switch
             {
-                "text" => 1024 * 1024, // 1MB for text
-                "hex" => 1024 * 1024, // 1MB for hex (will be ~2x output)
-                "base64" => 10 * 1024 * 1024, // 10MB for base64 (will be ~1.33x output)
+                "text" => 1024 * 1024,
+                "hex" => 1024 * 1024,
+                "base64" => 10 * 1024 * 1024,
                 _ => 1024 * 1024
             };
 
@@ -535,265 +502,4 @@ public sealed class ArtifactTools
             );
         }
     }
-
-    [McpServerTool(Name = "artifact_cleanup", Title = "Cleanup Old Artifacts", ReadOnly = false, Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true), Description("Delete artifacts based on strategy. Strategies: age (default, filter by age and pin status), duplicates (keep newest per PID+kind)")]
-    public static async Task<CleanupArtifactsResult> CleanupArtifacts(
-        [Description("Maximum age of artifacts to keep (e.g., 7d for 7 days)")] string maxAge,
-        McpServer server,
-        [Description("Maximum total size to delete in bytes (optional, e.g., 10737418240 for 10GB)")] long? maxSizeBytes = null,
-        [Description("Cleanup strategy: 'age' (default, filter by age and pin status), 'duplicates' (keep newest per PID+kind)")] string strategy = "age",
-        CancellationToken cancellationToken = default)
-    {
-        // Validate maxAge before getting services
-        if (string.IsNullOrWhiteSpace(maxAge))
-        {
-            return new CleanupArtifactsResult(
-                DeletedCount: 0,
-                Message: "Max age must not be empty"
-            );
-        }
-
-        // Validate strategy before getting services
-        if (!string.IsNullOrWhiteSpace(strategy))
-        {
-            var validStrategies = new[] { "age", "duplicates", "importance" };
-            if (!validStrategies.Contains(strategy, StringComparer.OrdinalIgnoreCase))
-            {
-                return new CleanupArtifactsResult(
-                    DeletedCount: 0,
-                    Message: $"Strategy must be one of: {string.Join(", ", validStrategies)}"
-                );
-            }
-        }
-
-        // Validate maxSizeBytes before getting services
-        if (maxSizeBytes.HasValue && maxSizeBytes.Value <= 0)
-        {
-            return new CleanupArtifactsResult(
-                DeletedCount: 0,
-                Message: "MaxSizeBytes must be greater than 0"
-            );
-        }
-
-        var retentionService = server.Services!.GetRequiredService<IArtifactRetentionService>();
-        var logger = server.Services!.GetRequiredService<ILogger<ArtifactTools>>();
-
-        try
-        {
-            var timeSpan = TimeSpanParser.ParseMaxAge(maxAge);
-            var deletedCount = await retentionService.CleanupOldArtifactsAsync(timeSpan, maxSizeBytes, strategy.ToLowerInvariant(), cancellationToken);
-
-            var strategyText = strategy.ToLowerInvariant();
-            var message = maxSizeBytes.HasValue
-                ? $"Deleted {deletedCount} artifacts using '{strategyText}' strategy older than {maxAge} (max size: {maxSizeBytes} bytes)"
-                : $"Deleted {deletedCount} artifacts using '{strategyText}' strategy older than {maxAge}";
-
-            logger.LogInformation("Cleanup completed: {DeletedCount} artifacts deleted older than {MaxAge}, max size: {MaxSize}",
-                deletedCount, maxAge, maxSizeBytes);
-
-            return new CleanupArtifactsResult(
-                DeletedCount: deletedCount,
-                Message: message
-            );
-        }
-        catch (ArgumentException ex)
-        {
-            logger.LogError(ex, "Invalid input for artifact cleanup: {Message}", ex.Message);
-            return new CleanupArtifactsResult(
-                DeletedCount: 0,
-                Message: $"Invalid input: {ex.Message}"
-            );
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Artifact cleanup failed");
-            return new CleanupArtifactsResult(
-                DeletedCount: 0,
-                Message: $"Cleanup failed: {ex.Message}"
-            );
-        }
-    }
-
-
-    [McpServerTool(Name = "artifact_pin", Title = "Pin Artifact", ReadOnly = false, Idempotent = false, UseStructuredContent = true), Description("Pin artifact to protect from automatic deletion")]
-    public static async Task<PinArtifactResult> PinArtifact(
-        [Description("Artifact ID to pin")] string artifactId,
-        McpServer server,
-        CancellationToken cancellationToken = default)
-    {
-        // Validate artifactId before getting services
-        if (string.IsNullOrWhiteSpace(artifactId))
-        {
-            return new PinArtifactResult(
-                Success: false,
-                ArtifactId: artifactId,
-                Message: "Artifact ID must not be empty"
-            );
-        }
-
-        var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
-        var logger = server.Services!.GetRequiredService<ILogger<ArtifactTools>>();
-
-        try
-        {
-            var id = new ArtifactId(artifactId);
-            var artifact = await artifactStore.GetAsync(id, cancellationToken);
-
-            if (artifact == null)
-            {
-                logger.LogWarning("Artifact {ArtifactId} not found for pinning", artifactId);
-                return new PinArtifactResult(
-                    Success: false,
-                    ArtifactId: artifactId,
-                    Message: "Artifact not found"
-                );
-            }
-
-            var updatedArtifact = artifact with { Pinned = true };
-            await artifactStore.UpdateAsync(updatedArtifact, cancellationToken);
-
-            logger.LogInformation("Pinned artifact {ArtifactId}", artifactId);
-
-            return new PinArtifactResult(
-                Success: true,
-                ArtifactId: artifactId,
-                Message: "Artifact pinned successfully"
-            );
-        }
-        catch (ArgumentException ex)
-        {
-            logger.LogError(ex, "Invalid input for artifact pinning: {Message}", ex.Message);
-            return new PinArtifactResult(
-                Success: false,
-                ArtifactId: artifactId,
-                Message: $"Invalid input: {ex.Message}"
-            );
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Pin artifact failed for {ArtifactId}", artifactId);
-            return new PinArtifactResult(
-                Success: false,
-                ArtifactId: artifactId,
-                Message: $"Pin artifact failed: {ex.Message}"
-            );
-        }
-    }
-
-    [McpServerTool(Name = "artifact_unpin", Title = "Unpin Artifact", ReadOnly = false, Idempotent = false, UseStructuredContent = true), Description("Unpin artifact to allow automatic deletion")]
-    public static async Task<PinArtifactResult> UnpinArtifact(
-        [Description("Artifact ID to unpin")] string artifactId,
-        McpServer server,
-        CancellationToken cancellationToken = default)
-    {
-        // Validate artifactId before getting services
-        if (string.IsNullOrWhiteSpace(artifactId))
-        {
-            return new PinArtifactResult(
-                Success: false,
-                ArtifactId: artifactId,
-                Message: "Artifact ID must not be empty"
-            );
-        }
-
-        var artifactStore = server.Services!.GetRequiredService<ISqliteArtifactStore>();
-        var logger = server.Services!.GetRequiredService<ILogger<ArtifactTools>>();
-
-        try
-        {
-            var id = new ArtifactId(artifactId);
-            var artifact = await artifactStore.GetAsync(id, cancellationToken);
-
-            if (artifact == null)
-            {
-                logger.LogWarning("Artifact {ArtifactId} not found for unpinning", artifactId);
-                return new PinArtifactResult(
-                    Success: false,
-                    ArtifactId: artifactId,
-                    Message: "Artifact not found"
-                );
-            }
-
-            var updatedArtifact = artifact with { Pinned = false };
-            await artifactStore.UpdateAsync(updatedArtifact, cancellationToken);
-
-            logger.LogInformation("Unpinned artifact {ArtifactId}", artifactId);
-
-            return new PinArtifactResult(
-                Success: true,
-                ArtifactId: artifactId,
-                Message: "Artifact unpinned successfully"
-            );
-        }
-        catch (ArgumentException ex)
-        {
-            logger.LogError(ex, "Invalid input for artifact unpinning: {Message}", ex.Message);
-            return new PinArtifactResult(
-                Success: false,
-                ArtifactId: artifactId,
-                Message: $"Invalid input: {ex.Message}"
-            );
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Unpin artifact failed for {ArtifactId}", artifactId);
-            return new PinArtifactResult(
-                Success: false,
-                ArtifactId: artifactId,
-                Message: $"Unpin artifact failed: {ex.Message}"
-            );
-        }
-    }
 }
-
-public record ArtifactMetadataResult(
-    bool Found,
-    string ArtifactId,
-    string? Kind,
-    string? Status,
-    long SizeBytes,
-    string? Sha256,
-    string? HashState,
-    int Pid,
-    DateTime? CreatedAtUtc,
-    string? FilePath,
-    string? Error
-);
-
-public record ArtifactListResult(
-    int Count,
-    int Total,
-    int Offset,
-    int Limit,
-    bool HasMore,
-    ArtifactSummary[] Artifacts,
-    string? Error = null
-);
-
-public record ArtifactSummary(
-    string ArtifactId,
-    string Kind,
-    string Status,
-    long SizeBytes,
-    DateTime CreatedAtUtc,
-    string? FilePath = null
-);
-
-public record DeleteArtifactResult(
-    bool Success,
-    string ArtifactId,
-    string Message
-);
-
-public record ReadArtifactTextResult(
-    bool Success,
-    string ArtifactId,
-    string? Content,
-    string? Error
-);
-
-public record PinArtifactResult(
-    bool Success,
-    string ArtifactId,
-    string Message
-);
