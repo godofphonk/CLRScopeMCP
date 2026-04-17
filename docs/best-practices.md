@@ -108,12 +108,12 @@ This prevents wasting time on non-.NET processes or processes that have already 
 - May not capture all objects during collection
 - Not suitable for real-time monitoring
 
-**Best Practices (v1.2.0):**
+**Best Practices:**
 - Use `analyze_heap` for type statistics with retained size (dominator tree analysis)
 - Use `find_retainer_paths` to trace why specific objects are kept alive
 - Process-based parsing via ClrScope.HeapParser with 5-minute timeout for reliability
 - Compare baseline vs issue gcdumps using diff analysis to identify growing objects
-- Use .gcdump files for heap analysis (reliable) vs .nettrace (unreliable for heap data)
+- Heap analysis requires `.gcdump`. The `.nettrace` heap path was removed in 1.3.0; use `dotnet-gcdump` (or `collect_gcdump`) instead of `dotnet-trace` for heap snapshots
 
 ### Thread Stacks (collect_stacks)
 
@@ -165,11 +165,10 @@ This prevents wasting time on non-.NET processes or processes that have already 
 - **Offline Analysis**: Analyze artifacts without requiring live process
 - **Cross-Session**: Compare artifacts collected at different times
 
-**Best Practices (v1.2.0):**
-- Use `import_gcdump` for heap analysis (reliable)
+**Best Practices:**
+- Use `import_gcdump` for heap analysis (the only supported heap input)
 - Use `import_trace` for CPU profiling, performance counters, trace analysis
-- Note: .nettrace heap snapshots are unreliable even with correct keywords
-- For heap analysis, prefer .gcdump over .nettrace
+- Note: `.nettrace` heap snapshots are not supported as of 1.3.0 (EventPipe heap-analysis path removed); use `.gcdump` for heap data
 
 ## Artifact-Specific Best Practices
 

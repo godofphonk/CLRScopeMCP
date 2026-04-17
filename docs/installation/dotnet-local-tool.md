@@ -34,7 +34,7 @@ dotnet tool run clrscope-mcp --version
 
 Output:
 ```
-CLRScope MCP v1.2.0
+CLRScope MCP v1.3.0
 ```
 
 Alternative invocation:

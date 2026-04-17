@@ -47,7 +47,7 @@ dotnet tool install -g dotnet-dump
 
 **Purpose:** Collect GC heap snapshots
 
-**Used in:** `collect_gcdump`, `analyze_heap` (v1.2.0), `find_retainer_paths` (v1.2.0), `import_gcdump` (v1.2.0)
+**Used in:** `collect_gcdump`, `analyze_heap`, `find_retainer_paths`, `import_gcdump`
 
 **Install:**
 ```bash
@@ -56,7 +56,7 @@ dotnet tool install -g dotnet-gcdump
 
 **Without this tool:** GC heap snapshots not collected (use full memory dump instead), heap analysis not available
 
-**Note (v1.2.0):** For heap analysis, use .gcdump files (reliable) instead of .nettrace (unreliable for heap data). Heap analysis includes dominator tree calculation (Cooper-Harvey-Kennedy algorithm) for retained size and retainer path tracing.
+**Note:** Heap analysis is supported only for `.gcdump` artifacts. The EventPipe/`.nettrace` heap-analysis path was removed in 1.3.0 due to persistent issues in the vendored `EventPipeDotNetHeapDumper`. `.nettrace` files remain useful for CPU sampling and trace analysis. Heap analysis includes dominator tree calculation (Cooper-Harvey-Kennedy algorithm) for retained size and retainer path tracing.
 
 ---
 

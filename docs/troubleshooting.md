@@ -146,20 +146,20 @@ This document provides solutions to common issues when using CLRScope MCP.
 **Problem:** `analyze_heap` fails with error.
 
 **Solutions:**
-- Verify artifact is a valid .gcdump file (not .nettrace)
-- .nettrace heap snapshots are unreliable — use .gcdump instead
+- Verify artifact is a valid `.gcdump` file (`.nettrace` is not accepted for heap analysis as of 1.3.0)
+- Re-collect with `collect_gcdump` / `dotnet-gcdump` if the artifact is a `.nettrace`
 - Check process-based parsing timeout (5 minutes for reliability)
-- Verify ClrScope.HeapParser.dll is in correct location
+- Verify `ClrScope.HeapParser.dll` is in the correct location
 
 ### Heap Analysis Shows Partial Data
 
 **Problem:** `analyze_heap` returns incomplete or empty type statistics.
 
 **Solutions:**
-- Use `.gcdump` files for reliable heap analysis (recommended)
-- `.nettrace` heap snapshots are unreliable even with correct keywords
+- Use `.gcdump` files for heap analysis (the only supported heap input)
+- The EventPipe/`.nettrace` heap-analysis path was removed in 1.3.0 due to unreliable data extraction from the vendored heap dumper
 - Use `dotnet-gcdump collect` instead of `dotnet-trace collect` for heap snapshots
-- `.nettrace` files are suitable for CPU profiling and trace analysis, not heap analysis
+- `.nettrace` files remain suitable for CPU profiling and trace analysis only
 
 ## Session Issues
 

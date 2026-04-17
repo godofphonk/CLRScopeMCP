@@ -103,8 +103,9 @@ This document provides comprehensive requirements for using all CLRScope MCP fea
 
 ### GC Heap Analysis
 - **Required**: dotnet-gcdump
-- **v1.2.0 Heap Analysis**: Dominator tree (Cooper-Harvey-Kennedy algorithm) for retained size, retainer path tracing, type statistics, and diff comparison
-- Process-based parsing via ClrScope.HeapParser with 5-minute timeout for reliability
+- **Heap Analysis**: Dominator tree (Cooper-Harvey-Kennedy algorithm) for retained size, retainer path tracing, type statistics, and diff comparison
+- Process-based parsing via `ClrScope.HeapParser` with 5-minute timeout for reliability
+- Input format: `.gcdump` only (the EventPipe/`.nettrace` heap-analysis path was removed in 1.3.0)
 
 ### Pattern Detection (Memory Leaks, Deadlocks, High CPU)
 - **Required**: dotnet-dump or dotnet-gcdump

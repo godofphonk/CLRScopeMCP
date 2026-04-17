@@ -266,7 +266,7 @@ For granular control or when automated workflows are not suitable.
 
 **Quick alternative:** `workflow_automated_memory_leak_bundle`
 
-**Tip:** Use `.gcdump` files for heap analysis (reliable). `.nettrace` files are unreliable for heap data.
+**Tip:** Heap analysis accepts only `.gcdump` files. Since 1.3.0 the `.nettrace` heap-analysis path is removed; use `collect_gcdump` (or `dotnet-gcdump`) for heap snapshots.
 ---
 
 ### Hang/Deadlock Investigation

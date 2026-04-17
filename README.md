@@ -10,14 +10,18 @@
 
 CLRScope MCP provides AI-powered diagnostic capabilities for .NET applications through the Model Context Protocol. It enables LLM agents to perform deep analysis of .NET processes including performance profiling, memory leak detection, thread analysis, and automated pattern detection.
 
-**v1.2.0 Highlights:**
+**Highlights:**
 - Heap analysis with dominator tree (Cooper-Harvey-Kennedy algorithm) for accurate retained size calculation
 - Retainer path analysis: trace object retention chains from GC roots to any target node
 - Type statistics (top N types) and diff comparison between gcdumps
-- Preflight validation for .nettrace heap snapshots to detect partial/incomplete data
 - Process-based heap parsing via ClrScope.HeapParser with 5-minute timeout
-- Import existing .gcdump and .nettrace files for analysis
+- Import existing .gcdump and .nettrace files for analysis (heap analysis supports .gcdump only)
 - Automated workflow bundles for common diagnostic scenarios
+
+**1.3.0 changes:**
+- Removed unreliable EventPipe/.nettrace heap-analysis path (adapters, facades, preflight). `.nettrace` is now used exclusively for CPU/trace analysis; heap analysis requires `.gcdump`.
+- Fixed ReverseBFS bugs in `DominatorTreeCalculator` (correct retained-size computation for deep graphs).
+- Added heap-analysis benchmarks and `MemoryPressureApp` under `test-data/` for realistic load scenarios.
 
 ## Quick Start for AI Agents
 
@@ -71,7 +75,7 @@ dotnet tool install --global ClrScope.Mcp
 For MCP clients that support the official .NET MCP discovery mechanism (VS Code, Visual Studio, etc.), CLRScope MCP can be installed and run using the `dnx` command from .NET 10 SDK:
 
 ```bash
-dnx ClrScope.Mcp@1.2.0 --yes
+dnx ClrScope.Mcp@1.3.0 --yes
 ```
 
 This command will:
@@ -89,7 +93,7 @@ For VS Code or Visual Studio, configure your MCP settings (e.g., VS Code `settin
     "clrscope": {
       "type": "stdio",
       "command": "dnx",
-      "args": ["ClrScope.Mcp@1.2.0", "--yes"]
+      "args": ["ClrScope.Mcp@1.3.0", "--yes"]
     }
   }
 }
