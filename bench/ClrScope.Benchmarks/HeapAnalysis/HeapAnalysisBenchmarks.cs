@@ -14,7 +14,7 @@ namespace ClrScope.Benchmarks.HeapAnalysis;
 /// Run with: dotnet run -c Release --project bench/ClrScope.Benchmarks/ClrScope.Benchmarks.csproj
 /// </summary>
 [MemoryDiagnoser]
-[SimpleJob(RuntimeMoniker.Net80)]
+[SimpleJob(RuntimeMoniker.Net100)]
 [Orderer(SummaryOrderPolicy.FastestToSlowest)]
 [Config(typeof(Config))]
 public class HeapAnalysisBenchmarks
