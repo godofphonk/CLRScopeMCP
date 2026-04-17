@@ -1,4 +1,5 @@
 using ClrScope.Mcp.Infrastructure;
+using ClrScope.Mcp.Services.Collect;
 using ClrScope.Mcp.Services.Health;
 using ClrScope.Mcp.Services.Runtime;
 using Microsoft.Extensions.DependencyInjection;
@@ -130,6 +131,25 @@ public static class CommandLineParser
             Console.WriteLine($"  CommandLine: {inspectResult.Details.CommandLine ?? "null"}");
             Console.WriteLine($"  OS: {inspectResult.Details.OperatingSystem}");
             Console.WriteLine($"  Architecture: {inspectResult.Details.ProcessArchitecture}");
+        }
+        Console.WriteLine();
+
+        // Collect dump
+        Console.WriteLine($"✓ Collecting dump from PID {firstTarget.Pid}...");
+        var dumpService = host.Services.GetRequiredService<CollectDumpService>();
+        var dumpRequest = new CollectDumpRequest(firstTarget.Pid, IncludeHeap: true);
+        var dumpResult = await dumpService.CollectDumpAsync(dumpRequest);
+        if (dumpResult.Artifact != null)
+        {
+            Console.WriteLine("  Session ID: {0}", dumpResult.Session.SessionId.Value);
+            Console.WriteLine("  Artifact ID: {0}", dumpResult.Artifact.ArtifactId.Value);
+            Console.WriteLine("  File Path: {0}", dumpResult.Artifact.FilePath);
+            Console.WriteLine("  Size: {0} bytes", dumpResult.Artifact.SizeBytes);
+            Console.WriteLine("  SHA256: {0} ({1})", dumpResult.Artifact.Sha256 ?? "N/A", dumpResult.Artifact.HashState);
+        }
+        else
+        {
+            Console.WriteLine("  Dump collection failed: {0}", dumpResult.Error);
         }
         Console.WriteLine();
 

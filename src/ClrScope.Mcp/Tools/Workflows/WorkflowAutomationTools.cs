@@ -8,6 +8,18 @@ namespace ClrScope.Mcp.Tools.Workflows;
 [McpServerToolType]
 public sealed class WorkflowAutomationTools
 {
+    private static async Task<Services.Workflows.WorkflowAutomationResult> ExecuteWorkflowAsync<TWorkflow>(
+        int pid,
+        McpServer server,
+        string duration,
+        CancellationToken cancellationToken)
+        where TWorkflow : IWorkflow
+    {
+        var orchestrator = server.Services!.GetRequiredService<WorkflowOrchestrator>();
+        var workflow = server.Services!.GetRequiredService<TWorkflow>();
+        return await orchestrator.ExecuteWorkflowAsync(workflow, pid, duration, cancellationToken);
+    }
+
     [McpServerTool(Name = "workflow_automated_high_cpu_bundle"), Description("Automated collection of high CPU diagnostic bundle - executes collect_trace, collect_counters, and collect_stacks in sequence")]
     public static async Task<Services.Workflows.WorkflowAutomationResult> AutomatedHighCpuBundle(
         [Description("Process ID to collect high CPU diagnostic bundle from")] int pid,
@@ -15,9 +27,7 @@ public sealed class WorkflowAutomationTools
         [Description("Duration for trace and counters collection (hh:mm:ss format, default: 00:01:00)")] string duration = "00:01:00",
         CancellationToken cancellationToken = default)
     {
-        var orchestrator = server.Services!.GetRequiredService<WorkflowOrchestrator>();
-        var workflow = server.Services!.GetRequiredService<HighCpuWorkflow>();
-        return await orchestrator.ExecuteWorkflowAsync(workflow, pid, duration, cancellationToken);
+        return await ExecuteWorkflowAsync<HighCpuWorkflow>(pid, server, duration, cancellationToken);
     }
 
     [McpServerTool(Name = "workflow_automated_memory_leak_bundle"), Description("Automated collection of memory leak diagnostic bundle - executes collect_gcdump, collect_counters, and collect_trace in sequence")]
@@ -27,9 +37,7 @@ public sealed class WorkflowAutomationTools
         [Description("Duration for trace and counters collection (hh:mm:ss format, default: 00:01:00)")] string duration = "00:01:00",
         CancellationToken cancellationToken = default)
     {
-        var orchestrator = server.Services!.GetRequiredService<WorkflowOrchestrator>();
-        var workflow = server.Services!.GetRequiredService<MemoryLeakWorkflow>();
-        return await orchestrator.ExecuteWorkflowAsync(workflow, pid, duration, cancellationToken);
+        return await ExecuteWorkflowAsync<MemoryLeakWorkflow>(pid, server, duration, cancellationToken);
     }
 
     [McpServerTool(Name = "workflow_automated_hang_bundle"), Description("Automated collection of hang/deadlock diagnostic bundle - executes collect_dump, collect_stacks, and collect_counters in sequence")]
@@ -39,9 +47,7 @@ public sealed class WorkflowAutomationTools
         [Description("Duration for counters collection (hh:mm:ss format, default: 00:00:30)")] string duration = "00:00:30",
         CancellationToken cancellationToken = default)
     {
-        var orchestrator = server.Services!.GetRequiredService<WorkflowOrchestrator>();
-        var workflow = server.Services!.GetRequiredService<HangWorkflow>();
-        return await orchestrator.ExecuteWorkflowAsync(workflow, pid, duration, cancellationToken);
+        return await ExecuteWorkflowAsync<HangWorkflow>(pid, server, duration, cancellationToken);
     }
 
     [McpServerTool(Name = "workflow_automated_baseline_bundle"), Description("Automated collection of baseline performance bundle - executes collect_counters, collect_trace, collect_gcdump, and collect_stacks in sequence")]
@@ -51,8 +57,6 @@ public sealed class WorkflowAutomationTools
         [Description("Duration for trace and counters collection (hh:mm:ss format, default: 00:01:00)")] string duration = "00:01:00",
         CancellationToken cancellationToken = default)
     {
-        var orchestrator = server.Services!.GetRequiredService<WorkflowOrchestrator>();
-        var workflow = server.Services!.GetRequiredService<BaselineWorkflow>();
-        return await orchestrator.ExecuteWorkflowAsync(workflow, pid, duration, cancellationToken);
+        return await ExecuteWorkflowAsync<BaselineWorkflow>(pid, server, duration, cancellationToken);
     }
 }
