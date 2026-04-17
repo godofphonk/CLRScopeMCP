@@ -14,7 +14,7 @@ public class ArtifactToolsTests
         var artifactId = "";
 
         // Act
-        var result = await ArtifactCrudTools.GetArtifactMetadata(artifactId, null!);
+        var result = await ArtifactQueryTools.GetArtifactMetadata(artifactId, null!);
 
         // Assert
         Assert.False(result.Found);
@@ -28,7 +28,7 @@ public class ArtifactToolsTests
         var artifactId = "   ";
 
         // Act
-        var result = await ArtifactCrudTools.GetArtifactMetadata(artifactId, null!);
+        var result = await ArtifactQueryTools.GetArtifactMetadata(artifactId, null!);
 
         // Assert
         Assert.False(result.Found);
@@ -42,7 +42,7 @@ public class ArtifactToolsTests
         string artifactId = null!;
 
         // Act
-        var result = await ArtifactCrudTools.GetArtifactMetadata(artifactId, null!);
+        var result = await ArtifactQueryTools.GetArtifactMetadata(artifactId, null!);
 
         // Assert
         Assert.False(result.Found);
@@ -61,7 +61,7 @@ public class ArtifactToolsTests
         var limit = 50;
 
         // Act
-        var result = await ArtifactCrudTools.ListArtifacts(null!, offset: offset, limit: limit);
+        var result = await ArtifactQueryTools.ListArtifacts(null!, offset: offset, limit: limit);
 
         // Assert
         Assert.Equal(0, result.Count);
@@ -76,7 +76,7 @@ public class ArtifactToolsTests
         var limit = 0;
 
         // Act
-        var result = await ArtifactCrudTools.ListArtifacts(null!, offset: offset, limit: limit);
+        var result = await ArtifactQueryTools.ListArtifacts(null!, offset: offset, limit: limit);
 
         // Assert
         Assert.Equal(0, result.Count);
@@ -91,7 +91,7 @@ public class ArtifactToolsTests
         var limit = -1;
 
         // Act
-        var result = await ArtifactCrudTools.ListArtifacts(null!, offset: offset, limit: limit);
+        var result = await ArtifactQueryTools.ListArtifacts(null!, offset: offset, limit: limit);
 
         // Assert
         Assert.Equal(0, result.Count);
@@ -106,7 +106,7 @@ public class ArtifactToolsTests
         var limit = 501;
 
         // Act
-        var result = await ArtifactCrudTools.ListArtifacts(null!, offset: offset, limit: limit);
+        var result = await ArtifactQueryTools.ListArtifacts(null!, offset: offset, limit: limit);
 
         // Assert
         Assert.Equal(0, result.Count);
@@ -120,7 +120,7 @@ public class ArtifactToolsTests
         var dateFrom = "invalid";
 
         // Act
-        var result = await ArtifactCrudTools.ListArtifacts(null!, dateFrom: dateFrom);
+        var result = await ArtifactQueryTools.ListArtifacts(null!, dateFrom: dateFrom);
 
         // Assert
         Assert.Equal(0, result.Count);
@@ -134,7 +134,7 @@ public class ArtifactToolsTests
         var dateTo = "invalid";
 
         // Act
-        var result = await ArtifactCrudTools.ListArtifacts(null!, dateTo: dateTo);
+        var result = await ArtifactQueryTools.ListArtifacts(null!, dateTo: dateTo);
 
         // Assert
         Assert.Equal(0, result.Count);
@@ -148,7 +148,7 @@ public class ArtifactToolsTests
     public async Task ListArtifacts_ReturnsError_WhenOffsetIsNegative_MultipleValues(int offset)
     {
         // Act
-        var result = await ArtifactCrudTools.ListArtifacts(null!, offset: offset, limit: 50);
+        var result = await ArtifactQueryTools.ListArtifacts(null!, offset: offset, limit: 50);
 
         // Assert
         Assert.Equal(0, result.Count);
@@ -163,7 +163,7 @@ public class ArtifactToolsTests
     public async Task ListArtifacts_ReturnsError_WhenLimitIsInvalid_MultipleValues(int limit)
     {
         // Act
-        var result = await ArtifactCrudTools.ListArtifacts(null!, offset: 0, limit: limit);
+        var result = await ArtifactQueryTools.ListArtifacts(null!, offset: 0, limit: limit);
 
         // Assert
         Assert.Equal(0, result.Count);
@@ -181,7 +181,7 @@ public class ArtifactToolsTests
         var artifactId = "";
 
         // Act
-        var result = await ArtifactCrudTools.ReadArtifactText(artifactId, null!);
+        var result = await ArtifactReadTools.ReadArtifactText(artifactId, null!);
 
         // Assert
         Assert.False(result.Success);
@@ -195,7 +195,7 @@ public class ArtifactToolsTests
         var artifactId = "   ";
 
         // Act
-        var result = await ArtifactCrudTools.ReadArtifactText(artifactId, null!);
+        var result = await ArtifactReadTools.ReadArtifactText(artifactId, null!);
 
         // Assert
         Assert.False(result.Success);
@@ -210,7 +210,7 @@ public class ArtifactToolsTests
         var format = "invalid";
 
         // Act
-        var result = await ArtifactCrudTools.ReadArtifactText(artifactId, null!, format: format);
+        var result = await ArtifactReadTools.ReadArtifactText(artifactId, null!, format: format);
 
         // Assert
         Assert.False(result.Success);
@@ -228,7 +228,7 @@ public class ArtifactToolsTests
         var artifactId = "";
 
         // Act
-        var result = await ArtifactCrudTools.DeleteArtifact(artifactId, null!);
+        var result = await ArtifactDeleteTools.DeleteArtifact(artifactId, null!);
 
         // Assert
         Assert.False(result.Success);
@@ -242,7 +242,7 @@ public class ArtifactToolsTests
         var artifactId = "   ";
 
         // Act
-        var result = await ArtifactCrudTools.DeleteArtifact(artifactId, null!);
+        var result = await ArtifactDeleteTools.DeleteArtifact(artifactId, null!);
 
         // Assert
         Assert.False(result.Success);
