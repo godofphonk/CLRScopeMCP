@@ -1,12 +1,15 @@
 using ClrScope.Mcp.Contracts;
 using ClrScope.Mcp.Domain.Heap.Adapters;
+using ClrScope.Mcp.Domain.Heap;
 using ClrScope.Mcp.Infrastructure;
 using ClrScope.Mcp.Options;
 using ClrScope.Mcp.Services.Analysis.PatternDetectors;
+using ClrScope.Mcp.Services.Artifacts;
 using ClrScope.Mcp.Services.Collect;
 using ClrScope.Mcp.Services.Health;
 using ClrScope.Mcp.Services.Heap;
 using ClrScope.Mcp.Services.Runtime;
+using ClrScope.Mcp.Services.Workflows;
 using ClrScope.Mcp.Tools.Analysis;
 using ClrScope.Mcp.Tools.Artifacts;
 using ClrScope.Mcp.Tools.Collect;
@@ -84,6 +87,9 @@ public static class ClrScopeServiceCollectionExtensions
         // Artifact content analyzer
         services.AddSingleton<ArtifactContentAnalyzer>();
 
+        // Artifact path validator
+        services.AddSingleton<IArtifactPathValidatorService, ArtifactPathValidatorService>();
+
         return services;
     }
 
@@ -112,6 +118,20 @@ public static class ClrScopeServiceCollectionExtensions
     }
 
     /// <summary>
+    /// Adds CLRScope workflow services
+    /// </summary>
+    public static IServiceCollection AddClrScopeWorkflows(this IServiceCollection services)
+    {
+        services.AddSingleton<WorkflowOrchestrator>();
+        services.AddSingleton<HighCpuWorkflow>();
+        services.AddSingleton<MemoryLeakWorkflow>();
+        services.AddSingleton<HangWorkflow>();
+        services.AddSingleton<BaselineWorkflow>();
+
+        return services;
+    }
+
+    /// <summary>
     /// Adds CLRScope MCP tools to the server
     /// </summary>
     public static IServiceCollection AddClrScopeMcpTools(this IServiceCollection services)
@@ -123,7 +143,8 @@ public static class ClrScopeServiceCollectionExtensions
             .WithTools<CollectCountersTools>()
             .WithTools<SystemTools>()
             .WithTools<SessionTools>()
-            .WithTools<ArtifactTools>()
+            .WithTools<ArtifactCrudTools>()
+            .WithTools<ArtifactLifecycleTools>()
             .WithTools<AnalysisTools>()
             .WithTools<ResourceTools>()
             .WithTools<SummaryTools>()
