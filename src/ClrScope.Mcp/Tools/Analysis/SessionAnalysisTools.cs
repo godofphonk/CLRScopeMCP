@@ -67,7 +67,7 @@ public sealed class SessionAnalysisTools
                 CompletedAt: session.CompletedAtUtc,
                 Phase: session.Phase.ToString(),
                 ArtifactCount: artifacts.Count,
-                Artifacts: artifacts.Select(a => new ArtifactInfo(
+                Artifacts: artifacts.Select(a => new SessionArtifactInfo(
                     a.ArtifactId.Value,
                     a.Kind.ToString(),
                     a.Status.ToString(),
@@ -246,7 +246,7 @@ public record SessionSummary(
     DateTime? CompletedAt,
     string Phase,
     int ArtifactCount,
-    List<ArtifactInfo> Artifacts,
+    List<SessionArtifactInfo> Artifacts,
     Dictionary<string, string> KeyMetrics,
     List<string> Issues,
     List<string> Recommendations,
@@ -254,7 +254,7 @@ public record SessionSummary(
     Dictionary<string, string>? Comparisons = null
 );
 
-public record ArtifactInfo(
+public record SessionArtifactInfo(
     string ArtifactId,
     string Kind,
     string Status,
