@@ -30,8 +30,7 @@ public class McpToolsRegistrationTests
 
         // Act & Assert
         // Verify no duplicate registrations
-        Assert.Equal(registeredToolTypes.Length, registeredToolTypes.Distinct().Count(),
-            "RegisteredToolTypes contains duplicate entries");
+        Assert.Equal(registeredToolTypes.Length, registeredToolTypes.Distinct().Count());
 
         // Act & Assert
         // Verify that all types in RegisteredToolTypes have [McpServerToolType] attribute
