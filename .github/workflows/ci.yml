@@ -32,10 +32,10 @@ jobs:
           dotnet-version: '10.0.100'
 
       - name: Restore
-        run: dotnet restore src/ClrScope.Mcp/ClrScope.Mcp.csproj --locked-mode
+        run: dotnet restore ClrScopeMCP.slnx --locked-mode
 
       - name: Build
-        run: dotnet build --no-restore -c Release src/ClrScope.Mcp/ClrScope.Mcp.csproj
+        run: dotnet build --no-restore -c Release ClrScopeMCP.slnx
 
       - name: Test with coverage (exclude Live tests)
         run: dotnet test --no-build -c Release tests/ClrScope.Mcp.Tests/ClrScope.Mcp.Tests.csproj --filter "Category!=Live" --collect:"XPlat Code Coverage" --results-directory ./coverage
@@ -50,7 +50,7 @@ jobs:
           fail_ci_if_error: false
 
       - name: Pack NuGet package
-        run: dotnet pack src/ClrScope.Mcp/ClrScope.Mcp.csproj -c Release
+        run: dotnet pack src/ClrScope.Mcp/ClrScope.Mcp.csproj -c Release --no-build
 
       - name: Verify NuGet package created
         run: |
@@ -98,14 +98,14 @@ jobs:
       - name: Build binary for validation
         run: |
           if [ "${{ runner.os }}" = "Linux" ]; then
-            dotnet publish src/ClrScope.Mcp/ClrScope.Mcp.csproj -c Release -r linux-x64 --self-contained false -p:DebugSymbols=false -p:DebugType=None -o ./test-artifacts/linux-x64
+            dotnet publish src/ClrScope.Mcp/ClrScope.Mcp.csproj -c Release -r linux-x64 --self-contained false -p:DebugSymbols=false -p:DebugType=None -o ./test-artifacts/linux-x64 --no-build
             chmod +x test-artifacts/linux-x64/ClrScope.Mcp
             ./test-artifacts/linux-x64/ClrScope.Mcp --version
           elif [ "${{ runner.os }}" = "Windows" ]; then
-            dotnet publish src/ClrScope.Mcp/ClrScope.Mcp.csproj -c Release -r win-x64 --self-contained false -p:DebugSymbols=false -p:DebugType=None -o ./test-artifacts/win-x64
+            dotnet publish src/ClrScope.Mcp/ClrScope.Mcp.csproj -c Release -r win-x64 --self-contained false -p:DebugSymbols=false -p:DebugType=None -o ./test-artifacts/win-x64 --no-build
             ./test-artifacts/win-x64/ClrScope.Mcp.exe --version
           elif [ "${{ runner.os }}" = "macOS" ]; then
-            dotnet publish src/ClrScope.Mcp/ClrScope.Mcp.csproj -c Release -r osx-arm64 --self-contained false -p:DebugSymbols=false -p:DebugType=None -o ./test-artifacts/osx-arm64
+            dotnet publish src/ClrScope.Mcp/ClrScope.Mcp.csproj -c Release -r osx-arm64 --self-contained false -p:DebugSymbols=false -p:DebugType=None -o ./test-artifacts/osx-arm64 --no-build
             chmod +x test-artifacts/osx-arm64/ClrScope.Mcp
             ./test-artifacts/osx-arm64/ClrScope.Mcp --version
           fi
@@ -124,10 +124,10 @@ jobs:
           dotnet-version: '10.0.100'
 
       - name: Restore
-        run: dotnet restore src/ClrScope.Mcp/ClrScope.Mcp.csproj --locked-mode
+        run: dotnet restore ClrScopeMCP.slnx --locked-mode
 
       - name: Build
-        run: dotnet build --no-restore -c Release src/ClrScope.Mcp/ClrScope.Mcp.csproj
+        run: dotnet build --no-restore -c Release ClrScopeMCP.slnx
 
       - name: Run Live Integration Tests
         run: dotnet test --no-build -c Release tests/ClrScope.Mcp.Tests/ClrScope.Mcp.Tests.csproj --filter "Category=Live" --logger "console;verbosity=detailed"
