@@ -109,4 +109,62 @@ public class WorkflowAutomationToolsTests
         Assert.Empty(result.SessionIds);
         Assert.NotNull(result.Error);
     }
+
+    [Fact]
+    public void WorkflowAutomationResult_ErrorCompensation_ContainsStepFailureInformation()
+    {
+        // Arrange
+        var artifacts = new[]
+        {
+            new ArtifactInfo("artifact-1", "GcDump", "/path/to/gcdump.gcdump", 1024),
+            new ArtifactInfo("artifact-2", "Counters", "/path/to/counters.txt", 512)
+        };
+
+        // Act
+        var result = new WorkflowAutomationResult(
+            Success: true,
+            WorkflowName: "Memory Leak Bundle",
+            StepsCompleted: 2,
+            TotalSteps: 3,
+            Artifacts: artifacts,
+            SessionIds: new[] { "session-1", "session-2" },
+            Error: "Step 3 (collect_trace) failed: Operation canceled",
+            ExecutionTimeMs: 4500
+        );
+
+        // Assert
+        Assert.True(result.Success); // Partial success is still considered success
+        Assert.Equal(2, result.StepsCompleted);
+        Assert.NotNull(result.Error);
+        Assert.Contains("Step 3", result.Error);
+        Assert.Contains("collect_trace", result.Error);
+        Assert.Contains("failed", result.Error);
+        
+        // Verify that completed steps are reflected in artifacts
+        Assert.Equal(2, result.Artifacts.Length);
+        Assert.Equal("GcDump", result.Artifacts[0].Kind);
+        Assert.Equal("Counters", result.Artifacts[1].Kind);
+    }
+
+    [Fact]
+    public void WorkflowAutomationResult_SessionStateRollback_ErrorContainsRelevantContext()
+    {
+        // Act
+        var result = new WorkflowAutomationResult(
+            Success: false,
+            WorkflowName: "Hang Bundle",
+            StepsCompleted: 1,
+            TotalSteps: 3,
+            Artifacts: Array.Empty<ArtifactInfo>(),
+            SessionIds: new[] { "session-1" },
+            Error: "Step 2 (collect_stacks) failed: Operation canceled. Session rolled back to Failed state.",
+            ExecutionTimeMs: 2000
+        );
+
+        // Assert
+        Assert.False(result.Success);
+        Assert.Contains("rolled back", result.Error);
+        Assert.Contains("Failed state", result.Error);
+        Assert.Single(result.SessionIds); // Session was created before failure
+    }
 }
