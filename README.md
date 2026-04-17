@@ -173,10 +173,6 @@ See [Full Requirements](docs/requirements.md) for installation instructions and 
 | `workflow_automated_memory_leak_bundle` | gcdump + counters + trace (gc-heap) |
 | `workflow_automated_hang_bundle` | dump + stacks + counters |
 | `workflow_automated_baseline_bundle` | counters + trace + gcdump + stacks |
-| `workflow_capture_high_cpu_bundle` | Step-by-step instructions for high CPU diagnostics |
-| `workflow_capture_memory_leak_bundle` | Step-by-step instructions for memory leak diagnostics |
-| `workflow_capture_hang_bundle` | Step-by-step instructions for hang/deadlock diagnostics |
-| `workflow_capture_baseline_bundle` | Step-by-step instructions for baseline collection |
 
 ### Management
 | Tool | Description |
