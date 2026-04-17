@@ -111,6 +111,27 @@ jobs:
           fi
         shell: bash
 
+  bench-build:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a66eefa2bf2572fc311ea6ff65a7b6ecc4df96a6
+        with:
+          dotnet-version: '10.0.106'
+
+      - name: Restore
+        run: dotnet restore ClrScopeMCP.slnx --locked-mode
+
+      - name: Build main project
+        run: dotnet build --no-restore -c Release ClrScopeMCP.slnx
+
+      - name: Build benchmarks
+        run: dotnet build --no-restore -c Release bench/ClrScope.Benchmarks/ClrScope.Benchmarks.csproj
+
   live-tests:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/heads/release-'))
