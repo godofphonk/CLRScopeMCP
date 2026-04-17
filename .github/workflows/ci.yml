@@ -37,8 +37,8 @@ jobs:
       - name: Build
         run: dotnet build --no-restore -c Release src/ClrScope.Mcp/ClrScope.Mcp.csproj
 
-      - name: Test with coverage
-        run: dotnet test --no-build -c Release tests/ClrScope.Mcp.Tests/ClrScope.Mcp.Tests.csproj --collect:"XPlat Code Coverage" --results-directory ./coverage
+      - name: Test with coverage (exclude Live tests)
+        run: dotnet test --no-build -c Release tests/ClrScope.Mcp.Tests/ClrScope.Mcp.Tests.csproj --filter "Category!=Live" --collect:"XPlat Code Coverage" --results-directory ./coverage
 
       - name: Upload coverage to Codecov
         if: matrix.os == 'ubuntu-latest'
@@ -110,3 +110,24 @@ jobs:
             ./test-artifacts/osx-arm64/ClrScope.Mcp --version
           fi
         shell: bash
+
+  live-tests:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/heads/release-'))
+    steps:
+      - name: Checkout
+        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a66eefa2bf2572fc311ea6ff65a7b6ecc4df96a6
+        with:
+          dotnet-version: '10.0.100'
+
+      - name: Restore
+        run: dotnet restore src/ClrScope.Mcp/ClrScope.Mcp.csproj --locked-mode
+
+      - name: Build
+        run: dotnet build --no-restore -c Release src/ClrScope.Mcp/ClrScope.Mcp.csproj
+
+      - name: Run Live Integration Tests
+        run: dotnet test --no-build -c Release tests/ClrScope.Mcp.Tests/ClrScope.Mcp.Tests.csproj --filter "Category=Live" --logger "console;verbosity=detailed"
