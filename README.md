@@ -200,7 +200,7 @@ See [Full Requirements](docs/requirements.md) for installation instructions and 
 
 ## Benchmarks
 
-Heap analysis benchmarks are available in `bench/ClrScope.Benchmarks/` for performance testing and optimization.
+Heap analysis benchmarks are available in `bench/ClrScope.Benchmarks/` for performance testing and optimization. Note: benchmarks are not included in the main solution build and must be run separately.
 
 **Running Benchmarks:**
 
