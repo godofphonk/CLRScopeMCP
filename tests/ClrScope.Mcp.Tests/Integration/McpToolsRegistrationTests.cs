@@ -8,18 +8,25 @@ namespace ClrScope.Mcp.Tests.Integration;
 
 public class McpToolsRegistrationTests
 {
+    private static Assembly GetClrScopeAssembly()
+    {
+        return Assembly.GetAssembly(typeof(ClrScopeServiceCollectionExtensions))!;
+    }
+
+    private static Type[] GetToolTypes(Assembly assembly)
+    {
+        return assembly
+            .GetTypes()
+            .Where(t => t.GetCustomAttribute<McpServerToolTypeAttribute>() != null)
+            .ToArray();
+    }
+
     [Fact]
     public void All_Tool_Classes_With_McpServerToolType_Are_Registered_WithTools()
     {
         // Arrange
-        var assembly = Assembly.GetAssembly(typeof(ClrScopeServiceCollectionExtensions))!;
-        
-        // Find all classes with [McpServerToolType] attribute
-        var toolTypes = assembly
-            .GetTypes()
-            .Where(t => t.GetCustomAttribute<McpServerToolTypeAttribute>() != null)
-            .Select(t => t.FullName!)
-            .ToHashSet();
+        var assembly = GetClrScopeAssembly();
+        var toolTypes = GetToolTypes(assembly);
 
         // Build host to get actual registration
         var host = Bootstrap.BuildHost(Array.Empty<string>());
@@ -29,18 +36,17 @@ public class McpToolsRegistrationTests
         // The MCP server builder registers tool types during WithTools calls
         // We verify that all types with [McpServerToolType] are registered in the DI container
         // and would be picked up by the MCP server
-        
+
         // Act & Assert
         // Since ModelContextProtocol doesn't expose a registry of registered tool types,
         // we verify that the tool types are available in the assembly and can be instantiated
         // through reflection, which confirms they're discoverable by the MCP server
-        foreach (var toolTypeFullName in toolTypes)
+        foreach (var toolType in toolTypes)
         {
-            var toolType = assembly.GetType(toolTypeFullName);
             Assert.NotNull(toolType);
-            
+
             // Verify the type has the attribute
-            var attr = toolType!.GetCustomAttribute<McpServerToolTypeAttribute>();
+            var attr = toolType.GetCustomAttribute<McpServerToolTypeAttribute>();
             Assert.NotNull(attr);
         }
     }
@@ -49,13 +55,8 @@ public class McpToolsRegistrationTests
     public void All_Tool_Classes_Are_Discoverable_In_Assembly()
     {
         // Arrange
-        var assembly = Assembly.GetAssembly(typeof(ClrScopeServiceCollectionExtensions))!;
-        
-        // Find all classes with [McpServerToolType] attribute
-        var toolTypes = assembly
-            .GetTypes()
-            .Where(t => t.GetCustomAttribute<McpServerToolTypeAttribute>() != null)
-            .ToList();
+        var assembly = GetClrScopeAssembly();
+        var toolTypes = GetToolTypes(assembly);
 
         // Act & Assert
         // Verify each tool class can be discovered and has at least one [McpServerTool] method
@@ -64,7 +65,7 @@ public class McpToolsRegistrationTests
             var methods = toolType.GetMethods(BindingFlags.Public | BindingFlags.Static)
                 .Where(m => m.GetCustomAttribute<McpServerToolAttribute>() != null)
                 .ToList();
-            
+
             Assert.NotEmpty(methods);
         }
     }
@@ -73,38 +74,33 @@ public class McpToolsRegistrationTests
     public void All_McpServerTool_Methods_Have_Tool_Class_Registered()
     {
         // Arrange
-        var assembly = Assembly.GetAssembly(typeof(ClrScopeServiceCollectionExtensions))!;
-        
-        // Find all classes with [McpServerToolType] attribute
-        var toolTypes = assembly
-            .GetTypes()
-            .Where(t => t.GetCustomAttribute<McpServerToolTypeAttribute>() != null)
-            .ToHashSet();
+        var assembly = GetClrScopeAssembly();
+        var toolTypes = GetToolTypes(assembly).ToHashSet();
 
         // Find all methods with [McpServerTool] attribute
-        var toolMethods = new List<(string ToolName, string ClassName)>();
+        var toolMethods = new List<(string ToolName, Type ToolClass)>();
         foreach (var toolType in toolTypes)
         {
             var methods = toolType.GetMethods(BindingFlags.Public | BindingFlags.Static)
                 .Where(m => m.GetCustomAttribute<McpServerToolAttribute>() != null);
-            
+
             foreach (var method in methods)
             {
                 var attr = method.GetCustomAttribute<McpServerToolAttribute>();
                 if (attr != null && !string.IsNullOrEmpty(attr.Name))
                 {
-                    toolMethods.Add((attr.Name, toolType.Name));
+                    toolMethods.Add((attr.Name, toolType));
                 }
             }
         }
 
         // Act & Assert
         // Verify each tool method belongs to a class with [McpServerToolType]
-        foreach (var (toolName, className) in toolMethods)
+        foreach (var (toolName, toolClass) in toolMethods)
         {
-            var hasAttribute = toolTypes.Any(t => t.Name == className);
-            Assert.True(hasAttribute, 
-                $"Tool method '{toolName}' is in class {className} which doesn't have [McpServerToolType] attribute");
+            var hasAttribute = toolTypes.Contains(toolClass);
+            Assert.True(hasAttribute,
+                $"Tool method '{toolName}' is in class {toolClass.Name} which doesn't have [McpServerToolType] attribute");
         }
     }
 }
