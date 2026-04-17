@@ -2,6 +2,7 @@ using ClrScope.Mcp.Contracts;
 using ClrScope.Mcp.Domain.Heap.Adapters;
 using ClrScope.Mcp.Infrastructure;
 using ClrScope.Mcp.Options;
+using ClrScope.Mcp.Services.Analysis.PatternDetectors;
 using ClrScope.Mcp.Services.Collect;
 using ClrScope.Mcp.Services.Health;
 using ClrScope.Mcp.Services.Heap;
@@ -73,6 +74,16 @@ public static class ClrScopeServiceCollectionExtensions
         services.AddSingleton<DominatorTreeCalculator>();
         services.AddSingleton<HeapRetainerPathsBuilder>();
 
+        // Pattern detectors
+        services.AddSingleton<IPatternDetector, DumpPatternDetector>();
+        services.AddSingleton<IPatternDetector, GcDumpPatternDetector>();
+        services.AddSingleton<IPatternDetector, TracePatternDetector>();
+        services.AddSingleton<IPatternDetector, CountersPatternDetector>();
+        services.AddSingleton<IPatternDetector, StacksPatternDetector>();
+
+        // Artifact content analyzer
+        services.AddSingleton<ArtifactContentAnalyzer>();
+
         return services;
     }
 
@@ -116,6 +127,8 @@ public static class ClrScopeServiceCollectionExtensions
             .WithTools<AnalysisTools>()
             .WithTools<ResourceTools>()
             .WithTools<SummaryTools>()
+            .WithTools<PatternDetectionTools>()
+            .WithTools<HeapAnalysisTools>()
             .WithTools<SessionAnalysisTools>()
             .WithTools<WorkflowAutomationTools>();
 
