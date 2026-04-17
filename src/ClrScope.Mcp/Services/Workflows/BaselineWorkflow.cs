@@ -1,6 +1,7 @@
+using ClrScope.Mcp.Options;
 using ClrScope.Mcp.Services.Collect;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace ClrScope.Mcp.Services.Workflows;
 
@@ -10,10 +11,26 @@ namespace ClrScope.Mcp.Services.Workflows;
 public sealed class BaselineWorkflow : IWorkflow
 {
     private readonly ILogger<BaselineWorkflow> _logger;
+    private readonly CollectCountersService _countersService;
+    private readonly CollectTraceService _traceService;
+    private readonly CollectGcDumpService _gcdumpService;
+    private readonly CollectStacksService _stacksService;
+    private readonly IOptions<ClrScopeOptions> _options;
 
-    public BaselineWorkflow(ILogger<BaselineWorkflow> logger)
+    public BaselineWorkflow(
+        ILogger<BaselineWorkflow> logger,
+        CollectCountersService countersService,
+        CollectTraceService traceService,
+        CollectGcDumpService gcdumpService,
+        CollectStacksService stacksService,
+        IOptions<ClrScopeOptions> options)
     {
         _logger = logger;
+        _countersService = countersService;
+        _traceService = traceService;
+        _gcdumpService = gcdumpService;
+        _stacksService = stacksService;
+        _options = options;
     }
 
     public string WorkflowName => "automated_baseline_bundle";
@@ -31,9 +48,8 @@ public sealed class BaselineWorkflow : IWorkflow
 
         // Step 1: Collect performance counters
         _logger.LogInformation("Step 1/4: Collecting performance counters for PID {Pid}", pid);
-        var countersService = serviceProvider.GetRequiredService<CollectCountersService>();
-        var countersRequest = new CollectCountersRequest(pid, duration, Providers: new[] { "System.Runtime" });
-        var countersResult = await countersService.CollectCountersAsync(countersRequest, null, cancellationToken);
+        var countersRequest = new CollectCountersRequest(pid, duration, Providers: _options.Value.DefaultCountersProviders);
+        var countersResult = await _countersService.CollectCountersAsync(countersRequest, null, cancellationToken);
         if (countersResult.Artifact != null)
         {
             artifacts.Add(new ArtifactInfo(countersResult.Artifact.ArtifactId.Value, "counters", countersResult.Artifact.FilePath, countersResult.Artifact.SizeBytes));
@@ -48,9 +64,8 @@ public sealed class BaselineWorkflow : IWorkflow
 
         // Step 2: Collect baseline trace
         _logger.LogInformation("Step 2/4: Collecting baseline trace for PID {Pid}", pid);
-        var traceService = serviceProvider.GetRequiredService<CollectTraceService>();
         var traceRequest = new CollectTraceRequest(pid, duration, Profile: "cpu-sampling");
-        var traceResult = await traceService.CollectTraceAsync(traceRequest, null, cancellationToken);
+        var traceResult = await _traceService.CollectTraceAsync(traceRequest, null, cancellationToken);
         if (traceResult.Artifact != null)
         {
             artifacts.Add(new ArtifactInfo(traceResult.Artifact.ArtifactId.Value, "trace", traceResult.Artifact.FilePath, traceResult.Artifact.SizeBytes));
@@ -65,9 +80,8 @@ public sealed class BaselineWorkflow : IWorkflow
 
         // Step 3: Collect GC dump
         _logger.LogInformation("Step 3/4: Collecting GC dump for PID {Pid}", pid);
-        var gcdumpService = serviceProvider.GetRequiredService<CollectGcDumpService>();
         var gcdumpRequest = new CollectGcDumpRequest(pid);
-        var gcdumpResult = await gcdumpService.CollectGcDumpAsync(gcdumpRequest, null, cancellationToken);
+        var gcdumpResult = await _gcdumpService.CollectGcDumpAsync(gcdumpRequest, null, cancellationToken);
         if (gcdumpResult.Artifact != null)
         {
             artifacts.Add(new ArtifactInfo(gcdumpResult.Artifact.ArtifactId.Value, "gcdump", gcdumpResult.Artifact.FilePath, gcdumpResult.Artifact.SizeBytes));
@@ -82,9 +96,8 @@ public sealed class BaselineWorkflow : IWorkflow
 
         // Step 4: Collect thread stacks
         _logger.LogInformation("Step 4/4: Collecting thread stacks for PID {Pid}", pid);
-        var stacksService = serviceProvider.GetRequiredService<CollectStacksService>();
         var stacksRequest = new CollectStacksRequest(pid);
-        var stacksResult = await stacksService.CollectStacksAsync(stacksRequest, null, cancellationToken);
+        var stacksResult = await _stacksService.CollectStacksAsync(stacksRequest, null, cancellationToken);
         if (stacksResult.Artifact != null)
         {
             artifacts.Add(new ArtifactInfo(stacksResult.Artifact.ArtifactId.Value, "stacks", stacksResult.Artifact.FilePath, stacksResult.Artifact.SizeBytes));

@@ -6,6 +6,7 @@ public class ClrScopeOptions
 
     public string ArtifactRoot { get; set; } = string.Empty;
     public string DatabasePath { get; set; } = string.Empty;
+    public string[] DefaultCountersProviders { get; set; } = new[] { "System.Runtime" };
 
     public string GetArtifactRoot()
     {

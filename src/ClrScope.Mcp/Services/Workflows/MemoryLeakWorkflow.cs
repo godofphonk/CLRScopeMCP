@@ -1,6 +1,7 @@
+using ClrScope.Mcp.Options;
 using ClrScope.Mcp.Services.Collect;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace ClrScope.Mcp.Services.Workflows;
 
@@ -10,10 +11,23 @@ namespace ClrScope.Mcp.Services.Workflows;
 public sealed class MemoryLeakWorkflow : IWorkflow
 {
     private readonly ILogger<MemoryLeakWorkflow> _logger;
+    private readonly CollectGcDumpService _gcdumpService;
+    private readonly CollectCountersService _countersService;
+    private readonly CollectTraceService _traceService;
+    private readonly IOptions<ClrScopeOptions> _options;
 
-    public MemoryLeakWorkflow(ILogger<MemoryLeakWorkflow> logger)
+    public MemoryLeakWorkflow(
+        ILogger<MemoryLeakWorkflow> logger,
+        CollectGcDumpService gcdumpService,
+        CollectCountersService countersService,
+        CollectTraceService traceService,
+        IOptions<ClrScopeOptions> options)
     {
         _logger = logger;
+        _gcdumpService = gcdumpService;
+        _countersService = countersService;
+        _traceService = traceService;
+        _options = options;
     }
 
     public string WorkflowName => "automated_memory_leak_bundle";
@@ -31,9 +45,8 @@ public sealed class MemoryLeakWorkflow : IWorkflow
 
         // Step 1: Collect GC dump
         _logger.LogInformation("Step 1/3: Collecting GC dump for PID {Pid}", pid);
-        var gcdumpService = serviceProvider.GetRequiredService<CollectGcDumpService>();
         var gcdumpRequest = new CollectGcDumpRequest(pid);
-        var gcdumpResult = await gcdumpService.CollectGcDumpAsync(gcdumpRequest, null, cancellationToken);
+        var gcdumpResult = await _gcdumpService.CollectGcDumpAsync(gcdumpRequest, null, cancellationToken);
         if (gcdumpResult.Artifact != null)
         {
             artifacts.Add(new ArtifactInfo(gcdumpResult.Artifact.ArtifactId.Value, "gcdump", gcdumpResult.Artifact.FilePath, gcdumpResult.Artifact.SizeBytes));
@@ -48,9 +61,8 @@ public sealed class MemoryLeakWorkflow : IWorkflow
 
         // Step 2: Collect GC counters
         _logger.LogInformation("Step 2/3: Collecting GC counters for PID {Pid}", pid);
-        var countersService = serviceProvider.GetRequiredService<CollectCountersService>();
-        var countersRequest = new CollectCountersRequest(pid, duration, Providers: new[] { "System.Runtime" });
-        var countersResult = await countersService.CollectCountersAsync(countersRequest, null, cancellationToken);
+        var countersRequest = new CollectCountersRequest(pid, duration, Providers: _options.Value.DefaultCountersProviders);
+        var countersResult = await _countersService.CollectCountersAsync(countersRequest, null, cancellationToken);
         if (countersResult.Artifact != null)
         {
             artifacts.Add(new ArtifactInfo(countersResult.Artifact.ArtifactId.Value, "counters", countersResult.Artifact.FilePath, countersResult.Artifact.SizeBytes));
@@ -65,9 +77,8 @@ public sealed class MemoryLeakWorkflow : IWorkflow
 
         // Step 3: Collect GC heap trace
         _logger.LogInformation("Step 3/3: Collecting GC heap trace for PID {Pid}", pid);
-        var traceService = serviceProvider.GetRequiredService<CollectTraceService>();
         var traceRequest = new CollectTraceRequest(pid, duration, Profile: "gc-heap");
-        var traceResult = await traceService.CollectTraceAsync(traceRequest, null, cancellationToken);
+        var traceResult = await _traceService.CollectTraceAsync(traceRequest, null, cancellationToken);
         if (traceResult.Artifact != null)
         {
             artifacts.Add(new ArtifactInfo(traceResult.Artifact.ArtifactId.Value, "trace", traceResult.Artifact.FilePath, traceResult.Artifact.SizeBytes));

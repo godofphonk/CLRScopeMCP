@@ -19,3 +19,4 @@ TestResults/
 **/bin/
 **/obj/
 bench/ClrScope.Benchmarks/test-data/*.gcdump
+.windsurf/
