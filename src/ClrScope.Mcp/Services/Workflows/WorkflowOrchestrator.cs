@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using ClrScope.Mcp.Tools.Workflows;
+using ClrScope.Mcp.Infrastructure;
 
 namespace ClrScope.Mcp.Services.Workflows;
 
@@ -8,13 +9,13 @@ namespace ClrScope.Mcp.Services.Workflows;
 /// </summary>
 public sealed class WorkflowOrchestrator
 {
-    private static readonly SemaphoreSlim _cliSemaphore = new SemaphoreSlim(1, 1);
-
     private readonly ILogger<WorkflowOrchestrator> _logger;
+    private readonly IPidLockManager _pidLockManager;
 
-    public WorkflowOrchestrator(ILogger<WorkflowOrchestrator> logger)
+    public WorkflowOrchestrator(ILogger<WorkflowOrchestrator> logger, IPidLockManager pidLockManager)
     {
         _logger = logger;
+        _pidLockManager = pidLockManager;
     }
 
     /// <summary>
@@ -27,7 +28,7 @@ public sealed class WorkflowOrchestrator
         string duration,
         CancellationToken cancellationToken)
     {
-        await _cliSemaphore.WaitAsync(cancellationToken);
+        using var pidLock = await _pidLockManager.AcquireLockAsync(pid, cancellationToken);
         var startTime = DateTime.UtcNow;
         var artifacts = new List<ArtifactInfo>();
         var sessionIds = new List<string>();
@@ -74,10 +75,6 @@ public sealed class WorkflowOrchestrator
                 SessionIds: sessionIds.ToArray(),
                 Error: ex.Message,
                 ExecutionTimeMs: executionTimeMs);
-        }
-        finally
-        {
-            _cliSemaphore.Release();
         }
     }
 }
